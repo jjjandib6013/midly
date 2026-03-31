@@ -23,7 +23,7 @@ export default function CreateTrade() {
           New Secure Trade
           <ShieldCheck className="w-6 h-6 text-primary glow-icon" />
         </h1>
-        <p className="text-text-muted mt-2">Initialize a smart escrow contract. Funds will be held safely until both parties confirm delivery.</p>
+        <p className="text-text-muted mt-2">Initialize a smart escrow contractasd Funds will be held safely until both parties confirm delivery.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -37,14 +37,14 @@ export default function CreateTrade() {
               <div className="space-y-3">
                 <label className="text-sm font-medium text-text-muted">My Role in this Trade</label>
                 <div className="grid grid-cols-2 gap-4">
-                  <div 
+                  <div
                     onClick={() => setTradeRole("BUY")}
                     className={`cursor-pointer p-4 rounded-xl border-2 transition-all ${tradeRole === "BUY" ? "border-primary bg-primary/10 glow-icon" : "border-dark-border bg-dark-bg hover:border-text-muted/50"}`}
                   >
                     <h4 className={`font-bold ${tradeRole === "BUY" ? "text-primary" : "text-white"}`}>I am Buying</h4>
                     <p className="text-xs text-text-muted mt-1">You will deposit funds into escrow.</p>
                   </div>
-                  <div 
+                  <div
                     onClick={() => setTradeRole("SELL")}
                     className={`cursor-pointer p-4 rounded-xl border-2 transition-all ${tradeRole === "SELL" ? "border-yellow-500 bg-yellow-500/10 glow-icon" : "border-dark-border bg-dark-bg hover:border-text-muted/50"}`}
                   >
@@ -121,20 +121,20 @@ export default function CreateTrade() {
           <div className="sticky top-24">
             <DynamicCard hoverEffect={false} className="border-t-2 border-t-primary/50 bg-dark-panel">
               <h3 className="font-bold text-white mb-6">Contract Overview</h3>
-              
+
               <div className="space-y-4 mb-6">
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-text-muted flex items-center gap-1">Base Price <Info className="w-3 h-3 text-text-muted" /></span>
                   <span className="font-bold text-white">₱ {price ? parseFloat(price).toFixed(2) : "0.00"}</span>
                 </div>
-                
+
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-text-muted flex items-center gap-1">Midly Escrow Fee (5%)</span>
                   <span className="font-bold text-red-400">+ ₱ {fee}</span>
                 </div>
-                
+
                 <div className="h-[1px] w-full bg-dark-border/50 my-2" />
-                
+
                 <div className="flex justify-between items-center">
                   <span className="font-bold text-white">Total Amount</span>
                   <span className="text-xl font-bold text-primary neon-glow">₱ {total}</span>
@@ -146,8 +146,8 @@ export default function CreateTrade() {
               </div>
 
               <Link href="/trade/1097" className="block">
-                <NeonButton 
-                  className="w-full gap-2 text-sm" 
+                <NeonButton
+                  className="w-full gap-2 text-sm"
                   disabled={!tradeRole || !price || !game || !itemType}
                 >
                   Generate Private Link <ArrowRight className="w-4 h-4" />
