@@ -2,140 +2,152 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import Link from "next/link";
-import { ShieldCheck, UploadCloud, ChevronRight, Fingerprint, Camera } from "lucide-react";
+import { ShieldCheck, UploadCloud, CheckCircle2, User, Camera, ArrowRight, ShieldAlert } from "lucide-react";
+import { useRouter } from "next/navigation";
 import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
 
-export default function KYCPage() {
-  const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [isUploading, setIsUploading] = useState(false);
+export default function KYCVerification() {
+  const router = useRouter();
+  const [step, setStep] = useState(1);
+  const [selectedID, setSelectedID] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState("");
+  
+  const idOptions = ["Passport", "Driver's License", "National ID"];
 
-  const handleSimulateUpload = () => {
-    setIsUploading(true);
-    setTimeout(() => {
-      setIsUploading(false);
-      setStep((curr) => Math.min(curr + 1, 3) as 1 | 2 | 3);
-    }, 1500);
+  const handleNextStep = () => {
+    if (step < 3) setStep(step + 1);
+  };
+
+  const handleComplete = async () => {
+    setIsProcessing(true);
+    setError("");
+    
+    try {
+       const res = await fetch("http://localhost:5000/api/kyc", {
+          method: "POST",
+          headers: { 
+             "Content-Type": "application/json",
+             "Authorization": `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({
+             idType: selectedID,
+             idNumber: "SIMULATED-ID-" + Math.floor(Math.random() * 100000),
+             idName: "Simulated User",
+             birthdate: "1995-10-15"
+          })
+       });
+       
+       if (!res.ok) throw new Error("KYC Verification Failed. Please try again.");
+       
+       router.push("/dashboard");
+    } catch (err: any) {
+       setError(err.message);
+       setIsProcessing(false);
+    }
   };
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center min-h-[calc(100vh-64px)] px-4 py-12 relative overflow-hidden">
-      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/5 blur-[150px] rounded-full pointer-events-none z-0" />
+    <div className="flex-1 w-full max-w-4xl mx-auto px-4 py-12">
+      <div className="text-center mb-12">
+        <h1 className="text-3xl font-bold text-white mb-2 flex items-center justify-center gap-3">
+          Identity Verification <ShieldCheck className="w-8 h-8 text-primary glow-icon"/>
+        </h1>
+        <p className="text-text-muted">Federal-grade verification to protect the Midly network from scammers.</p>
+      </div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-2xl z-10"
-      >
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-dark-panel border border-primary/30 mb-6 glow-icon">
-            <Fingerprint className="w-8 h-8 text-primary" />
-          </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Identity Verification</h1>
-          <p className="text-text-muted max-w-md mx-auto">
-            MIDLY requires strict KYC to permanently eliminate ghosting and scammers. 
-            Once verified, you are fully protected to trade.
-          </p>
-        </div>
-
-        <DynamicCard className="border border-dark-border/50 bg-dark-panel p-8" hoverEffect={false}>
-          {/* Progress Steps */}
-          <div className="flex items-center justify-between mb-10 relative">
-            <div className="absolute top-1/2 left-0 w-full h-[2px] bg-dark-border -translate-y-1/2 z-0" />
-            <div 
-              className="absolute top-1/2 left-0 h-[2px] bg-primary glow-icon -translate-y-1/2 z-0 transition-all duration-500"
-              style={{ width: `${(step - 1) * 50}%` }}
+      <div className="flex justify-between items-center mb-10 max-w-2xl mx-auto relative relative z-0">
+         <div className="absolute top-1/2 left-0 right-0 h-1 bg-dark-border -z-10 -translate-y-1/2">
+            <motion.div 
+              initial={{ width: "0%" }} 
+              animate={{ width: `${((step - 1) / 2) * 100}%` }} 
+              className="h-full bg-primary"
             />
-            
-            <div className="relative z-10 flex flex-col items-center gap-2">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-colors duration-300 ${step >= 1 ? "bg-dark-bg border-primary text-primary" : "bg-dark-bg border-dark-border text-text-muted"}`}>1</div>
-              <span className={`text-xs font-semibold ${step >= 1 ? "text-white" : "text-text-muted"}`}>Government ID</span>
+         </div>
+         
+         {[1, 2, 3].map((s) => (
+            <div key={s} className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all ${step >= s ? 'bg-primary border-primary text-black glow-icon' : 'bg-dark-bg border-dark-border text-text-muted'}`}>
+               {step > s ? <CheckCircle2 className="w-6 h-6" /> : s}
             </div>
-            
-            <div className="relative z-10 flex flex-col items-center gap-2">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-colors duration-300 ${step >= 2 ? "bg-dark-bg border-primary text-primary glow-icon" : "bg-dark-bg border-dark-border text-text-muted"}`}>2</div>
-              <span className={`text-xs font-semibold ${step >= 2 ? "text-white" : "text-text-muted"}`}>Selfie Verification</span>
-            </div>
+         ))}
+      </div>
 
-            <div className="relative z-10 flex flex-col items-center gap-2">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-colors duration-300 ${step >= 3 ? "bg-dark-bg border-primary text-primary glow-icon" : "bg-dark-bg border-dark-border text-text-muted"}`}>3</div>
-              <span className={`text-xs font-semibold ${step >= 3 ? "text-white" : "text-text-muted"}`}>Verified</span>
+      <div className="max-w-2xl mx-auto">
+         {error && (
+            <div className="mb-6 p-3 bg-red-500/10 border border-red-500/30 rounded text-red-500 text-sm flex items-center justify-center gap-2">
+               <ShieldAlert className="w-4 h-4"/> {error}
             </div>
-          </div>
-
-          <AnimatePresence mode="wait">
+         )}
+         
+         <AnimatePresence mode="wait">
             {step === 1 && (
-              <motion.div
-                key="step1"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="flex flex-col items-center text-center space-y-6"
-              >
-                <div className="w-full h-48 border-2 border-dashed border-dark-border rounded-xl flex flex-col items-center justify-center bg-dark-bg/50 hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer group">
-                  <UploadCloud className="w-10 h-10 text-text-muted group-hover:text-primary transition-colors mb-3" />
-                  <p className="text-sm font-medium text-white mb-1">Click to upload valid ID</p>
-                  <p className="text-xs text-text-muted">Passport, Driver's License, or National ID</p>
-                </div>
-                <NeonButton onClick={handleSimulateUpload} isLoading={isUploading} className="w-full gap-2">
-                  Submit ID Document <ChevronRight className="w-4 h-4" />
-                </NeonButton>
-              </motion.div>
+               <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                  <DynamicCard hoverEffect={false} className="border border-dark-border bg-dark-panel p-8">
+                     <h2 className="text-xl font-bold text-white mb-6">Select Document Type</h2>
+                     <div className="space-y-4 mb-8">
+                        {idOptions.map((opt) => (
+                           <div 
+                              key={opt}
+                              onClick={() => setSelectedID(opt)}
+                              className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${selectedID === opt ? 'border-primary bg-primary/10 text-white' : 'border-dark-border hover:border-text-muted text-text-muted'}`}
+                           >
+                              <span className="font-medium">{opt}</span>
+                              <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${selectedID === opt ? 'border-primary' : 'border-dark-border'}`}>
+                                 {selectedID === opt && <div className="w-3 h-3 bg-primary rounded-full" />}
+                              </div>
+                           </div>
+                        ))}
+                     </div>
+                     <NeonButton className="w-full" disabled={!selectedID} onClick={handleNextStep}>
+                        Continue <ArrowRight className="w-4 h-4 ml-2" />
+                     </NeonButton>
+                  </DynamicCard>
+               </motion.div>
             )}
 
             {step === 2 && (
-              <motion.div
-                key="step2"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="flex flex-col items-center text-center space-y-6"
-              >
-                <div className="w-48 h-48 border border-dark-border rounded-full flex flex-col items-center justify-center bg-dark-bg/50 overflow-hidden relative">
-                  <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=256&h=256&auto=format&fit=crop')] bg-cover opacity-50 sepia-[.3] hue-rotate-[90deg] saturate-[2]" />
-                  <div className="absolute inset-0 border-4 border-primary/50 rounded-full scale-105" />
-                  <div className="w-full h-[2px] bg-primary absolute top-1/2 left-0 shadow-[0_0_15px_#3FE56C] animate-[bounce_3s_ease-in-out_infinite] z-20" />
-                  <Camera className="w-10 h-10 text-white z-10 drop-shadow-md relative" />
-                </div>
-                <p className="text-sm text-text-muted max-w-xs">
-                  Position your face in the oval. AI will verify this matches your submitted ID document.
-                </p>
-                <NeonButton onClick={handleSimulateUpload} isLoading={isUploading} className="w-full gap-2 mt-4">
-                  Run Biometric Scan <ChevronRight className="w-4 h-4" />
-                </NeonButton>
-              </motion.div>
+               <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                  <DynamicCard hoverEffect={false} className="border border-dark-border bg-dark-panel p-8">
+                     <h2 className="text-xl font-bold text-white mb-2">Upload {selectedID}</h2>
+                     <p className="text-sm text-text-muted mb-6">Please ensure all details are clearly visible and well-lit.</p>
+                     
+                     <div className="border-2 border-dashed border-dark-border rounded-xl p-12 flex flex-col items-center justify-center mb-8 bg-dark-bg/50 hover:bg-dark-bg hover:border-primary/50 transition-colors cursor-pointer group">
+                        <UploadCloud className="w-12 h-12 text-text-muted group-hover:text-primary transition-colors mb-4" />
+                        <p className="text-white font-medium mb-1">Click to upload front of {selectedID}</p>
+                        <p className="text-xs text-text-muted">JPG, PNG up to 5MB</p>
+                     </div>
+                     
+                     <div className="flex gap-4">
+                        <NeonButton variant="ghost" className="flex-1" onClick={() => setStep(1)}>Back</NeonButton>
+                        <NeonButton className="flex-1" onClick={handleNextStep}>Continue <ArrowRight className="w-4 h-4 ml-2" /></NeonButton>
+                     </div>
+                  </DynamicCard>
+               </motion.div>
             )}
 
             {step === 3 && (
-              <motion.div
-                key="step3"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="flex flex-col items-center text-center space-y-6"
-              >
-                <motion.div 
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ type: "spring", stiffness: 200, delay: 0.2 }}
-                  className="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center"
-                >
-                  <ShieldCheck className="w-12 h-12 text-primary neon-glow drop-shadow-[0_0_15px_rgba(63,229,108,0.5)]" />
-                </motion.div>
-                <div>
-                  <h3 className="text-2xl font-bold text-white mb-2">Account Fully Verified!</h3>
-                  <p className="text-text-muted">You now have access to High-Value Escrow Trades.</p>
-                </div>
-                <Link href="/dashboard" className="w-full block mt-4">
-                  <NeonButton className="w-full gap-2 glow-icon">
-                    Enter Trading Dashboard <ChevronRight className="w-4 h-4" />
-                  </NeonButton>
-                </Link>
-              </motion.div>
+               <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                  <DynamicCard hoverEffect={false} className="border border-dark-border bg-dark-panel p-8 text-center">
+                     <h2 className="text-xl font-bold text-white mb-2">Liveness Check</h2>
+                     <p className="text-sm text-text-muted mb-8">Position your face in the frame to match your ID.</p>
+                     
+                     <div className="w-48 h-48 rounded-full border-4 border-dashed border-primary/50 mx-auto mb-8 flex items-center justify-center relative overflow-hidden bg-dark-bg">
+                        <Camera className="w-10 h-10 text-primary/50" />
+                        <div className="absolute inset-0 border-[6px] border-dark-bg rounded-full pointer-events-none" />
+                     </div>
+                     
+                     <div className="flex gap-4">
+                        <NeonButton variant="ghost" className="flex-1" disabled={isProcessing} onClick={() => setStep(2)}>Back</NeonButton>
+                        <NeonButton className="flex-1 glow-icon" isLoading={isProcessing} onClick={handleComplete}>
+                           Verify Identity <ShieldCheck className="w-4 h-4 ml-2" />
+                        </NeonButton>
+                     </div>
+                  </DynamicCard>
+               </motion.div>
             )}
-          </AnimatePresence>
-        </DynamicCard>
-      </motion.div>
+         </AnimatePresence>
+      </div>
     </div>
   );
 }

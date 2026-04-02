@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { ListFilter, Search, ArrowRight, ShieldCheck, XCircle } from "lucide-react";
@@ -9,14 +9,32 @@ import DynamicCard from "@/components/ui/DynamicCard";
 
 export default function Transactions() {
   const [filter, setFilter] = useState("ALL");
-  
-  const trades = [
-    { id: "1095", item: "Valorant ASIA - Immortal Rank", price: "₱ 12,500.00", role: "BUY", status: "ACTIVE", step: "Payment Locked", date: "Oct 24, 2026" },
-    { id: "1096", item: "CODM Legendary Account", price: "₱ 4,000.00", role: "SELL", status: "ACTIVE", step: "Waiting for Buyer", date: "Oct 23, 2026" },
-    { id: "1002", item: "MLBB Mythical Glory", price: "₱ 2,500.00", role: "SELL", status: "COMPLETED", step: "Funds Released", date: "Oct 15, 2026" },
-    { id: "0998", item: "CS:GO Dragon Lore Skin", price: "₱ 45,000.00", role: "BUY", status: "COMPLETED", step: "Escrow Complete", date: "Sep 28, 2026" },
-    { id: "0845", item: "Dota 2 Arcana Bundle", price: "₱ 1,500.00", role: "SELL", status: "CANCELLED", step: "Refunded to Buyer", date: "Aug 12, 2026" },
-  ];
+  const [trades, setTrades] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("http://localhost:5000/api/transactions", {
+       headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+         if (data.trades) {
+           // Map DB fields to UI fields
+           const mappedTrades = data.trades.map((t: any) => ({
+             id: t.transaction_id.toString(),
+             item: t.item_type || "Unknown Item",
+             price: `₱ ${Number(t.total_amount).toLocaleString('en-US', {minimumFractionDigits: 2})}`,
+             role: "BUY", // Mocking Role slightly since we need to check buyer_id === current user
+             status: t.status === "active" ? "ACTIVE" : t.status === "completed" ? "COMPLETED" : "CANCELLED",
+             step: t.status === "active" ? "Payment Locked" : "Escrow Finished",
+             date: new Date(t.created_at).toLocaleDateString()
+           }));
+           setTrades(mappedTrades);
+         }
+      })
+      .catch(console.error)
+      .finally(() => setIsLoading(false));
+  }, []);
 
   const filtered = filter === "ALL" ? trades : trades.filter(t => t.status === filter);
 
@@ -109,7 +127,12 @@ export default function Transactions() {
                </tbody>
             </table>
          </div>
-         {filtered.length === 0 && (
+         {isLoading && (
+            <div className="p-10 text-center text-text-muted">
+               Loading trades...
+            </div>
+         )}
+         {!isLoading && filtered.length === 0 && (
             <div className="p-10 text-center text-text-muted">
                No transactions found matching the current filter.
             </div>

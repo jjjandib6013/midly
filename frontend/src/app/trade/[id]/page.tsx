@@ -1,148 +1,517 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
-import { Copy, CheckCircle2, AlertTriangle, ShieldCheck } from "lucide-react";
+import { ShieldCheck, MessageSquare, CheckCircle2, ShieldAlert, Paperclip, ImageIcon, ArrowRight, Copy } from "lucide-react";
 import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
-import EscrowTracker, { EscrowStep } from "@/components/ui/EscrowTracker";
-import ChatBox, { Message } from "@/components/ui/ChatBox";
+import { io } from "socket.io-client";
+import toast from "react-hot-toast";
+
+type Message = { id: string; text: string; sender: "user" | "other" | "ai"; timestamp: string };
 
 export default function TradeHub() {
-  const params = useParams();
-  const tradeId = params?.id || "1095";
+   const params = useParams();
+   const tradeId = params.id as string;
 
-  // Mock State for the UI
-  const [currentStep, setCurrentStep] = useState<number>(3); // 1 to 5
-  const [messages, setMessages] = useState<Message[]>([
-    { id: "1", text: "Secure Trade Room Initialized. MIDLY AI is monitoring this chat.", sender: "ai", timestamp: "10:00 AM" },
-    { id: "2", text: "Hi, I have locked the funds. Send the account details when ready.", sender: "other", timestamp: "10:02 AM", riskLevel: "Safe" },
-    { id: "3", text: "Awesome, I see the payment is secured. Sending info now.", sender: "user", timestamp: "10:05 AM" }
-  ]);
-  const [isAiProcessing, setIsAiProcessing] = useState(false);
+   const [trade, setTrade] = useState<any>(null);
+   const [myRole, setMyRole] = useState<"BUY" | "SELL" | null>(null);
+   const [counterparty, setCounterparty] = useState<any>(null);
+   const [messages, setMessages] = useState<Message[]>([]);
+   const [inputText, setInputText] = useState("");
+   const [currentStep, setCurrentStep] = useState(1);
+   const [paymentMethod, setPaymentMethod] = useState("midly_wallet");
+   const [isAiProcessing, setIsAiProcessing] = useState(false);
+   const [isLoading, setIsLoading] = useState(true);
+   const [hasRated, setHasRated] = useState(false);
+   const fileInputRef = useRef<HTMLInputElement>(null);
+   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const steps: EscrowStep[] = [
-    { id: 1, label: "Agreement", status: currentStep > 1 ? "completed" : currentStep === 1 ? "current" : "pending" },
-    { id: 2, label: "Payment Secured", status: currentStep > 2 ? "completed" : currentStep === 2 ? "current" : "pending" },
-    { id: 3, label: "Item Handover", status: currentStep > 3 ? "completed" : currentStep === 3 ? "current" : "pending" },
-    { id: 4, label: "Verification", status: currentStep > 4 ? "completed" : currentStep === 4 ? "current" : "pending" },
-    { id: 5, label: "Release Funds", status: currentStep > 5 ? "completed" : currentStep === 5 ? "current" : "pending" },
-  ];
+   const fetchTrade = () => {
+      fetch(`http://localhost:5000/api/transactions/${tradeId}`, {
+         headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` }
+      })
+         .then(res => res.json())
+         .then(data => {
+            if (data.trade) {
+               setTrade(data.trade);
+               setMyRole(data.my_role);
+               setCounterparty(data.my_role === 'BUY' ? data.trade.seller : data.trade.buyer);
 
-  const handleSendMessage = (text: string) => {
-    // Add user message
-    const newMsg: Message = { id: Date.now().toString(), text, sender: "user", timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
-    setMessages(prev => [...prev, newMsg]);
+               if (data.trade.status === 'agreement') setCurrentStep(1);
+               else if (data.trade.status === 'awaiting_payment') setCurrentStep(2);
+               else if (data.trade.status === 'active') setCurrentStep(3);
+               else if (data.trade.status === 'verifying') setCurrentStep(4);
+               else if (data.trade.status === 'completed') setCurrentStep(5);
+               else if (data.trade.status === 'disputed') setCurrentStep(6);
+            }
+         })
+         .catch(console.error);
+   };
 
-    // Simulate AI Moderation
-    setIsAiProcessing(true);
-    setTimeout(() => {
-      setIsAiProcessing(false);
-      // AI check for scam keywords
-      if (text.toLowerCase().includes("gcash") || text.toLowerCase().includes("pay me direct") || text.toLowerCase().includes("facebook")) {
-        setMessages(prev => [
-            ...prev,
-            { id: Date.now().toString()+"ai", text: "Warning: Attempting to take payments outside Midly violates terms and voids escrow protection.", sender: "ai", timestamp: new Date().toLocaleTimeString() }
-        ]);
+   const fetchMessages = () => {
+      fetch(`http://localhost:5000/api/messages/${tradeId}`, {
+         headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` }
+      })
+         .then(res => res.json())
+         .then(data => {
+            if (data.messages && data.messages.length > 0) {
+               const myUserId = parseInt(JSON.parse(atob(localStorage.getItem('token')!.split('.')[1])).user_id);
+               const formatted = data.messages.map((m: any) => ({
+                  id: m.message_id.toString(),
+                  text: m.message_text,
+                  sender: m.sender_id === myUserId ? "user" : (m.is_system_generated ? "ai" : "other"),
+                  timestamp: new Date(m.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+               }));
+               setMessages(formatted);
+            }
+         })
+         .catch(console.error)
+         .finally(() => setIsLoading(false));
+   };
+
+   useEffect(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+   }, [messages]);
+
+   useEffect(() => {
+      fetchTrade();
+      fetchMessages();
+
+      // WebSockets Real-Time Engine
+      const socket = io("http://localhost:5000");
+      socket.emit("join_trade", tradeId);
+
+      // Listen for incoming messages
+      socket.on("new_message", (msg: any) => {
+         const myUserId = parseInt(JSON.parse(atob(localStorage.getItem('token')!.split('.')[1])).user_id);
+         setMessages(prev => [...prev, {
+            id: msg.message_id.toString(),
+            text: msg.message_text,
+            sender: msg.sender_id === myUserId ? 'user' : (msg.is_system_generated ? 'ai' : 'other'),
+            timestamp: new Date(msg.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+         }]);
+      });
+
+      // Listen for immediate state updates
+      socket.on("trade_updated", (newStatus: string) => {
+         if (newStatus === 'awaiting_payment') toast.success("Seller requested payment. Awaiting Buyer deposit.");
+         if (newStatus === 'active') toast.success("Payment Secured in Vault! Handover phase started.");
+         if (newStatus === 'verifying') toast.success("Items Delivered. Retrieval Lock & Verification started.");
+         if (newStatus === 'completed') toast.success("Funds successfully Released!");
+         if (newStatus === 'disputed') toast.error("Trade has been officially Disputed. Funds are frozen.");
+         fetchTrade();
+      });
+
+      return () => {
+         socket.disconnect();
+      };
+   }, [tradeId]);
+
+   const steps = [
+      { id: 1, label: "Agreement", status: currentStep > 1 ? "completed" : "current" },
+      { id: 2, label: "Payment Secured", status: currentStep > 2 ? "completed" : currentStep === 2 ? "current" : "pending" },
+      { id: 3, label: "Item Handover", status: currentStep > 3 ? "completed" : currentStep === 3 ? "current" : "pending" },
+      { id: 4, label: "Verification", status: currentStep > 4 ? "completed" : currentStep === 4 ? "current" : "pending" },
+      { id: 5, label: "Release Funds", status: currentStep > 5 ? "completed" : currentStep === 5 ? "current" : "pending" },
+   ];
+
+   if (currentStep === 6) steps.push({ id: 6, label: "DISPUTED", status: "current" });
+
+   const handleSendMessage = async (text: string) => {
+      try {
+         setIsAiProcessing(true);
+         const textLower = text.toLowerCase();
+         const isHighRisk = textLower.includes("gcash") || textLower.includes("pay me direct")
+            || textLower.includes("facebook")
+            || textLower.includes("blue app")
+            || textLower.includes("tiktok")
+            || textLower.includes("black app")
+            || textLower.includes("orange app");
+
+         await fetch(`http://localhost:5000/api/messages/${tradeId}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem('token')}` },
+            body: JSON.stringify({ text, riskLevel: isHighRisk ? "High" : "Safe" })
+         });
+
+         if (isHighRisk) {
+            toast.error("AI Warning: High Risk keyword detected.");
+            setTimeout(async () => {
+               const aiMsgText = "Warning: Attempting to take payments outside Midly violates terms and voids escrow protection.";
+               await fetch(`http://localhost:5000/api/messages/${tradeId}`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem('token')}` },
+                  body: JSON.stringify({ text: aiMsgText, isAi: true, riskLevel: "High" })
+               });
+            }, 1500);
+         }
+      } catch (e) {
+         console.error("Message failed to send", e);
+      } finally {
+         setTimeout(() => setIsAiProcessing(false), 1500);
       }
-    }, 1500);
-  };
+   };
 
-  const handleConfirmAction = () => {
-    if (currentStep < 5) {
-      setCurrentStep(prev => prev + 1);
-    }
-  };
+   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
 
-  return (
-    <div className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 py-6 h-[calc(100vh-64px)] overflow-hidden flex flex-col">
-      <div className="flex justify-between items-center mb-6 flex-shrink-0">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            Escrow Hub <span className="text-primary glow-icon text-lg px-2 rounded bg-primary/10">#{tradeId}</span>
-          </h1>
-          <p className="text-sm text-text-muted mt-1">Valorant ASIA - Immortal Rank • Total: ₱ 12,500.00</p>
-        </div>
-        <div className="flex gap-2">
-           <NeonButton variant="secondary" className="gap-2 text-sm !px-4 !py-2">
-             <AlertTriangle className="w-4 h-4 text-yellow-500" /> Open Dispute
-           </NeonButton>
-        </div>
-      </div>
+      const formData = new FormData();
+      formData.append("file", file);
 
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-0 overflow-y-auto pb-10 custom-scrollbar">
-        {/* Left Column: Flow & Details */}
-        <div className="lg:col-span-2 space-y-6 flex flex-col">
-          {/* Tracker Card */}
-          <DynamicCard hoverEffect={false} className="border border-dark-border bg-dark-panel p-8">
-            <h3 className="font-bold text-white mb-6 flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-primary" /> Live Transaction Status
-            </h3>
-            <EscrowTracker steps={steps} className="py-2 mb-8" />
+      try {
+         setIsAiProcessing(true); // Re-use spinner for UI feedback
+         toast.success("Uploading image proof...");
+         const uploadRes = await fetch("http://localhost:5000/api/upload", {
+            method: "POST",
+            body: formData
+         });
+         const data = await uploadRes.json();
+         if (data.url) {
+            handleSendMessage(data.url); // Send the image URL physically as a message
+         } else {
+            toast.error("Upload failed.");
+         }
+      } catch (err) {
+         toast.error("Server error during upload.");
+      } finally {
+         setIsAiProcessing(false);
+      }
+   };
+
+   const handleTradeProgress = async (action: string) => {
+      try {
+         setIsLoading(true);
+         const res = await fetch(`http://localhost:5000/api/transactions/${tradeId}/progress`, {
+            method: "PUT",
+            headers: { "Authorization": `Bearer ${localStorage.getItem('token')}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ action })
+         });
+         const data = await res.json();
+         if (res.ok) {
+            toast.success("Trade status updated.");
+            fetchTrade();
+         } else {
+            toast.error(data.error || "Action failed.");
+         }
+      } catch (e) {
+         console.error(e);
+         toast.error("Action error.");
+      } finally {
+         setIsLoading(false);
+      }
+   };
+
+   const handleDispute = async () => {
+      const reason = prompt("Enter a specific reason for Disputing this Escrow transaction:");
+      if (!reason) return;
+
+      try {
+         setIsLoading(true);
+         const res = await fetch(`http://localhost:5000/api/transactions/${tradeId}/dispute`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${localStorage.getItem('token')}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ reason })
+         });
+         if (res.ok) {
+            toast.error("Dispute active. Funds locked immediately.");
+            fetchTrade();
+         } else {
+            toast.error("Failed to initiate dispute.");
+         }
+      } catch (e) {
+         toast.error("Server error.");
+      } finally {
+         setIsLoading(false);
+      }
+   };
+
+   const handleRateSeller = async (score: number) => {
+      try {
+         const res = await fetch(`http://localhost:5000/api/user/rate/${trade.seller_id}`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${localStorage.getItem('token')}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ score })
+         });
+         if (res.ok) {
+            toast.success(`You rated the seller ${score} Stars!`);
+            setHasRated(true);
+         }
+      } catch (e) { }
+   };
+
+   if (isLoading || !trade) return <div className="flex-1 flex justify-center items-center"><div className="w-8 h-8 rounded-full border-4 border-primary border-t-transparent animate-spin" /></div>;
+
+   return (
+      <div className="flex-1 w-full max-w-7xl mx-auto px-4 py-8 grid grid-cols-3 gap-8 h-[calc(100vh-64px)] max-h-[calc(100vh-64px)] overflow-hidden">
+
+         {/* Left Column: Flow & Details */}
+         <div className="flex flex-col gap-6 overflow-y-auto pr-2 custom-scrollbar min-h-0 max-h-full">
             
-            <div className="flex flex-col sm:flex-row justify-center items-center gap-4 pt-6 border-t border-dark-border">
-              <div className="text-center sm:text-left text-sm text-text-muted flex-1">
-                {currentStep === 3 && "You need to send the account credentials. Waiting for your action."}
-                {currentStep === 4 && "Buyer is currently inspecting the asset. They have 24 hours to approve."}
-                {currentStep === 5 && "Funds have been released to your wallet seamlessly!"}
-              </div>
-              
-              {currentStep === 3 && (
-                <NeonButton onClick={handleConfirmAction} className="w-full sm:w-auto mt-4 sm:mt-0 glow-icon">
-                  Confirm Items Delivered
-                </NeonButton>
-              )}
-              {currentStep === 4 && (
-                <NeonButton onClick={handleConfirmAction} variant="secondary" className="w-full sm:w-auto mt-4 sm:mt-0 flex items-center gap-2 pointer-events-none opacity-50">
-                  <div className="animate-spin w-4 h-4 border-2 border-white/20 border-t-primary rounded-full"/>
-                  Waiting for Buyer...
-                </NeonButton>
-              )}
-              {currentStep === 5 && (
-                <div className="flex items-center gap-2 text-primary font-bold bg-primary/10 px-4 py-2 rounded glow-icon">
-                  <CheckCircle2 className="w-5 h-5" /> Escrow Complete
-                </div>
-              )}
+            {/* COUNTERPARTY IDENTITY */}
+            {counterparty && (
+               <DynamicCard hoverEffect={false} className="border border-dark-border bg-dark-panel p-5 shrink-0 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 px-3 py-1 bg-primary/10 text-primary rounded-bl-lg text-[10px] font-bold uppercase tracking-widest border-b border-l border-primary/20">
+                     {myRole === 'BUY' ? "Seller" : "Buyer"}
+                  </div>
+                  <h3 className="text-xs font-bold text-text-muted mb-4 uppercase tracking-wider">Trading Partner</h3>
+                  <div className="flex items-center gap-4">
+                     <div className="w-14 h-14 rounded-full bg-dark-bg border border-primary/30 flex items-center justify-center font-bold text-xl text-primary shadow-[0_0_15px_rgba(63,229,108,0.2)] uppercase">
+                        {counterparty.email.charAt(0)}
+                     </div>
+                     <div>
+                        <h4 className="font-bold text-white text-lg leading-tight truncate w-32">{counterparty.email.split('@')[0]}</h4>
+                        <div className="flex items-center gap-1 mt-1">
+                           <span className="text-yellow-400 text-sm">★</span>
+                           <span className="text-sm font-medium text-text-muted">{(Number(counterparty.reputation_score) || 5.0).toFixed(1)}</span>
+                        </div>
+                     </div>
+                  </div>
+               </DynamicCard>
+            )}
+
+            {/* TRADE PAYLOAD (Moved up for visibility) */}
+            <DynamicCard hoverEffect={false} className="border border-dark-border bg-dark-bg/50 p-6 shrink-0">
+               <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider text-text-muted">Trade Payload</h3>
+               <div className="space-y-3">
+                  <div className="flex justify-between border-b border-dark-border pb-2">
+                     <span className="text-text-muted text-sm">Item ID</span>
+                     <span className="text-white text-sm font-medium">#{tradeId.padStart(6, '0')}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-dark-border pb-2">
+                     <span className="text-text-muted text-sm">Description</span>
+                     <span className="text-white text-sm font-medium truncate max-w-[150px]" title={trade.item_type}>{trade.item_type}</span>
+                  </div>
+                  <div className="flex justify-between">
+                     <span className="text-text-muted text-sm">Base Price</span>
+                     <span className="text-primary font-bold">₱ {Number(trade.agreed_price).toLocaleString()}</span>
+                  </div>
+               </div>
+            </DynamicCard>
+
+            {/* ESCROW TRACKER */}
+            <DynamicCard hoverEffect={false} className="border border-dark-border bg-dark-panel p-6 shrink-0 mb-4">
+               <div className="flex items-center gap-3 mb-6">
+                  <ShieldCheck className="w-6 h-6 text-primary glow-icon" />
+                  <h2 className="text-xl font-bold text-white tracking-tight">Escrow Tracker</h2>
+               </div>
+
+               <div className="relative border-l-2 border-dark-border ml-3 space-y-8 pb-4">
+                  {steps.map((s, i) => (
+                     <div key={s.id} className="relative pl-6">
+                        <div className={`absolute -left-[11px] top-1 w-5 h-5 rounded-full border-2 flex items-center justify-center bg-dark-bg transition-colors ${s.status === "completed" ? "border-primary text-primary" :
+                           s.status === "current" ? "border-primary bg-primary shadow-[0_0_10px_rgba(63,229,108,0.5)]" :
+                              "border-dark-border text-dark-border"
+                           }`}>
+                           {s.status === "completed" && <CheckCircle2 className="w-3 h-3 text-primary" />}
+                        </div>
+                        <h3 className={`font-bold transition-colors ${s.status === "current" ? (s.id === 6 ? "text-red-500" : "text-white") :
+                           s.status === "completed" ? "text-text-muted" : "text-dark-border"
+                           }`}>{s.label}</h3>
+                     </div>
+                  ))}
+               </div>
+
+               <div className="mt-8 pt-6 border-t border-dark-border space-y-4">
+                  {currentStep === 1 && (
+                     <>
+                        <h4 className="text-white font-bold text-sm">Agreement Phase</h4>
+                        {myRole === 'SELL' ? (
+                           <>
+                              <p className="text-sm text-text-muted">Verify terms with the buyer. When ready, lock the terms to request funds into the Vault.</p>
+                              <NeonButton className="w-full justify-center !py-3 bg-dark-bg" onClick={() => handleTradeProgress('REQUEST_PAYMENT')}>
+                                 Lock Terms & Request Payment <ArrowRight className="w-4 h-4 ml-2" />
+                              </NeonButton>
+                           </>
+                        ) : (
+                           <p className="text-sm text-text-muted pb-2">Waiting for the Seller to lock terms and send the payment request.</p>
+                        )}
+                     </>
+                  )}
+                  {currentStep === 2 && (
+                     <>
+                        <h4 className="text-white font-bold text-sm">Payment Secured Phase</h4>
+                        {myRole === 'BUY' ? (
+                           <>
+                              <p className="text-sm text-text-muted mb-4">The Seller has locked the terms. Please secure the funds into the Vault.</p>
+                              
+                              <div className="space-y-2 mb-6">
+                                 <label className="text-xs text-text-muted uppercase tracking-wider font-bold">Select Funding Source</label>
+                                 <select 
+                                    value={paymentMethod}
+                                    onChange={(e) => setPaymentMethod(e.target.value)}
+                                    className="w-full bg-dark-bg border border-dark-border py-3 px-3 rounded-lg text-sm text-white focus:outline-none focus:border-primary/50 appearance-none"
+                                 >
+                                    <option value="midly_wallet">Midly Global Wallet</option>
+                                    <option value="credit_card">Credit / Debit Card</option>
+                                    <option value="gcash">GCash Direct</option>
+                                 </select>
+                              </div>
+
+                              <NeonButton className="w-full justify-center !py-3 text-lg relative overflow-hidden group" onClick={() => handleTradeProgress('PAY')}>
+                                 Secure ₱{Number(trade.total_amount).toLocaleString()}
+                              </NeonButton>
+                           </>
+                        ) : (
+                           <p className="text-sm text-text-muted pb-2">Waiting for the Buyer to deposit funds into the Midly Smart Vault.</p>
+                        )}
+                     </>
+                  )}
+                  {currentStep === 3 && (
+                     <>
+                        <h4 className="text-white font-bold text-sm">Item Handover</h4>
+                        {myRole === 'SELL' ? (
+                           <>
+                              <p className="text-sm text-text-muted">The Midly Vault has secured the funds. Please format/deliver the item to the buyer.</p>
+                              <NeonButton className="w-full justify-center !py-3" onClick={() => handleTradeProgress('DELIVER')}>
+                                 Confirm Items Delivered <ArrowRight className="w-4 h-4 ml-2" />
+                              </NeonButton>
+                           </>
+                        ) : (
+                           <p className="text-sm text-text-muted pb-2">Funds secured. Waiting for Seller to deliver the item / upload proof in chat.</p>
+                        )}
+                     </>
+                  )}
+                  {currentStep === 4 && (
+                     <>
+                        <h4 className="text-white font-bold text-sm">Retrieval Lock & Verification</h4>
+                        {myRole === 'BUY' ? (
+                           <>
+                              <p className="text-sm text-text-muted mb-2">Seller marked delivered. You have 24 hours to inspect before auto-release.</p>
+                              <div className="flex gap-2">
+                                 <NeonButton variant="ghost" className="flex-1 text-red-500 border border-red-500 hover:bg-red-500/10" onClick={handleDispute}>
+                                    Dispute
+                                 </NeonButton>
+                                 <NeonButton className="flex-[2] justify-center text-sm px-2" onClick={() => handleTradeProgress('APPROVE')}>
+                                    Release Funds Early
+                                 </NeonButton>
+                              </div>
+                           </>
+                        ) : (
+                           <p className="text-sm text-text-muted pb-2">Delivery confirmed. 24-hr Retrieval Lock active. Awaiting Buyer override or auto-release.</p>
+                        )}
+                     </>
+                  )}
+                  {currentStep === 5 && (
+                     <div className="bg-primary/10 border border-primary/30 rounded-xl p-4 flex flex-col gap-4">
+                        <div className="flex items-start gap-3">
+                           <ShieldCheck className="w-6 h-6 text-primary flex-shrink-0" />
+                           <div>
+                              <h4 className="text-white font-bold text-sm">Escrow Complete</h4>
+                              <p className="text-xs text-text-muted mt-1 leading-relaxed">Funds have been successfully released to the seller's wallet. Thank you for using Midly.</p>
+                           </div>
+                        </div>
+
+                        {/* Reputation System (Buyers Only) */}
+                        {myRole === 'BUY' && !hasRated && (
+                           <div className="pt-3 border-t border-primary/20 text-center">
+                              <p className="text-xs text-text-muted mb-2 uppercase tracking-wider">Rate Seller</p>
+                              <div className="flex justify-center gap-2">
+                                 {[1, 2, 3, 4, 5].map(star => (
+                                    <button key={star} onClick={() => handleRateSeller(star)} className="text-2xl text-dark-border hover:text-yellow-400 transition-colors">
+                                       ★
+                                    </button>
+                                 ))}
+                              </div>
+                           </div>
+                        )}
+                        {hasRated && <p className="text-xs text-center text-primary mt-2">Rating Submitted ✓</p>}
+                     </div>
+                  )}
+               </div>
+            </DynamicCard>
+         </div>
+
+         {/* Right Column: Intelligent Chat */}
+         <div className="col-span-2 flex flex-col h-full max-h-full min-h-0 bg-dark-panel border border-dark-border rounded-2xl overflow-hidden shadow-2xl relative">
+            <div className="p-5 border-b border-dark-border bg-dark-bg flex items-center justify-between shrink-0">
+               <div className="flex items-center gap-3">
+                  <MessageSquare className="w-5 h-5 text-primary glow-icon" />
+                  <h2 className="font-bold text-white">Intelligent Negotiation Hub</h2>
+               </div>
+               <div className="flex items-center gap-3">
+                  <button onClick={() => {
+                     navigator.clipboard.writeText(window.location.href);
+                     toast.success("Room Invite Link Copied!");
+                  }} className="px-3 py-1 bg-dark-panel hover:bg-dark-border cursor-pointer transition-colors rounded-full border border-dark-border text-xs text-white flex items-center gap-2">
+                     <Copy className="w-3 h-3 text-text-muted" /> Copy Invite Link
+                  </button>
+                  <div className="px-3 py-1 bg-dark-panel rounded-full border border-dark-border text-xs text-text-muted flex items-center gap-2">
+                     End-to-End Encrypted <ShieldCheck className="w-3 h-3 text-primary" />
+                  </div>
+               </div>
             </div>
-          </DynamicCard>
 
-          {/* Trade Info */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <DynamicCard hoverEffect={false} className="border border-dark-border bg-dark-panel">
-               <h3 className="font-bold text-white mb-4 text-sm uppercase tracking-wide">Buyer Info</h3>
-               <div className="flex items-center gap-4">
-                 <div className="w-12 h-12 bg-dark-bg rounded-lg border border-primary/30 flex items-center justify-center glow-icon relative">
-                    <span className="text-lg font-bold text-primary">J</span>
-                    <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-primary border-2 border-dark-panel animate-pulse"/>
-                 </div>
-                 <div>
-                    <p className="text-white font-medium">Juan Buyer</p>
-                    <p className="text-xs text-primary glow-icon flex items-center gap-1"><ShieldCheck className="w-3 h-3"/> KYC Verified ID</p>
-                 </div>
-               </div>
-            </DynamicCard>
-            <DynamicCard hoverEffect={false} className="border border-dark-border bg-dark-panel">
-               <h3 className="font-bold text-white mb-4 text-sm uppercase tracking-wide">Contract Link</h3>
-               <p className="text-xs text-text-muted mb-2">Share this private link for buyers to deposit.</p>
-               <div className="flex items-center p-2 rounded bg-dark-bg border border-dark-border gap-2">
-                 <p className="flex-1 truncate text-sm text-text-main font-mono">midly.com/t/val-1095</p>
-                 <button className="p-2 bg-dark-panel hover:bg-dark-border rounded text-text-muted hover:text-white transition-colors">
-                    <Copy className="w-4 h-4" />
-                 </button>
-               </div>
-            </DynamicCard>
-          </div>
-        </div>
+            <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+               {messages.length === 0 && (
+                  <div className="flex items-center justify-center h-full">
+                     <p className="text-text-muted text-sm border border-dark-border p-4 rounded-xl bg-dark-bg">No messages yet. Say hello securely!</p>
+                  </div>
+               )}
+               {messages.map((m) => (
+                  <div key={m.id} className={`flex ${m.sender === "user" ? "justify-end" : m.sender === "ai" ? "justify-center" : "justify-start"}`}>
+                     {m.sender === "ai" ? (
+                        <div className="max-w-[90%] bg-red-500/10 border border-red-500/30 text-red-400 p-3 rounded-xl text-sm flex items-start gap-3 my-2 shadow-[0_0_15px_rgba(239,68,68,0.1)]">
+                           <ShieldAlert className="w-5 h-5 flex-shrink-0" />
+                           <p className="leading-relaxed">{m.text}</p>
+                        </div>
+                     ) : (
+                        <div className={`max-w-[70%] p-4 rounded-2xl ${m.sender === "user"
+                           ? "bg-primary text-black rounded-tr-sm shadow-[0_0_15px_rgba(63,229,108,0.2)]"
+                           : "bg-dark-bg border border-dark-border text-white rounded-tl-sm"
+                           }`}>
+                           {m.text.startsWith('http') && m.text.includes('/uploads/') ? (
+                              <img src={m.text} className="max-w-[200px] rounded-lg border border-white/20" alt="Proof" />
+                           ) : (
+                              <p className="text-[15px] leading-relaxed">{m.text}</p>
+                           )}
+                           <span className={`text-[10px] mt-2 block ${m.sender === "user" ? "text-black/60" : "text-text-muted"}`}>
+                              {m.timestamp}
+                           </span>
+                        </div>
+                     )}
+                  </div>
+               ))}
+               <div ref={messagesEndRef} />
+            </div>
 
-        {/* Right Column: Chat Box */}
-        <div className="col-span-1 h-full max-h-[700px]">
-          <ChatBox 
-            initialMessages={messages} 
-            onSendMessage={handleSendMessage}
-            isProcessingText={isAiProcessing ? "AI Verifying..." : undefined}
-          />
-        </div>
+            <div className="p-4 bg-dark-bg border-t border-dark-border shrink-0">
+               <div className="relative flex items-center">
+                  <input
+                     type="text"
+                     value={inputText}
+                     onChange={(e) => setInputText(e.target.value)}
+                     onKeyDown={(e) => {
+                        if (e.key === "Enter" && inputText.trim()) {
+                           handleSendMessage(inputText);
+                           setInputText("");
+                        }
+                     }}
+                     disabled={currentStep >= 5}
+                     placeholder={currentStep >= 5 ? "Escrow closed..." : "Send a secure message..."}
+                     className="w-full bg-dark-panel border border-dark-border rounded-full pl-5 pr-24 py-4 text-white focus:outline-none focus:border-primary/50 transition-colors placeholder:text-text-muted disabled:opacity-50"
+                  />
+                  <div className="absolute right-2 flex items-center gap-1">
+                     <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileUpload} />
+                     <button className="p-2 text-text-muted hover:text-white transition-colors" title="Attach Proof" onClick={() => fileInputRef.current?.click()}>
+                        <Paperclip className="w-5 h-5" />
+                     </button>
+                     <NeonButton
+                        className="!py-2 !px-4 !rounded-full"
+                        disabled={!inputText.trim() || currentStep >= 5 || isAiProcessing}
+                        onClick={() => {
+                           handleSendMessage(inputText);
+                           setInputText("");
+                        }}
+                     >
+                        Send
+                     </NeonButton>
+                  </div>
+               </div>
+               {isAiProcessing && <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-xs text-primary animate-pulse bg-dark-bg px-3 py-1 rounded-full border border-primary/20">AI is screening message...</div>}
+            </div>
+         </div>
       </div>
-    </div>
-  );
+   );
 }

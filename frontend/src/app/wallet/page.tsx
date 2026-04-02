@@ -1,118 +1,171 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { Wallet, ShieldCheck, ArrowDownToLine, ArrowUpFromLine, RefreshCcw, Lock } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Wallet as WalletIcon, ArrowUpRight, ArrowDownLeft, ShieldCheck, History } from "lucide-react";
 import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
+import toast from "react-hot-toast";
 
-export default function WalletPage() {
+type Transaction = { id: number; amount: string; type: string; date: string; status: string };
+
+import { useRouter } from "next/navigation";
+
+export default function Wallet() {
+  const router = useRouter();
+  const [balance, setBalance] = useState("0.00");
+  const [isVerified, setIsVerified] = useState(false);
+  const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
+  const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
+  const [amount, setAmount] = useState("");
+
+  const fetchWallet = () => {
+     fetch(`http://localhost:5000/api/wallet`, {
+        headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` }
+     })
+     .then(res => res.json())
+     .then(data => {
+        if (data.wallet_balance !== undefined) setBalance(Number(data.wallet_balance).toFixed(2));
+     });
+
+     fetch(`http://localhost:5000/api/user/profile`, {
+        headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` }
+     })
+     .then(res => res.json())
+     .then(data => {
+        if (data.kyc?.status === 'approved') setIsVerified(true);
+     });
+  };
+
+  useEffect(() => {
+     fetchWallet();
+  }, []);
+
+  const handleDeposit = async (e: React.FormEvent) => {
+     e.preventDefault();
+     try {
+       const res = await fetch(`http://localhost:5000/api/wallet/deposit`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${localStorage.getItem('token')}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ amount })
+       });
+       if (res.ok) {
+          toast.success(`Successfully deposited ₱${amount}`);
+          setAmount("");
+          setIsDepositModalOpen(false);
+          fetchWallet();
+       } else { toast.error("Deposit failed"); }
+     } catch (e) { toast.error("Server error"); }
+  };
+
+  const handleWithdraw = async (e: React.FormEvent) => {
+     e.preventDefault();
+     if (!isVerified) {
+         toast.error("AML Law: Identity Verification Required to withdraw funds.");
+         router.push("/kyc");
+         return;
+     }
+
+     try {
+       const res = await fetch(`http://localhost:5000/api/wallet/withdraw`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${localStorage.getItem('token')}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ amount })
+       });
+       const data = await res.json();
+       if (res.ok) {
+          toast.success(`Successfully withdrew ₱${amount} to bank`);
+          setAmount("");
+          setIsWithdrawModalOpen(false);
+          fetchWallet();
+       } else { toast.error(data.error || "Withdrawal failed"); }
+     } catch (e) { toast.error("Server error"); }
+  };
+
   return (
-    <div className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 py-10">
-      <div className="mb-10">
-        <h1 className="text-3xl font-bold text-white tracking-tight flex items-center gap-3">
-          MIDLY Vault
-          <ShieldCheck className="w-8 h-8 text-primary glow-icon" />
-        </h1>
-        <p className="text-text-muted mt-2">Manage your balances and view funds secured in active smart escrows.</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
-        {/* Available Balance */}
-        <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-          <DynamicCard hoverEffect={false} className="border-t-2 border-t-primary bg-primary/5 h-full flex flex-col justify-between">
-            <div>
-              <div className="flex items-center gap-2 text-primary font-bold mb-4">
-                <Wallet className="w-5 h-5"/> Available Balance
-              </div>
-              <h2 className="text-5xl font-bold text-white mt-2 mb-1 glow-icon drop-shadow-[0_0_15px_rgba(63,229,108,0.2)]">₱ 18,450.00</h2>
-              <p className="text-sm text-text-muted">Ready to withdraw or use for trades.</p>
+    <div className="flex-1 w-full max-w-7xl mx-auto px-4 py-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* Main Wallet Card */}
+        <div className="lg:col-span-2 space-y-8">
+          <DynamicCard className="border border-dark-border bg-dark-panel p-8 relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-8 opacity-5">
+              <WalletIcon className="w-48 h-48" />
             </div>
             
-            <div className="grid grid-cols-2 gap-3 mt-8">
-               <NeonButton className="w-full rounded text-sm gap-2">
-                 <ArrowUpFromLine className="w-4 h-4"/> Deposit
-               </NeonButton>
-               <NeonButton variant="secondary" className="w-full rounded text-sm gap-2 hover:border-primary hover:text-primary transition-all glow-icon">
-                 <ArrowDownToLine className="w-4 h-4"/> Withdraw
-               </NeonButton>
+            <div className="relative z-10">
+              <h2 className="text-text-muted font-medium mb-2 flex items-center gap-2">
+                <WalletIcon className="w-5 h-5 text-primary" /> Total Balance (PHP)
+              </h2>
+              <div className="text-6xl font-bold text-white tracking-tight mb-8">
+                ₱{Number(balance).toLocaleString()}
+              </div>
+
+              <div className="flex gap-4">
+                <NeonButton onClick={() => setIsDepositModalOpen(true)} className="flex-1 justify-center gap-2 !py-4 text-lg">
+                  <ArrowDownLeft className="w-5 h-5" /> Deposit Funds
+                </NeonButton>
+                <NeonButton onClick={() => {
+                   if (!isVerified) {
+                      toast.error("AML Law: Identity Verification Required to withdraw funds.");
+                      router.push("/kyc");
+                   } else {
+                      setIsWithdrawModalOpen(true);
+                   }
+                }} variant="ghost" className="flex-1 justify-center gap-2 !py-4 text-lg border border-text-muted hover:border-white">
+                  <ArrowUpRight className="w-5 h-5" /> Withdraw to Bank
+                </NeonButton>
+              </div>
             </div>
           </DynamicCard>
-        </motion.div>
 
-        {/* Funds in Escrow (Locked) */}
-        <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-          <DynamicCard hoverEffect={false} className="border border-dark-border bg-dark-panel h-full flex flex-col justify-between relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-8 border-l border-b border-dark-border rounded-bl-[100px] bg-dark-bg/50">
-              <Lock className="w-12 h-12 text-text-muted/20" />
-            </div>
-            <div className="relative z-10">
-              <div className="flex items-center gap-2 text-text-muted font-bold mb-4">
-                <Lock className="w-5 h-5"/> Locked in Escrow
-              </div>
-              <h2 className="text-4xl font-bold text-text-main mt-2 mb-1">₱ 12,500.00</h2>
-              <p className="text-sm text-text-muted">Secured in 1 active "BUY" transaction.</p>
-            </div>
-            <div className="mt-8">
-              <p className="text-xs text-text-muted leading-relaxed">
-                These funds cannot be withdrawn until the associated transaction (#1095) is either completed or canceled through dispute resolution.
+          {/* Security Banner */}
+          <div className="bg-primary/10 border border-primary/20 rounded-2xl p-6 flex items-start gap-4">
+            <ShieldCheck className="w-8 h-8 text-primary flex-shrink-0" />
+            <div>
+              <h3 className="text-white font-bold mb-1">Bank-Grade Security Encryption</h3>
+              <p className="text-text-muted text-sm leading-relaxed">
+                Your funds are secured in the Midly Smart Vault. All deposits and withdrawals map to your hardware-verified identity, preventing any money laundering or fraudulent exits.
               </p>
             </div>
-          </DynamicCard>
-        </motion.div>
+          </div>
+        </div>
 
-        {/* Incoming Escrow (Waiting) */}
-        <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-          <DynamicCard hoverEffect={false} className="border border-dark-border bg-dark-panel h-full flex flex-col justify-between relative overflow-hidden">
-             <div className="absolute top-0 right-0 p-8 border-l border-b border-dark-border rounded-bl-[100px] bg-dark-bg/50">
-              <RefreshCcw className="w-12 h-12 text-yellow-500/10" />
-            </div>
-            <div className="relative z-10">
-              <div className="flex items-center gap-2 text-yellow-500 font-bold mb-4">
-                <RefreshCcw className="w-5 h-5"/> Expected Incoming
-              </div>
-              <h2 className="text-4xl font-bold text-text-main mt-2 mb-1 text-yellow-500">₱ 3,800.00</h2>
-              <p className="text-sm text-text-muted">From 1 active "SELL" transaction.</p>
-            </div>
-            <div className="mt-8">
-               <p className="text-xs text-text-muted leading-relaxed">
-                This amount will be directly deposited to your available balance once the buyer approves the received asset. Note: 5% fee is already deducted.
-              </p>
-            </div>
-          </DynamicCard>
-        </motion.div>
+        {/* Transaction Ledger */}
+        <DynamicCard hoverEffect={false} className="border border-dark-border bg-dark-bg p-6">
+          <div className="flex items-center gap-3 mb-6 pb-4 border-b border-dark-border">
+            <History className="w-5 h-5 text-text-muted" />
+            <h3 className="text-lg font-bold text-white">Recent Ledger</h3>
+          </div>
+          <div className="space-y-4">
+             <div className="text-center text-text-muted text-sm py-10">Ledger API coming soon...</div>
+          </div>
+        </DynamicCard>
       </div>
 
-      <h2 className="text-xl font-bold text-white mb-6">Recent Vault Activity</h2>
-      <DynamicCard hoverEffect={false} className="p-0 border border-dark-border bg-dark-bg/30">
-        <div className="divide-y divide-dark-border/50 text-sm">
-           <div className="p-4 flex items-center gap-4 hover:bg-dark-panel/30 transition-colors">
-              <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center text-red-500"><ArrowDownToLine className="w-4 h-4"/></div>
-              <div className="flex-1">
-                 <p className="font-bold text-white">Escrow Payment Locked (Trade #1095)</p>
-                 <p className="text-xs text-text-muted">Oct 24, 2026 • 10:05 AM</p>
-              </div>
-              <p className="font-bold text-white">- ₱ 12,500.00</p>
-           </div>
-           
-           <div className="p-4 flex items-center gap-4 hover:bg-dark-panel/30 transition-colors">
-              <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500"><ArrowUpFromLine className="w-4 h-4"/></div>
-              <div className="flex-1">
-                 <p className="font-bold text-white">Deposit via GCash/PayMaya</p>
-                 <p className="text-xs text-text-muted">Oct 24, 2026 • 09:30 AM</p>
-              </div>
-              <p className="font-bold text-emerald-500">+ ₱ 12,500.00</p>
-           </div>
-           
-           <div className="p-4 flex items-center gap-4 hover:bg-dark-panel/30 transition-colors">
-              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary glow-icon"><ShieldCheck className="w-4 h-4"/></div>
-              <div className="flex-1">
-                 <p className="font-bold text-white">Funds Released (Trade #1002)</p>
-                 <p className="text-xs text-text-muted">Oct 15, 2026 • 15:45 PM</p>
-              </div>
-              <p className="font-bold text-primary">+ ₱ 2,375.00</p>
+      {isDepositModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setIsDepositModalOpen(false)}>
+           <div className="bg-dark-panel border border-dark-border p-8 rounded-2xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
+              <h2 className="text-2xl font-bold text-white mb-6">Deposit via GCash/Bank</h2>
+              <form onSubmit={handleDeposit} className="space-y-4">
+                 <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} required min="100" placeholder="Amount (₱)" className="w-full bg-dark-bg border border-dark-border rounded-xl p-4 text-white focus:outline-none focus:border-primary text-xl font-bold" />
+                 <NeonButton type="submit" className="w-full justify-center !py-4">Confirm Deposit</NeonButton>
+              </form>
            </div>
         </div>
-      </DynamicCard>
+      )}
+
+      {isWithdrawModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setIsWithdrawModalOpen(false)}>
+           <div className="bg-dark-panel border border-dark-border p-8 rounded-2xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
+              <h2 className="text-2xl font-bold text-white mb-6">Withdraw to Bank</h2>
+              <p className="text-sm text-text-muted mb-4">Available: ₱{Number(balance).toLocaleString()}</p>
+              <form onSubmit={handleWithdraw} className="space-y-4">
+                 <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} required min="100" placeholder="Amount (₱)" className="w-full bg-dark-bg border border-dark-border rounded-xl p-4 text-white focus:outline-none focus:border-primary text-xl font-bold" />
+                 <NeonButton type="submit" className="w-full justify-center !py-4 border border-white text-white" variant="ghost">Request Withdrawal</NeonButton>
+              </form>
+           </div>
+        </div>
+      )}
     </div>
   );
 }
