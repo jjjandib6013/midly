@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
-import { ShieldCheck, MessageSquare, CheckCircle2, ShieldAlert, Paperclip, ImageIcon, ArrowRight, Copy } from "lucide-react";
+import { ShieldCheck, MessageSquare, CheckCircle2, ShieldAlert, Paperclip, ImageIcon, ArrowRight, Copy, Wallet, Smartphone, CreditCard, Lock } from "lucide-react";
 import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
 import { io } from "socket.io-client";
@@ -21,6 +21,8 @@ export default function TradeHub() {
    const [inputText, setInputText] = useState("");
    const [currentStep, setCurrentStep] = useState(1);
    const [paymentMethod, setPaymentMethod] = useState("midly_wallet");
+   const [myWalletBalance, setMyWalletBalance] = useState<number>(0);
+   const [isPaymentSimulating, setIsPaymentSimulating] = useState(false);
    const [isAiProcessing, setIsAiProcessing] = useState(false);
    const [isLoading, setIsLoading] = useState(true);
    const [hasRated, setHasRated] = useState(false);
@@ -181,12 +183,32 @@ export default function TradeHub() {
    };
 
    const handleTradeProgress = async (action: string) => {
+      if (action === 'PAY' && (paymentMethod === 'gcash' || paymentMethod === 'credit_card')) {
+          setIsPaymentSimulating(true);
+          setTimeout(async () => {
+              try {
+                  const res = await fetch(`http://localhost:5000/api/transactions/${tradeId}/progress`, {
+                     method: "PUT",
+                     headers: { "Authorization": `Bearer ${localStorage.getItem('token')}`, "Content-Type": "application/json" },
+                     body: JSON.stringify({ action, paymentMethod })
+                  });
+                  if (res.ok) fetchTrade();
+                  else {
+                     const data = await res.json();
+                     toast.error(data.error || "Action failed");
+                  }
+              } catch(e) {}
+              setIsPaymentSimulating(false);
+          }, 2000); // simulate gateway auth
+          return;
+      }
+
       try {
          setIsLoading(true);
          const res = await fetch(`http://localhost:5000/api/transactions/${tradeId}/progress`, {
             method: "PUT",
             headers: { "Authorization": `Bearer ${localStorage.getItem('token')}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ action })
+            body: JSON.stringify({ action, paymentMethod: action === 'PAY' ? paymentMethod : undefined })
          });
          const data = await res.json();
          if (res.ok) {
@@ -336,22 +358,65 @@ export default function TradeHub() {
                            <>
                               <p className="text-sm text-text-muted mb-4">The Seller has locked the terms. Please secure the funds into the Vault.</p>
                               
-                              <div className="space-y-2 mb-6">
-                                 <label className="text-xs text-text-muted uppercase tracking-wider font-bold">Select Funding Source</label>
-                                 <select 
-                                    value={paymentMethod}
-                                    onChange={(e) => setPaymentMethod(e.target.value)}
-                                    className="w-full bg-dark-bg border border-dark-border py-3 px-3 rounded-lg text-sm text-white focus:outline-none focus:border-primary/50 appearance-none"
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+                                 <div 
+                                    onClick={() => setPaymentMethod('midly_wallet')} 
+                                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${paymentMethod === 'midly_wallet' ? 'border-primary bg-primary/10 glow-icon' : 'border-dark-border bg-dark-bg hover:border-primary/50'}`}
                                  >
-                                    <option value="midly_wallet">Midly Global Wallet</option>
-                                    <option value="credit_card">Credit / Debit Card</option>
-                                    <option value="gcash">GCash Direct</option>
-                                 </select>
+                                    <div className="flex flex-col items-center justify-center text-center">
+                                       <Wallet className={`w-6 h-6 mb-2 ${paymentMethod === 'midly_wallet' ? 'text-primary' : 'text-text-muted'}`} />
+                                       <h4 className="text-sm font-bold text-white">Midly Wallet</h4>
+                                       <p className="text-xs mt-1 text-text-muted">Balance: ₱{myWalletBalance.toLocaleString()}</p>
+                                    </div>
+                                 </div>
+
+                                 <div 
+                                    onClick={() => setPaymentMethod('gcash')} 
+                                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${paymentMethod === 'gcash' ? 'border-blue-500 bg-blue-500/10' : 'border-dark-border bg-dark-bg hover:border-blue-500/50'}`}
+                                 >
+                                    <div className="flex flex-col items-center justify-center text-center">
+                                       <Smartphone className={`w-6 h-6 mb-2 ${paymentMethod === 'gcash' ? 'text-blue-500' : 'text-text-muted'}`} />
+                                       <h4 className="text-sm font-bold text-white">GCash Direct</h4>
+                                       <p className="text-xs mt-1 text-text-muted">External Gateway</p>
+                                    </div>
+                                 </div>
+
+                                 <div 
+                                    onClick={() => setPaymentMethod('credit_card')} 
+                                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${paymentMethod === 'credit_card' ? 'border-purple-500 bg-purple-500/10' : 'border-dark-border bg-dark-bg hover:border-purple-500/50'}`}
+                                 >
+                                    <div className="flex flex-col items-center justify-center text-center">
+                                       <CreditCard className={`w-6 h-6 mb-2 ${paymentMethod === 'credit_card' ? 'text-purple-500' : 'text-text-muted'}`} />
+                                       <h4 className="text-sm font-bold text-white">Credit / Debit</h4>
+                                       <p className="text-xs mt-1 text-text-muted">Powered by Stripe</p>
+                                    </div>
+                                 </div>
                               </div>
 
-                              <NeonButton className="w-full justify-center !py-3 text-lg relative overflow-hidden group" onClick={() => handleTradeProgress('PAY')}>
-                                 Secure ₱{Number(trade.total_amount).toLocaleString()}
-                              </NeonButton>
+                              {paymentMethod === 'midly_wallet' && (myWalletBalance < Number(trade.total_amount)) ? (
+                                 <div className="text-center p-4 rounded-xl border border-red-500/30 bg-red-500/10 mb-4">
+                                    <p className="text-red-500 text-sm mb-2 font-bold flex items-center justify-center gap-2">
+                                       <ShieldAlert className="w-4 h-4" /> Insufficient Midly Wallet Balance
+                                    </p>
+                                    <a href="/wallet" target="_blank" className="text-primary hover:underline text-xs font-medium">Deposit Funds in Wallet Dashboard</a>
+                                 </div>
+                              ) : (
+                                 <NeonButton 
+                                    className="w-full justify-center !py-3 text-lg relative overflow-hidden group" 
+                                    onClick={() => handleTradeProgress('PAY')}
+                                    disabled={isPaymentSimulating}
+                                 >
+                                    {isPaymentSimulating ? (
+                                       <span className="flex items-center gap-2">
+                                          <div className="w-5 h-5 rounded-full border-2 border-white border-t-transparent animate-spin" /> Authenticating...
+                                       </span>
+                                    ) : (
+                                       <span className="flex items-center gap-2">
+                                          <Lock className="w-5 h-5" /> Secure ₱{Number(trade.total_amount).toLocaleString()}
+                                       </span>
+                                    )}
+                                 </NeonButton>
+                              )}
                            </>
                         ) : (
                            <p className="text-sm text-text-muted pb-2">Waiting for the Buyer to deposit funds into the Midly Smart Vault.</p>
