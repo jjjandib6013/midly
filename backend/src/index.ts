@@ -738,6 +738,69 @@ app.post('/api/transactions/:id/dispute', authenticateJWT, async (req, res): Pro
    }
 });
 
+// POST Auto-Release System Trigger
+app.post('/api/transactions/:id/auto-release', authenticateJWT, async (req, res): Promise<any> => {
+   try {
+      const tradeId = parseInt(req.params.id as string);
+      const trade = await prisma.transaction.findUnique({
+         where: { transaction_id: tradeId },
+         include: { payment: true }
+      });
+
+      if (!trade) return res.status(404).json({ error: 'Not found' });
+      if (trade.status !== 'verifying' || !trade.item_delivered_at) {
+         return res.status(400).json({ error: 'Trade is not in verifiable state.' });
+      }
+
+      // Allow bypass for the demo if 'forceDemo' is sent in body
+      const { forceDemo } = req.body;
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      
+      if (!forceDemo && trade.item_delivered_at >= twentyFourHoursAgo) {
+         return res.status(403).json({ error: '24 hours have not elapsed yet.' });
+      }
+
+      if (!trade.payment) return res.status(400).json({ error: 'Vault empty' });
+
+      await prisma.$transaction(async (tx) => {
+         // Auto Approve trade status
+         await tx.transaction.update({
+            where: { transaction_id: tradeId },
+            data: { status: 'completed', buyer_approved_at: new Date() }
+         });
+
+         // Release funds
+         await tx.payment.update({
+            where: { payment_id: trade.payment!.payment_id },
+            data: { vault_status: 'released', release_date: new Date() }
+         });
+
+         // Increment seller wallet
+         const amountToReceive = Number(trade.agreed_price);
+         await tx.user.update({
+            where: { user_id: trade.seller_id },
+            data: { wallet_balance: { increment: amountToReceive } }
+         });
+
+         // System Log
+         await tx.message.create({
+            data: {
+               transaction_id: tradeId,
+               sender_id: trade.seller_id,
+               message_text: `[SYSTEM TRIGGER: AUTO-RELEASE EXECUTED]\n24-Hours elapsed without Buyer Override. The Smart Contract has verified delivery implicitly and successfully routed ₱${amountToReceive.toLocaleString()} to the Seller's wallet.`,
+               is_system_generated: true,
+               risk_level: 'Safe'
+            }
+         });
+      });
+
+      io.to(`trade_${tradeId}`).emit('trade_updated', 'completed');
+      res.json({ status: 'AUTO_RELEASED' });
+   } catch (e) {
+      res.status(500).json({ error: 'Server error' });
+   }
+});
+
 // POST Message
 app.post('/api/messages/:txId', authenticateJWT, async (req, res): Promise<any> => {
    // ... existing POST message ...

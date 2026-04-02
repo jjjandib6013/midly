@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
-import { ShieldCheck, MessageSquare, CheckCircle2, ShieldAlert, Paperclip, ImageIcon, ArrowRight, Copy, Wallet, Smartphone, CreditCard, Lock } from "lucide-react";
+import { ShieldCheck, MessageSquare, CheckCircle2, ShieldAlert, Paperclip, ImageIcon, ArrowRight, Copy, Wallet, Smartphone, CreditCard, Lock, Timer } from "lucide-react";
 import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
 import { io } from "socket.io-client";
@@ -28,6 +28,30 @@ export default function TradeHub() {
    const [hasRated, setHasRated] = useState(false);
    const fileInputRef = useRef<HTMLInputElement>(null);
    const messagesEndRef = useRef<HTMLDivElement>(null);
+
+   const [timeRemaining, setTimeRemaining] = useState({ hours: 24, minutes: 0, seconds: 0, isExpired: false });
+   
+   useEffect(() => {
+      if (trade?.status === 'verifying' && trade?.item_delivered_at) {
+         const end = new Date(trade.item_delivered_at).getTime() + 24 * 60 * 60 * 1000;
+         const interval = setInterval(() => {
+            const now = Date.now();
+            const diff = end - now;
+            if (diff <= 0) {
+               setTimeRemaining({ hours: 0, minutes: 0, seconds: 0, isExpired: true });
+               clearInterval(interval);
+            } else {
+               setTimeRemaining({
+                  hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
+                  minutes: Math.floor((diff / 1000 / 60) % 60),
+                  seconds: Math.floor((diff / 1000) % 60),
+                  isExpired: false
+               });
+            }
+         }, 1000);
+         return () => clearInterval(interval);
+      }
+   }, [trade?.status, trade?.item_delivered_at]);
 
    const fetchTrade = () => {
       fetch(`http://localhost:5000/api/transactions/${tradeId}`, {
@@ -179,6 +203,24 @@ export default function TradeHub() {
          toast.error("Server error during upload.");
       } finally {
          setIsAiProcessing(false);
+      }
+   };
+
+   const handleAutoRelease = async () => {
+      try {
+         const res = await fetch(`http://localhost:5000/api/transactions/${tradeId}/auto-release`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+            body: JSON.stringify({ forceDemo: true })
+         });
+         if (res.ok) {
+            toast.success("System Override: Funds Auto-Released");
+            fetchTrade();
+         } else {
+            toast.error("Failed to trigger auto-release.");
+         }
+      } catch (e) {
+         toast.error("Network Error.");
       }
    };
 
@@ -441,20 +483,53 @@ export default function TradeHub() {
                   {currentStep === 4 && (
                      <>
                         <h4 className="text-white font-bold text-sm">Retrieval Lock & Verification</h4>
-                        {myRole === 'BUY' ? (
-                           <>
-                              <p className="text-sm text-text-muted mb-2">Seller marked delivered. You have 24 hours to inspect before auto-release.</p>
-                              <div className="flex gap-2">
-                                 <NeonButton variant="ghost" className="flex-1 text-red-500 border border-red-500 hover:bg-red-500/10" onClick={handleDispute}>
-                                    Dispute
-                                 </NeonButton>
-                                 <NeonButton className="flex-[2] justify-center text-sm px-2" onClick={() => handleTradeProgress('APPROVE')}>
-                                    Release Funds Early
-                                 </NeonButton>
+                        
+                        {trade.status === 'disputed' ? (
+                           <div className="p-4 rounded-xl border border-red-500/30 bg-red-500/10 flex items-start gap-4 animate-pulse">
+                              <ShieldAlert className="w-8 h-8 text-red-500 shrink-0" />
+                              <div>
+                                 <h4 className="text-red-500 font-bold">FUNDS FROZEN - Escrow Suspended</h4>
+                                 <p className="text-xs text-red-400 mt-1 leading-relaxed">A dispute was filed. The 24-hour Auto-Release timer has been completely dismantled. This vault is now legally frozen and awaits Admin Mediation.</p>
                               </div>
-                           </>
+                           </div>
                         ) : (
-                           <p className="text-sm text-text-muted pb-2">Delivery confirmed. 24-hr Retrieval Lock active. Awaiting Buyer override or auto-release.</p>
+                           <>
+                              <div className="flex items-center justify-between bg-dark-bg border border-dark-border p-4 rounded-xl mb-4 shadow-inner">
+                                 <div className="flex items-center gap-3">
+                                    <Timer className="w-6 h-6 text-yellow-500" />
+                                    <div>
+                                       <p className="text-xs text-text-muted font-bold uppercase tracking-wider">Escrow Auto-Release</p>
+                                       <p className="text-sm font-mono text-white mt-1">
+                                          {timeRemaining.isExpired ? "00:00:00 - TIME ELAPSED" : `${timeRemaining.hours.toString().padStart(2, '0')}:${timeRemaining.minutes.toString().padStart(2, '0')}:${timeRemaining.seconds.toString().padStart(2, '0')} REMAINING`}
+                                       </p>
+                                    </div>
+                                 </div>
+                              </div>
+
+                              {myRole === 'BUY' ? (
+                                 <>
+                                    <p className="text-sm text-text-muted mb-4">You have 24 hours to inspect the item. If you don't respond, funds release automatically.</p>
+                                    <div className="flex gap-2">
+                                       <NeonButton variant="ghost" className="flex-1 text-red-500 border border-red-500 hover:bg-red-500/10" onClick={handleDispute}>
+                                          Dispute
+                                       </NeonButton>
+                                       <NeonButton className="flex-[2] justify-center text-sm px-2" onClick={() => handleTradeProgress('APPROVE')}>
+                                          Approve Delivery
+                                       </NeonButton>
+                                    </div>
+                                    <button onClick={handleAutoRelease} className="w-full mt-4 text-xs text-primary bg-primary/10 border border-primary/20 py-2 rounded font-bold hover:bg-primary/20 transition-all">
+                                       [Developer Tool] Force 24h Auto-Release Simulation
+                                    </button>
+                                 </>
+                              ) : (
+                                 <>
+                                    <p className="text-sm text-text-muted pb-2">Delivery confirmed. 24-hr Retrieval Lock active. Awaiting Buyer override or auto-release.</p>
+                                    <button onClick={handleAutoRelease} className="w-full mt-4 text-xs text-primary bg-primary/10 border border-primary/20 py-2 rounded font-bold hover:bg-primary/20 transition-all">
+                                       [Developer Tool] Force 24h Auto-Release Simulation
+                                    </button>
+                                 </>
+                              )}
+                           </>
                         )}
                      </>
                   )}
