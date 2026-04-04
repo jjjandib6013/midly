@@ -76,13 +76,41 @@ const authenticateJWT = (req: Request, res: Response, next: NextFunction): void 
 const requireKYC = async (req: Request, res: Response, next: NextFunction): Promise<any> => {
    try {
       const kyc = await prisma.kycVerification.findUnique({ where: { user_id: req.user.user_id } });
-      if (!kyc || kyc.status !== 'approved') {
+      if (!kyc || kyc.status !== 'verified') {
          return res.status(403).json({ error: 'KYC Verification Required. Please complete Identity Verification.' });
       }
       next();
    } catch (e) {
       res.status(500).json({ error: 'Server error checking KYC' });
    }
+};
+
+// ==========================================
+// AUDIT LOGGING UTILITY
+// ==========================================
+
+const logAudit = async (tx: any, tradeId: number, userId: number, actionType: string, description: string, ip?: string) => {
+   await tx.auditLog.create({
+      data: {
+         transaction_id: tradeId,
+         user_id: userId,
+         action_type: actionType,
+         action_description: description,
+         ip_address: ip || 'system',
+         risk_score: 0
+      }
+   });
+};
+
+// ==========================================
+// STATE VALIDATION GUARD
+// ==========================================
+
+const TERMINAL_STATES = ['completed', 'refunded', 'cancelled', 'disputed'];
+const PRE_ACCEPTANCE_STATES = ['pending_invite'];
+
+const isTradeLockedForActions = (status: string): boolean => {
+   return TERMINAL_STATES.includes(status) || PRE_ACCEPTANCE_STATES.includes(status);
 };
 
 // ==========================================
@@ -234,7 +262,18 @@ app.get('/api/transactions/:id', authenticateJWT, async (req, res): Promise<any>
          return res.status(403).json({ error: 'Forbidden. You are not part of this trade.' });
       }
 
-      res.json({ trade, my_role: trade.buyer_id === req.user.user_id ? 'BUY' : 'SELL' });
+      // Determine who initiated the trade by checking the escrow_invite notification
+      const inviteNotif = await prisma.notification.findFirst({
+         where: { reference_id: tradeId, type: 'escrow_invite' }
+      });
+      // The initiator is the person who is NOT the recipient of the invite notification
+      const initiatorId = inviteNotif ? (inviteNotif.user_id === trade.buyer_id ? trade.seller_id : trade.buyer_id) : trade.buyer_id;
+
+      res.json({
+         trade,
+         my_role: trade.buyer_id === req.user.user_id ? 'BUY' : 'SELL',
+         is_initiator: req.user.user_id === initiatorId
+      });
    } catch (error: any) {
       res.status(500).json({ error: 'Server error', msg: error.message });
    }
@@ -488,14 +527,33 @@ app.get('/api/notifications', authenticateJWT, async (req, res): Promise<any> =>
    } catch (e) { res.status(500).json({ error: 'Server err' }); }
 });
 
-// PUT Accept Escrow Invite
+// PUT Accept Escrow Invite (Hardened: counterparty-only, idempotent, audit-logged)
 app.put('/api/transactions/:id/accept-invite', authenticateJWT, async (req, res): Promise<any> => {
    try {
       const tradeId = parseInt(req.params.id as string);
 
       const trade = await prisma.transaction.findUnique({ where: { transaction_id: tradeId } });
-      if (!trade || trade.status !== 'pending_invite') return res.status(400).json({ error: 'Invalid invite' });
-      if (req.user.user_id !== trade.buyer_id && req.user.user_id !== trade.seller_id) return res.status(403).json({ error: 'Forbidden' });
+      if (!trade) return res.status(404).json({ error: 'Trade not found' });
+
+      // Idempotency: if trade already past pending_invite, return success silently
+      if (trade.status !== 'pending_invite') {
+         return res.json({ success: true, message: 'Trade already accepted.' });
+      }
+
+      // Authorization: must be part of the trade
+      if (req.user.user_id !== trade.buyer_id && req.user.user_id !== trade.seller_id) {
+         return res.status(403).json({ error: 'Forbidden. You are not part of this trade.' });
+      }
+
+      // CRITICAL: Only the counterparty (invited user) can accept, NOT the initiator
+      const inviteNotif = await prisma.notification.findFirst({
+         where: { reference_id: tradeId, type: 'escrow_invite' }
+      });
+      const invitedUserId = inviteNotif?.user_id;
+
+      if (!invitedUserId || req.user.user_id !== invitedUserId) {
+         return res.status(403).json({ error: 'Only the invited counterparty may accept this trade.' });
+      }
 
       await prisma.$transaction(async (tx) => {
          await tx.transaction.update({
@@ -508,17 +566,32 @@ app.put('/api/transactions/:id/accept-invite', authenticateJWT, async (req, res)
             data: { is_read: true }
          });
 
+         // Notify the initiator that their invite was accepted
+         const initiatorId = invitedUserId === trade.buyer_id ? trade.seller_id : trade.buyer_id;
+         await tx.notification.create({
+            data: {
+               user_id: initiatorId,
+               message: `Your Private Escrow invite for Trade #${tradeId} has been accepted! The Agreement Phase is now active.`,
+               type: 'escrow_accepted',
+               reference_id: tradeId
+            }
+         });
+
          await tx.message.create({
             data: {
                transaction_id: tradeId,
                sender_id: req.user.user_id,
-               message_text: `[SYSTEM LOG] User has accepted the Private Escrow Request. The Room is now unlocked. You are in the Agreement Phase. Please discuss terms.`,
+               message_text: `[SYSTEM LOG] The Counterparty has accepted the Private Escrow Request. The Room is now unlocked. You are in the Agreement Phase. Please discuss terms.`,
                is_system_generated: true,
                risk_level: 'Safe'
             }
          });
+
+         // Audit log
+         await logAudit(tx, tradeId, req.user.user_id, 'ACCEPT_INVITE', `User ${req.user.email} accepted escrow invite for trade #${tradeId}`, req.ip);
       });
 
+      io.to(`trade_${tradeId}`).emit('trade_updated', 'agreement');
       return res.json({ success: true });
    } catch (e: any) {
       res.status(500).json({ error: 'Server error' });
@@ -541,8 +614,12 @@ app.put('/api/transactions/:id/progress', authenticateJWT, async (req, res): Pro
          return res.status(403).json({ error: 'Forbidden' });
       }
 
-      if (trade.status === 'disputed' || trade.status === 'completed' || trade.status === 'refunded') {
+      // HARD BLOCK: No actions allowed in terminal or pre-acceptance states
+      if (TERMINAL_STATES.includes(trade.status || '')) {
          return res.status(400).json({ error: 'Trade state is locked and cannot be altered.' });
+      }
+      if (PRE_ACCEPTANCE_STATES.includes(trade.status || '')) {
+         return res.status(400).json({ error: 'Trade is not active. Acceptance by both parties is required.' });
       }
 
       if (action === 'REQUEST_PAYMENT' && req.user.user_id === trade.seller_id) {
@@ -816,9 +893,8 @@ app.post('/api/transactions/:id/auto-release', authenticateJWT, async (req, res)
    }
 });
 
-// POST Message
+// POST Message (with terminal state restriction)
 app.post('/api/messages/:txId', authenticateJWT, async (req, res): Promise<any> => {
-   // ... existing POST message ...
    try {
       const txId = parseInt(req.params.txId as string);
       const { text, isAi, riskLevel } = req.body;
@@ -826,6 +902,12 @@ app.post('/api/messages/:txId', authenticateJWT, async (req, res): Promise<any> 
       const trade = await prisma.transaction.findUnique({ where: { transaction_id: txId } });
       if (!trade || (trade.buyer_id !== req.user.user_id && trade.seller_id !== req.user.user_id)) {
          return res.status(403).json({ error: 'Forbidden.' });
+      }
+
+      // Block messaging in terminal and pre-acceptance states
+      const blockedStates = ['completed', 'cancelled', 'refunded', 'pending_invite'];
+      if (blockedStates.includes(trade.status || '')) {
+         return res.status(400).json({ error: 'This trade room is closed. No further messages allowed.' });
       }
 
       const newMsg = await prisma.message.create({

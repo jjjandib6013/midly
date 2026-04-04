@@ -18,22 +18,29 @@ export default function Wallet() {
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
   const [amount, setAmount] = useState("");
 
-  const fetchWallet = () => {
-    fetch(`http://localhost:5000/api/user/wallet`, {
-      headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` }
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data.wallet_balance !== undefined) setBalance(Number(data.wallet_balance).toFixed(2));
-      });
+  const fetchWallet = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
 
-    fetch(`http://localhost:5000/api/user/profile`, {
-      headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` }
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data.kyc?.status === 'approved') setIsVerified(true);
+    try {
+      const walletRes = await fetch(`http://localhost:5000/api/user/wallet`, {
+        headers: { "Authorization": `Bearer ${token}` }
       });
+      if (walletRes.ok) {
+        const data = await walletRes.json();
+        // The endpoint returns "available_balance", not "wallet_balance"
+        const bal = data.available_balance ?? data.wallet_balance;
+        if (bal !== undefined) setBalance(Number(bal).toFixed(2));
+      }
+    } catch (e) { console.error("Wallet fetch error:", e); }
+
+    try {
+      const profileRes = await fetch(`http://localhost:5000/api/user/profile`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      const data = await profileRes.json();
+      if (data.kyc?.status === 'verified') setIsVerified(true);
+    } catch (e) { console.error("Profile fetch error:", e); }
   };
 
   useEffect(() => {

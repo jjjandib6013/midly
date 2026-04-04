@@ -3,175 +3,172 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { PlusCircle, List, AlertTriangle, ArrowUpRight, Activity, CheckCircle2, RefreshCcw } from "lucide-react";
+import {
+   PlusCircle, ShieldCheck, ArrowRight, Wallet, Clock,
+   CheckCircle2, AlertTriangle, Send, Package, XCircle,
+   Zap, Eye, ChevronRight
+} from "lucide-react";
 import NeonButton from "@/components/ui/NeonButton";
-import DynamicCard from "@/components/ui/DynamicCard";
+
+type Trade = {
+   transaction_id: number;
+   item_type: string;
+   item_name: string;
+   game_type: string;
+   agreed_price: string;
+   total_amount: string;
+   status: string;
+   buyer_id: number;
+   seller_id: number;
+   created_at: string;
+   updated_at: string;
+   buyer: { email: string; first_name: string };
+   seller: { email: string; first_name: string };
+};
+
+const STATUS: Record<string, { label: string; color: string; icon: any }> = {
+   pending_invite: { label: "Pending", color: "text-yellow-500", icon: Send },
+   agreement: { label: "Agreement", color: "text-blue-400", icon: ShieldCheck },
+   awaiting_payment: { label: "Awaiting Pay", color: "text-orange-400", icon: Wallet },
+   active: { label: "Active", color: "text-primary", icon: Zap },
+   verifying: { label: "Verifying", color: "text-purple-400", icon: Eye },
+   completed: { label: "Completed", color: "text-emerald-400", icon: CheckCircle2 },
+   disputed: { label: "Disputed", color: "text-red-500", icon: AlertTriangle },
+   cancelled: { label: "Cancelled", color: "text-neutral-500", icon: XCircle },
+   refunded: { label: "Refunded", color: "text-yellow-400", icon: Clock },
+};
 
 export default function Dashboard() {
-  const [stats, setStats] = useState({ active: 0, total: 0, completed: 0 });
-  const [recentTrades, setRecentTrades] = useState<any[]>([]);
+   const [user, setUser] = useState<any>(null);
+   const [trades, setTrades] = useState<Trade[]>([]);
+   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    fetch("http://localhost:5000/api/transactions", {
-       headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` }
-    })
-      .then(res => res.json())
-      .then(data => {
-         if (data.trades) {
-            setRecentTrades(data.trades.slice(0, 3));
-            setStats({
-               active: data.trades.filter((t: any) => t.status === 'active').length,
-               completed: data.trades.filter((t: any) => t.status === 'completed').length,
-               total: data.trades.length
-            });
-         }
-      })
-      .catch(console.error);
-  }, []);
+   useEffect(() => {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      Promise.all([
+         fetch("http://localhost:5000/api/user/profile", { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+         fetch("http://localhost:5000/api/transactions", { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+      ]).then(([p, t]) => {
+         setUser(p);
+         if (t.trades) setTrades(t.trades);
+         setIsLoading(false);
+      }).catch(() => setIsLoading(false));
+   }, []);
 
-  const container = {
-    hidden: { opacity: 0 },
-    show: { opacity: 1, transition: { staggerChildren: 0.1 } },
-  };
+   const getMyUserId = () => { try { return JSON.parse(atob(localStorage.getItem('token')!.split('.')[1])).user_id; } catch { return 0; } };
+   const getCounterparty = (t: Trade) => t.buyer_id === getMyUserId() ? t.seller?.first_name || t.seller?.email?.split('@')[0] : t.buyer?.first_name || t.buyer?.email?.split('@')[0];
+   const timeAgo = (d: string) => { const m = Math.floor((Date.now() - new Date(d).getTime()) / 60000); if (m < 1) return "now"; if (m < 60) return `${m}m`; const h = Math.floor(m / 60); if (h < 24) return `${h}h`; return `${Math.floor(h / 24)}d`; };
 
-  const item = {
-    hidden: { opacity: 0, y: 15 },
-    show: { opacity: 1, y: 0, transition: { duration: 0.4 } },
-  };
+   const live = trades.filter(t => !['completed', 'cancelled', 'refunded'].includes(t.status));
+   const sorted = [...trades].sort((a, b) => new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime());
 
+   if (isLoading) return <div className="flex-1 flex justify-center items-center"><div className="w-7 h-7 rounded-full border-[3px] border-primary border-t-transparent animate-spin" /></div>;
 
-  return (
-    <div className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-      <motion.div 
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10"
-      >
-        <div>
-          <h1 className="text-3xl font-bold text-white tracking-tight flex items-center gap-3">
-            Welcome back, Trader
-            <div className="px-2 py-0.5 rounded text-[10px] font-bold bg-primary/20 text-primary border border-primary/30 uppercase tracking-wider glow-icon">
-              Verified
+   return (
+      <div className="flex-1 w-full max-w-4xl mx-auto px-6 py-10">
+
+         {/* Header */}
+         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-10">
+            <div className="flex items-end justify-between">
+               <div>
+                  <h1 className="text-2xl font-semibold text-white tracking-tight">
+                     {user?.first_name || 'Home'}
+                  </h1>
+                  <p className="text-sm text-text-muted mt-1">
+                     {live.length > 0 ? `${live.length} active trade${live.length > 1 ? 's' : ''}` : 'No active trades'}
+                  </p>
+               </div>
+               <Link href="/create-trade">
+                  <NeonButton className="gap-2 !py-2.5 !px-5 !text-sm">
+                     <PlusCircle className="w-4 h-4" /> New Escrow
+                  </NeonButton>
+               </Link>
             </div>
-          </h1>
-          <p className="text-text-muted mt-1">Here's your current secure trading overview.</p>
-        </div>
-        
-        <div className="flex items-center gap-3">
-          <Link href="/transactions">
-            <NeonButton variant="ghost" className="gap-2">
-              <List className="w-5 h-5 flex-shrink-0" />
-              <span className="hidden sm:inline">My Trades</span>
-            </NeonButton>
-          </Link>
-          <Link href="/create-trade">
-            <NeonButton className="gap-2 glow-icon shadow-[0_0_15px_rgba(63,229,108,0.2)]">
-              <PlusCircle className="w-5 h-5 flex-shrink-0" />
-              <span>New Escrow</span>
-            </NeonButton>
-          </Link>
-        </div>
-      </motion.div>
+         </motion.div>
 
-      <motion.div 
-        variants={container}
-        initial="hidden"
-        animate="show"
-        className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8"
-      >
-        <motion.div variants={item}>
-          <DynamicCard hoverEffect className="border-t-2 border-t-primary/50 bg-dark-bg/50">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-sm font-medium text-text-muted mb-1">Active Transactions</p>
-                <h3 className="text-4xl font-bold text-white">{stats.active}</h3>
-              </div>
-              <div className="p-3 bg-primary/10 rounded-xl">
-                <RefreshCcw className="w-6 h-6 text-primary glow-icon" />
-              </div>
-            </div>
-            <p className="text-sm text-primary mt-4 flex items-center gap-1 font-medium">
-              <ArrowUpRight className="w-4 h-4" /> Live now
-            </p>
-          </DynamicCard>
-        </motion.div>
-
-        <motion.div variants={item}>
-          <DynamicCard hoverEffect className="border-t-2 border-t-blue-500/50 bg-dark-bg/50">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-sm font-medium text-text-muted mb-1">Total Trades</p>
-                <h3 className="text-4xl font-bold text-white">{stats.total}</h3>
-              </div>
-              <div className="p-3 bg-blue-500/10 rounded-xl">
-                <Activity className="w-6 h-6 text-blue-500 glow-icon" />
-              </div>
-            </div>
-            <p className="text-sm text-text-muted mt-4 font-medium">
-              Across all items
-            </p>
-          </DynamicCard>
-        </motion.div>
-
-        <motion.div variants={item}>
-          <DynamicCard hoverEffect className="border-t-2 border-t-emerald-500/50 bg-dark-bg/50">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-sm font-medium text-text-muted mb-1">Completed (100% Secure)</p>
-                <h3 className="text-4xl font-bold text-white">{stats.completed}</h3>
-              </div>
-              <div className="p-3 bg-emerald-500/10 rounded-xl">
-                <CheckCircle2 className="w-6 h-6 text-emerald-500 glow-icon" />
-              </div>
-            </div>
-            <p className="text-sm text-emerald-500 flex items-center gap-1 mt-4 font-medium">
-              0 scam attempts lost
-            </p>
-          </DynamicCard>
-        </motion.div>
-      </motion.div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <motion.div 
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.3 }}
-          className="col-span-1 lg:col-span-2 space-y-4"
-        >
-          <h2 className="text-xl font-bold text-white flex items-center justify-between">
-            Recent Active Trades
-            <Link href="/transactions" className="text-sm font-medium text-primary hover:text-primary-hover transition-colors">
-              View All
+         {/* Metrics */}
+         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="grid grid-cols-3 gap-px bg-dark-border/50 rounded-xl overflow-hidden border border-dark-border mb-10">
+            <Link href="/wallet" className="bg-dark-bg p-5 hover:bg-dark-panel/50 transition-colors group cursor-pointer">
+               <p className="text-[11px] text-text-muted uppercase tracking-widest mb-1">Balance</p>
+               <p className="text-xl font-semibold text-white group-hover:text-primary transition-colors">₱{Number(user?.wallet_balance || 0).toLocaleString()}</p>
             </Link>
-          </h2>
-          
-          <DynamicCard hoverEffect={false} className="p-0 border-dark-border bg-dark-bg/30">
-            <div className="divide-y divide-dark-border/50">
-              {recentTrades.map((t) => (
-                <Link key={t.transaction_id} href={`/trade/${t.transaction_id}`} className="px-6 py-4 flex items-center justify-between hover:bg-dark-panel/50 transition-colors group">
-                  <div className="flex items-center gap-4">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center border text-xs font-bold transition-all ${t.status === 'active' ? 'bg-primary/20 border-primary/50 text-primary group-hover:neon-glow' : 'bg-dark-panel border-dark-border text-text-muted'}`}>
-                      {t.status === 'active' ? 'LIVE' : t.status === 'completed' ? 'DONE' : 'CANC'}
-                    </div>
-                    <div>
-                      <h4 className="text-white font-medium group-hover:text-primary transition-colors">{t.item_type}</h4>
-                      <p className="text-xs text-text-muted">Status: <span className="text-primary font-medium">{t.status.toUpperCase()}</span></p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-white font-bold">₱ {Number(t.total_amount).toLocaleString()}</p>
-                    <p className="text-xs text-text-muted">ID: #{t.transaction_id}</p>
-                  </div>
-                </Link>
-              ))}
-
-              {recentTrades.length === 0 && (
-                <div className="px-6 py-10 text-center text-text-muted">No recent trades found.</div>
-              )}
+            <div className="bg-dark-bg p-5">
+               <p className="text-[11px] text-text-muted uppercase tracking-widest mb-1">In Vault</p>
+               <p className="text-xl font-semibold text-white">₱{trades.filter(t => ['active', 'verifying'].includes(t.status)).reduce((s, t) => s + Number(t.total_amount || 0), 0).toLocaleString()}</p>
             </div>
-          </DynamicCard>
-        </motion.div>
+            <div className="bg-dark-bg p-5">
+               <p className="text-[11px] text-text-muted uppercase tracking-widest mb-1">Completed</p>
+               <p className="text-xl font-semibold text-white">{trades.filter(t => t.status === 'completed').length}</p>
+            </div>
+         </motion.div>
+
+         {/* Live Trades */}
+         {live.length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="mb-10">
+               <h2 className="text-xs font-semibold text-text-muted uppercase tracking-widest mb-3">Live</h2>
+               <div className="rounded-xl border border-dark-border overflow-hidden divide-y divide-dark-border/50">
+                  {live.map(t => {
+                     const s = STATUS[t.status] || STATUS.agreement;
+                     const Icon = s.icon;
+                     return (
+                        <Link key={t.transaction_id} href={`/trade/${t.transaction_id}`} className="flex items-center justify-between px-5 py-3.5 bg-dark-bg hover:bg-dark-panel/40 transition-colors group">
+                           <div className="flex items-center gap-3 min-w-0">
+                              <Icon className={`w-4 h-4 ${s.color} shrink-0`} />
+                              <div className="min-w-0">
+                                 <p className="text-sm text-white font-medium truncate max-w-[240px] group-hover:text-primary transition-colors">{t.item_name || t.game_type}</p>
+                                 <p className="text-[11px] text-text-muted"><span className={`font-medium ${s.color}`}>{s.label}</span> · {getCounterparty(t)}</p>
+                              </div>
+                           </div>
+                           <div className="flex items-center gap-3 shrink-0">
+                              <span className="text-sm text-white font-medium">₱{Number(t.agreed_price).toLocaleString()}</span>
+                              <ChevronRight className="w-3.5 h-3.5 text-dark-border group-hover:text-primary transition-colors" />
+                           </div>
+                        </Link>
+                     );
+                  })}
+               </div>
+            </motion.div>
+         )}
+
+         {/* Recent */}
+         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+            <div className="flex items-center justify-between mb-3">
+               <h2 className="text-xs font-semibold text-text-muted uppercase tracking-widest">Recent</h2>
+               <Link href="/transactions" className="text-[11px] text-text-muted hover:text-primary transition-colors font-medium">All trades <ArrowRight className="w-3 h-3 inline ml-0.5" /></Link>
+            </div>
+
+            {sorted.length === 0 ? (
+               <div className="rounded-xl border border-dashed border-dark-border py-16 text-center">
+                  <p className="text-text-muted text-sm mb-4">No trades yet</p>
+                  <Link href="/create-trade">
+                     <NeonButton className="mx-auto gap-2 !text-sm">
+                        <PlusCircle className="w-4 h-4" /> Create Trade
+                     </NeonButton>
+                  </Link>
+               </div>
+            ) : (
+               <div className="rounded-xl border border-dark-border overflow-hidden divide-y divide-dark-border/50">
+                  {sorted.slice(0, 6).map(t => {
+                     const s = STATUS[t.status] || STATUS.agreement;
+                     const Icon = s.icon;
+                     return (
+                        <Link key={t.transaction_id} href={`/trade/${t.transaction_id}`} className="flex items-center justify-between px-5 py-3 bg-dark-bg hover:bg-dark-panel/40 transition-colors group">
+                           <div className="flex items-center gap-3 min-w-0">
+                              <Icon className={`w-3.5 h-3.5 ${s.color} shrink-0 opacity-60`} />
+                              <p className="text-sm text-white/80 truncate max-w-[200px] group-hover:text-primary transition-colors">{t.item_name || t.item_type || t.game_type}</p>
+                              <span className={`text-[10px] font-medium ${s.color} opacity-70`}>{s.label}</span>
+                           </div>
+                           <div className="flex items-center gap-4 shrink-0">
+                              <span className="text-xs text-text-muted">{timeAgo(t.updated_at || t.created_at)}</span>
+                              <span className="text-sm text-white/70 font-medium">₱{Number(t.agreed_price).toLocaleString()}</span>
+                           </div>
+                        </Link>
+                     );
+                  })}
+               </div>
+            )}
+         </motion.div>
       </div>
-    </div>
-  );
+   );
 }

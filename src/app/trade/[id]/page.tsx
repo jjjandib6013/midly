@@ -16,6 +16,7 @@ export default function TradeHub() {
 
    const [trade, setTrade] = useState<any>(null);
    const [myRole, setMyRole] = useState<"BUY" | "SELL" | null>(null);
+   const [isInitiator, setIsInitiator] = useState(false);
    const [counterparty, setCounterparty] = useState<any>(null);
    const [messages, setMessages] = useState<Message[]>([]);
    const [inputText, setInputText] = useState("");
@@ -66,14 +67,18 @@ export default function TradeHub() {
             if (data.trade) {
                setTrade(data.trade);
                setMyRole(data.my_role);
+               setIsInitiator(data.is_initiator ?? false);
                setCounterparty(data.my_role === 'BUY' ? data.trade.seller : data.trade.buyer);
 
-               if (data.trade.status === 'agreement') setCurrentStep(1);
+               if (data.trade.status === 'pending_invite') setCurrentStep(0);
+               else if (data.trade.status === 'agreement') setCurrentStep(1);
                else if (data.trade.status === 'awaiting_payment') setCurrentStep(2);
                else if (data.trade.status === 'active') setCurrentStep(3);
                else if (data.trade.status === 'verifying') setCurrentStep(4);
                else if (data.trade.status === 'completed') setCurrentStep(5);
                else if (data.trade.status === 'disputed') setCurrentStep(6);
+               else if (data.trade.status === 'cancelled') setCurrentStep(-1);
+               else if (data.trade.status === 'refunded') setCurrentStep(-2);
             }
          })
          .catch(console.error);
@@ -100,6 +105,18 @@ export default function TradeHub() {
          .finally(() => setIsLoading(false));
    };
 
+   const fetchWallet = () => {
+      fetch(`http://localhost:5000/api/user/wallet`, {
+         headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` }
+      })
+         .then(res => res.json())
+         .then(data => {
+            const bal = data.available_balance ?? data.wallet_balance;
+            if (bal !== undefined) setMyWalletBalance(Number(bal));
+         })
+         .catch(console.error);
+   };
+
    useEffect(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
    }, [messages]);
@@ -107,6 +124,7 @@ export default function TradeHub() {
    useEffect(() => {
       fetchTrade();
       fetchMessages();
+      fetchWallet();
 
       // WebSockets Real-Time Engine
       const socket = io("http://localhost:5000");
@@ -139,7 +157,7 @@ export default function TradeHub() {
    }, [tradeId]);
 
    const steps = [
-      { id: 1, label: "Agreement", status: currentStep > 1 ? "completed" : "current" },
+      { id: 1, label: "Agreement", status: currentStep > 1 ? "completed" : currentStep === 1 ? "current" : "pending" },
       { id: 2, label: "Payment Secured", status: currentStep > 2 ? "completed" : currentStep === 2 ? "current" : "pending" },
       { id: 3, label: "Item Handover", status: currentStep > 3 ? "completed" : currentStep === 3 ? "current" : "pending" },
       { id: 4, label: "Verification", status: currentStep > 4 ? "completed" : currentStep === 4 ? "current" : "pending" },
@@ -147,6 +165,8 @@ export default function TradeHub() {
    ];
 
    if (currentStep === 6) steps.push({ id: 6, label: "DISPUTED", status: "current" });
+   if (currentStep === -1) steps.splice(0, steps.length, { id: -1, label: "CANCELLED", status: "current" });
+   if (currentStep === -2) steps.splice(0, steps.length, { id: -2, label: "REFUNDED", status: "current" });
 
    const handleSendMessage = async (text: string) => {
       try {
@@ -296,6 +316,9 @@ export default function TradeHub() {
    };
 
    const handleCancelTrade = async () => {
+      if (!trade || !['pending_invite', 'agreement', 'awaiting_payment'].includes(trade.status)) {
+         toast.error("Cannot cancel at this stage."); return;
+      }
       if (!confirm("Are you sure you want to completely cancel this trade? No funds have been secured yet.")) return;
       try {
          setIsLoading(true);
@@ -306,6 +329,23 @@ export default function TradeHub() {
          if (res.ok) { toast.success("Trade Permanently Cancelled!"); fetchTrade(); }
          else toast.error("Cancellation failed.");
       } catch (e) { } finally { setIsLoading(false); }
+   };
+
+   const handleAcceptInvite = async () => {
+      try {
+         setIsLoading(true);
+         const res = await fetch(`http://localhost:5000/api/transactions/${tradeId}/accept-invite`, {
+            method: "PUT",
+            headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` }
+         });
+         if (res.ok) {
+            toast.success("Trade Accepted! Agreement Phase is now active.");
+            fetchTrade();
+         } else {
+            const data = await res.json();
+            toast.error(data.error || "Failed to accept invite.");
+         }
+      } catch (e) { toast.error("Server error."); } finally { setIsLoading(false); }
    };
 
    const handleRequestCancellation = async () => {
@@ -335,6 +375,84 @@ export default function TradeHub() {
    };
 
    if (isLoading || !trade) return <div className="flex-1 flex justify-center items-center"><div className="w-8 h-8 rounded-full border-4 border-primary border-t-transparent animate-spin" /></div>;
+
+   // =============================================
+   // PENDING INVITE: Completely separate page
+   // No trade room, no chat, no escrow tracker
+   // =============================================
+   if (currentStep === 0) {
+      return (
+         <div className="flex-1 w-full max-w-2xl mx-auto px-4 py-12 flex flex-col items-center justify-center">
+            <div className="text-center mb-8">
+               <div className="w-20 h-20 rounded-full bg-primary/10 border-2 border-primary/30 flex items-center justify-center mx-auto mb-6">
+                  <ShieldCheck className="w-10 h-10 text-primary" />
+               </div>
+               <h1 className="text-3xl font-bold text-white mb-2">Private Escrow Invitation</h1>
+               <p className="text-text-muted">Trade #{tradeId.padStart(6, '0')}</p>
+            </div>
+
+            <DynamicCard hoverEffect={false} className="w-full border border-dark-border bg-dark-panel p-8 mb-6">
+               <h3 className="text-xs font-bold text-text-muted uppercase tracking-wider mb-4">Trade Details</h3>
+               <div className="space-y-3 mb-6">
+                  <div className="flex justify-between border-b border-dark-border pb-2">
+                     <span className="text-text-muted text-sm">Item</span>
+                     <span className="text-white text-sm font-medium">{trade.item_name || trade.item_type}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-dark-border pb-2">
+                     <span className="text-text-muted text-sm">Category</span>
+                     <span className="text-white text-sm font-medium">{trade.game_type}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-dark-border pb-2">
+                     <span className="text-text-muted text-sm">Your Role</span>
+                     <span className="text-white text-sm font-medium">{myRole === 'BUY' ? '🛒 Buyer' : '📦 Seller'}</span>
+                  </div>
+                  {counterparty && (
+                     <div className="flex justify-between border-b border-dark-border pb-2">
+                        <span className="text-text-muted text-sm">Counterparty</span>
+                        <span className="text-white text-sm font-medium">{counterparty.email}</span>
+                     </div>
+                  )}
+                  <div className="flex justify-between">
+                     <span className="text-text-muted text-sm">Agreed Price</span>
+                     <span className="text-primary font-bold text-lg">₱ {Number(trade.agreed_price).toLocaleString()}</span>
+                  </div>
+               </div>
+
+               <div className="border-t border-dark-border pt-6">
+                  {isInitiator ? (
+                     <>
+                        <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-xl flex items-center gap-3 mb-4">
+                           <Timer className="w-5 h-5 text-yellow-500 flex-shrink-0 animate-pulse" />
+                           <div>
+                              <p className="text-sm font-bold text-yellow-500">Waiting for Counterparty</p>
+                              <p className="text-xs text-yellow-500/70 mt-1">The trade room and escrow features will unlock once they accept your invitation.</p>
+                           </div>
+                        </div>
+                        <NeonButton variant="ghost" className="w-full text-red-500 hover:bg-red-500/10 border border-red-500/50" onClick={handleCancelTrade}>
+                           <XCircle className="w-4 h-4 mr-2" /> Cancel Invitation
+                        </NeonButton>
+                     </>
+                  ) : (
+                     <>
+                        <p className="text-sm text-text-muted mb-4">You've been invited to a secure escrow trade. By accepting, you agree to enter the negotiation phase where trade terms will be finalized.</p>
+                        <NeonButton className="w-full justify-center !py-4 text-lg mb-3" onClick={handleAcceptInvite}>
+                           <ShieldCheck className="w-5 h-5 mr-2" /> Accept Trade Invitation
+                        </NeonButton>
+                        <NeonButton variant="ghost" className="w-full text-red-500 hover:bg-red-500/10 border border-red-500/50" onClick={handleCancelTrade}>
+                           <XCircle className="w-4 h-4 mr-2" /> Decline & Cancel
+                        </NeonButton>
+                     </>
+                  )}
+               </div>
+            </DynamicCard>
+
+            <div className="flex items-center gap-2 text-text-muted text-xs">
+               <Lock className="w-3 h-3" />
+               <span>Trade room, chat, and escrow actions are locked until both parties accept.</span>
+            </div>
+         </div>
+      );
+   }
 
    return (
       <div className="flex-1 w-full max-w-7xl mx-auto px-4 py-8 grid grid-cols-3 gap-8 h-[calc(100vh-64px)] max-h-[calc(100vh-64px)] overflow-hidden">
@@ -407,6 +525,28 @@ export default function TradeHub() {
                </div>
 
                <div className="mt-8 pt-6 border-t border-dark-border space-y-4">
+                  {currentStep === -1 && (
+                     <div className="p-4 rounded-xl border border-red-500/30 bg-red-500/10">
+                        <div className="flex items-start gap-3">
+                           <XCircle className="w-6 h-6 text-red-500 flex-shrink-0" />
+                           <div>
+                              <h4 className="text-red-500 font-bold text-sm">Trade Cancelled</h4>
+                              <p className="text-xs text-red-400 mt-1">This trade has been permanently cancelled. No funds were transferred.</p>
+                           </div>
+                        </div>
+                     </div>
+                  )}
+                  {currentStep === -2 && (
+                     <div className="p-4 rounded-xl border border-yellow-500/30 bg-yellow-500/10">
+                        <div className="flex items-start gap-3">
+                           <ShieldAlert className="w-6 h-6 text-yellow-500 flex-shrink-0" />
+                           <div>
+                              <h4 className="text-yellow-500 font-bold text-sm">Trade Refunded</h4>
+                              <p className="text-xs text-yellow-400 mt-1">This dispute has been resolved. Funds have been refunded to the buyer's wallet.</p>
+                           </div>
+                        </div>
+                     </div>
+                  )}
                   {currentStep === 1 && (
                      <>
                         <h4 className="text-white font-bold text-sm">Agreement Phase</h4>
@@ -743,8 +883,8 @@ export default function TradeHub() {
                            setInputText("");
                         }
                      }}
-                     disabled={currentStep >= 5}
-                     placeholder={currentStep >= 5 ? "Escrow closed..." : "Send a secure message..."}
+                     disabled={currentStep >= 5 || currentStep <= -1}
+                     placeholder={currentStep >= 5 || currentStep <= -1 ? "Escrow closed..." : "Send a secure message..."}
                      className="w-full bg-dark-panel border border-dark-border rounded-full pl-5 pr-24 py-4 text-white focus:outline-none focus:border-primary/50 transition-colors placeholder:text-text-muted disabled:opacity-50"
                   />
                   <div className="absolute right-2 flex items-center gap-1">
