@@ -3,13 +3,13 @@
 @theme {
   --color-primary: #3FE56C;
   --color-primary-hover: #32c45b;
-  --color-dark-bg: #0A0D14;
-  --color-dark-panel: #141824;
-  --color-dark-border: #2A2F3D;
-  --color-text-main: #E2E8F0;
-  --color-text-muted: #94A3B8;
+  --color-dark-bg: #030407; /* Sleeker pure dark base */
+  --color-dark-panel: #0a0d14; /* Elevated panel */
+  --color-dark-border: #1a202d;
+  --color-text-main: #FAFAFA; /* Pure white text for headings */
+  --color-text-muted: #8892b0; /* High contrast muted */
 
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
 }
 
@@ -19,21 +19,31 @@
   --foreground: var(--color-text-main);
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   background-color: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
+  background-image: 
+    radial-gradient(circle at 50% 0%, rgba(63, 229, 108, 0.05) 0%, transparent 40%),
+    radial-gradient(circle at 100% 100%, rgba(63, 229, 108, 0.03) 0%, transparent 40%);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   /* Highlight selection in neon green */
-  @apply selection:bg-primary/30 selection:text-primary;
+  @apply selection:bg-primary/20 selection:text-primary;
 }
 
-/* Custom Webkit Scrollbar */
+/* Beautiful Minimal Webkit Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--color-dark-bg);
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
   background: var(--color-dark-border);
@@ -45,7 +55,11 @@ body {
 
 /* Custom Utilities for Tailwind v4 */
 @utility neon-glow {
-  box-shadow: 0 0 15px rgba(63, 229, 108, 0.3);
+  box-shadow: 0 0 20px -5px rgba(63, 229, 108, 0.3), 0 0 10px -5px rgba(63, 229, 108, 0.2);
+}
+
+@utility neon-glow-intense {
+  box-shadow: 0 0 30px -5px rgba(63, 229, 108, 0.4), 0 0 15px -5px rgba(63, 229, 108, 0.3);
 }
 
 @utility neon-border {
@@ -53,7 +67,16 @@ body {
 }
 
 @utility glass-panel {
-  background: rgba(20, 24, 36, 0.65);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(10, 13, 20, 0.4);
+  backdrop-filter: blur(24px) saturate(1.2);
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+@utility text-gradient {
+  background: linear-gradient(to right, #ffffff, #8892b0);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }

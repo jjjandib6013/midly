@@ -32,7 +32,7 @@ export default function RootLayout({
       <body className="min-h-screen text-text-main bg-dark-bg flex flex-col antialiased">
         <Toaster position="top-right" toastOptions={{ style: { background: '#1c1c1f', color: '#fff', border: '1px solid #333' } }} />
         <Navbar />
-        <main className="flex-1 flex flex-col">
+        <main className="flex-1 flex flex-col pt-[104px]">
           {children}
         </main>
       </body>

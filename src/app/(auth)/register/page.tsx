@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { motion } from "framer-motion";
+import { useState, useRef } from "react";
+import gsap from "gsap";
+import { useGSAP } from "@gsap/react";
 import Link from "next/link";
 import { ArrowRight, Lock, Mail, User, Phone, ShieldAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -13,6 +14,11 @@ export default function Register() {
   const [formData, setFormData] = useState({ first_name: '', last_name: '', email: '', password: '', phone: '' });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useGSAP(() => {
+     gsap.fromTo(containerRef.current, { opacity: 0, scale: 0.95 }, { opacity: 1, scale: 1, duration: 0.6, ease: "power3.out" });
+  }, { scope: containerRef });
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,81 +49,79 @@ export default function Register() {
     <div className="flex-1 flex items-center justify-center min-h-[calc(100vh-64px)] px-4 py-12 relative overflow-hidden">
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/5 blur-[120px] rounded-full pointer-events-none z-0" />
 
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.4 }}
-        className="w-full max-w-xl z-10"
+      <div
+        ref={containerRef}
+        className="w-full max-w-2xl z-10 opacity-0"
       >
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Create Identity</h1>
-          <p className="text-text-muted">Register to interact securely via smart escrows.</p>
+        <div className="text-center mb-10">
+          <h1 className="text-5xl font-black text-white mb-4 uppercase tracking-tighter">Create Identity</h1>
+          <p className="text-[#8892b0] font-medium tracking-wide">Register to interact securely via smart escrows.</p>
         </div>
 
-        <DynamicCard className="border border-dark-border/50 bg-dark-panel p-8" hoverEffect={false}>
+        <DynamicCard className="border border-white/5 bg-[#0a0d14]/80 p-10 md:p-14 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)]" hoverEffect={false}>
           {error && (
-             <div className="mb-6 p-3 bg-red-500/10 border border-red-500/30 rounded text-red-500 text-sm flex items-center gap-2">
-                <ShieldAlert className="w-4 h-4"/> {error}
+             <div className="mb-8 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-500 text-sm flex items-center gap-3 font-semibold">
+                <ShieldAlert className="w-5 h-5"/> {error}
              </div>
           )}
-          <form className="space-y-5" onSubmit={handleRegister}>
-            <div className="grid grid-cols-2 gap-4">
+          <form className="space-y-6" onSubmit={handleRegister}>
+            <div className="grid grid-cols-2 gap-6">
                {/* First Name */}
-               <div className="space-y-2">
-                 <label className="text-sm font-medium text-text-muted">First Name</label>
+               <div className="space-y-2 w-full">
+                 <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1">First Name</label>
                  <div className="relative">
-                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><User className="h-4 w-4 text-text-muted" /></div>
-                   <input type="text" onChange={e => setFormData({...formData, first_name: e.target.value})} className="w-full bg-dark-bg border border-dark-border text-white rounded-lg pl-10 pr-4 py-2.5 focus:outline-none focus:border-primary/50" required />
+                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><User className="h-5 w-5 text-[#8892b0]" /></div>
+                   <input type="text" onChange={e => setFormData({...formData, first_name: e.target.value})} className="w-full bg-[#030407] border border-white/10 text-white rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-primary/50 font-medium" required />
                  </div>
                </div>
                {/* Last Name */}
-               <div className="space-y-2">
-                 <label className="text-sm font-medium text-text-muted">Last Name</label>
+               <div className="space-y-2 w-full">
+                 <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1">Last Name</label>
                  <div className="relative">
-                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><User className="h-4 w-4 text-text-muted" /></div>
-                   <input type="text" onChange={e => setFormData({...formData, last_name: e.target.value})} className="w-full bg-dark-bg border border-dark-border text-white rounded-lg pl-10 pr-4 py-2.5 focus:outline-none focus:border-primary/50" required />
+                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><User className="h-5 w-5 text-[#8892b0]" /></div>
+                   <input type="text" onChange={e => setFormData({...formData, last_name: e.target.value})} className="w-full bg-[#030407] border border-white/10 text-white rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-primary/50 font-medium" required />
                  </div>
                </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-text-muted">Email Address (Requires Verification)</label>
+              <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1">Email Address <span className="opacity-50">(Requires Sync)</span></label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Mail className="h-5 w-5 text-text-muted" /></div>
-                <input type="email" onChange={e => setFormData({...formData, email: e.target.value})} className="w-full bg-dark-bg border border-dark-border text-white rounded-lg pl-10 pr-4 py-3 focus:outline-none focus:border-primary/50" required />
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Mail className="h-5 w-5 text-[#8892b0]" /></div>
+                <input type="email" onChange={e => setFormData({...formData, email: e.target.value})} className="w-full bg-[#030407] border border-white/10 text-white rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-primary/50 font-medium" required />
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-text-muted">Mobile Number</label>
+              <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1">Mobile Number Level Layer</label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Phone className="h-4 w-4 text-text-muted" /></div>
-                <input type="tel" onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full bg-dark-bg border border-dark-border text-white rounded-lg pl-10 pr-4 py-3 focus:outline-none focus:border-primary/50" />
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Phone className="h-5 w-5 text-[#8892b0]" /></div>
+                <input type="tel" onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full bg-[#030407] border border-white/10 text-white rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-primary/50 font-medium" />
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-text-muted">Password</label>
+              <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1">Security Key (Password)</label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Lock className="h-5 w-5 text-text-muted" /></div>
-                <input type="password" onChange={e => setFormData({...formData, password: e.target.value})} className="w-full bg-dark-bg border border-dark-border text-white rounded-lg pl-10 pr-4 py-3 focus:outline-none focus:border-primary/50" required minLength={8}/>
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Lock className="h-5 w-5 text-[#8892b0]" /></div>
+                <input type="password" onChange={e => setFormData({...formData, password: e.target.value})} className="w-full bg-[#030407] border border-white/10 text-white rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-primary/50 font-medium" required minLength={8}/>
               </div>
-              <p className="text-xs text-text-muted">Must be at least 8 characters</p>
+              <p className="text-[10px] uppercase font-bold tracking-widest text-[#8892b0] pl-1">Minimum 8 cipher strength bits</p>
             </div>
 
-            <NeonButton type="submit" className="w-full gap-2 mt-4" isLoading={isLoading}>
-              Next: Identity Verification <ArrowRight className="w-4 h-4" />
+            <NeonButton type="submit" className="w-full gap-3 mt-8 text-sm uppercase tracking-widest !py-5" isLoading={isLoading}>
+              Next: Hardware Verification <ArrowRight className="w-5 h-5" />
             </NeonButton>
           </form>
 
-          <div className="mt-6 text-center">
-            <p className="text-sm text-text-muted">
-              Already verified?{" "}
-              <Link href="/login" className="text-primary hover:text-white transition-colors font-medium">Log into Gateway</Link>
+          <div className="mt-8 pt-8 border-t border-white/[0.04] text-center">
+            <p className="text-sm text-[#8892b0] tracking-wide font-medium">
+              Identity compiled securely?{" "}
+              <Link href="/login" className="text-primary hover:text-white transition-colors font-bold tracking-wider uppercase ml-2">Log into Protocol</Link>
             </p>
           </div>
         </DynamicCard>
-      </motion.div>
+      </div>
     </div>
   );
 }

@@ -1,14 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { useState, useEffect, useRef } from "react";
+import gsap from "gsap";
+import { useGSAP } from "@gsap/react";
 import Link from "next/link";
 import {
    PlusCircle, ShieldCheck, ArrowRight, Wallet, Clock,
    CheckCircle2, AlertTriangle, Send, Package, XCircle,
-   Zap, Eye, ChevronRight
+   Zap, Eye, ChevronRight, Activity
 } from "lucide-react";
 import NeonButton from "@/components/ui/NeonButton";
+import DynamicCard from "@/components/ui/DynamicCard";
 
 type Trade = {
    transaction_id: number;
@@ -28,13 +30,13 @@ type Trade = {
 
 const STATUS: Record<string, { label: string; color: string; icon: any }> = {
    pending_invite: { label: "Pending", color: "text-yellow-500", icon: Send },
-   agreement: { label: "Agreement", color: "text-blue-400", icon: ShieldCheck },
+   agreement: { label: "Agreement", color: "text-[#8892b0]", icon: ShieldCheck },
    awaiting_payment: { label: "Awaiting Pay", color: "text-orange-400", icon: Wallet },
    active: { label: "Active", color: "text-primary", icon: Zap },
    verifying: { label: "Verifying", color: "text-purple-400", icon: Eye },
-   completed: { label: "Completed", color: "text-emerald-400", icon: CheckCircle2 },
+   completed: { label: "Completed", color: "text-primary", icon: CheckCircle2 },
    disputed: { label: "Disputed", color: "text-red-500", icon: AlertTriangle },
-   cancelled: { label: "Cancelled", color: "text-neutral-500", icon: XCircle },
+   cancelled: { label: "Cancelled", color: "text-[#8892b0]", icon: XCircle },
    refunded: { label: "Refunded", color: "text-yellow-400", icon: Clock },
 };
 
@@ -42,6 +44,8 @@ export default function Dashboard() {
    const [user, setUser] = useState<any>(null);
    const [trades, setTrades] = useState<Trade[]>([]);
    const [isLoading, setIsLoading] = useState(true);
+   
+   const containerRef = useRef<HTMLDivElement>(null);
 
    useEffect(() => {
       const token = localStorage.getItem('token');
@@ -56,6 +60,15 @@ export default function Dashboard() {
       }).catch(() => setIsLoading(false));
    }, []);
 
+   useGSAP(() => {
+      if (isLoading) return;
+      
+      const tl = gsap.timeline();
+      tl.fromTo(".dash-header", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.6, ease: "power3.out" })
+        .fromTo(".dash-metric", { opacity: 0, scale: 0.95 }, { opacity: 1, scale: 1, duration: 0.5, stagger: 0.1, ease: "back.out(1.2)" }, "-=0.3")
+        .fromTo(".dash-item", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.4, stagger: 0.05, ease: "power2.out" }, "-=0.2");
+   }, { scope: containerRef, dependencies: [isLoading] });
+
    const getMyUserId = () => { try { return JSON.parse(atob(localStorage.getItem('token')!.split('.')[1])).user_id; } catch { return 0; } };
    const getCounterparty = (t: Trade) => t.buyer_id === getMyUserId() ? t.seller?.first_name || t.seller?.email?.split('@')[0] : t.buyer?.first_name || t.buyer?.email?.split('@')[0];
    const timeAgo = (d: string) => { const m = Math.floor((Date.now() - new Date(d).getTime()) / 60000); if (m < 1) return "now"; if (m < 60) return `${m}m`; const h = Math.floor(m / 60); if (h < 24) return `${h}h`; return `${Math.floor(h / 24)}d`; };
@@ -63,112 +76,158 @@ export default function Dashboard() {
    const live = trades.filter(t => !['completed', 'cancelled', 'refunded'].includes(t.status));
    const sorted = [...trades].sort((a, b) => new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime());
 
-   if (isLoading) return <div className="flex-1 flex justify-center items-center"><div className="w-7 h-7 rounded-full border-[3px] border-primary border-t-transparent animate-spin" /></div>;
+   if (isLoading) return <div className="flex-1 flex justify-center items-center h-[50vh]"><div className="w-8 h-8 rounded-full border-[3px] border-primary border-t-transparent animate-spin" /></div>;
 
    return (
-      <div className="flex-1 w-full max-w-4xl mx-auto px-6 py-10">
-
-         {/* Header */}
-         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-10">
-            <div className="flex items-end justify-between">
-               <div>
-                  <h1 className="text-2xl font-semibold text-white tracking-tight">
-                     {user?.first_name || 'Home'}
-                  </h1>
-                  <p className="text-sm text-text-muted mt-1">
-                     {live.length > 0 ? `${live.length} active trade${live.length > 1 ? 's' : ''}` : 'No active trades'}
-                  </p>
-               </div>
+      <div ref={containerRef} className="flex-1 w-full max-w-[1600px] mx-auto px-6 py-12 lg:px-16">
+         
+         {/* Top Header - Asymmetric Text Alignment */}
+         <div className="dash-header flex flex-col md:flex-row items-start md:items-end justify-between mb-16 gap-8 border-b border-white/[0.04] pb-8">
+            <div>
+               <h1 className="text-6xl md:text-7xl font-black text-white tracking-tighter uppercase leading-none">
+                 System<br/> <span className="text-[#8892b0]">Overview</span>
+               </h1>
+            </div>
+            <div className="flex flex-col items-start md:items-end gap-6 border-l md:border-l-0 md:border-r-2 border-primary/50 pl-6 md:pl-0 md:pr-6">
+                <p className="text-sm font-bold text-[#8892b0] tracking-widest uppercase">
+                   {user?.first_name ? `Welcome back, ${user.first_name}` : 'Operator Identity Loaded'}
+                </p>
                <Link href="/create-trade">
-                  <NeonButton className="gap-2 !py-2.5 !px-5 !text-sm">
-                     <PlusCircle className="w-4 h-4" /> New Escrow
+                  <NeonButton className="gap-3 !py-4 w-full md:w-auto tracking-widest uppercase text-xs">
+                     <PlusCircle className="w-4 h-4" /> Initialize Escrow
                   </NeonButton>
                </Link>
             </div>
-         </motion.div>
+         </div>
 
-         {/* Metrics */}
-         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="grid grid-cols-3 gap-px bg-dark-border/50 rounded-xl overflow-hidden border border-dark-border mb-10">
-            <Link href="/wallet" className="bg-dark-bg p-5 hover:bg-dark-panel/50 transition-colors group cursor-pointer">
-               <p className="text-[11px] text-text-muted uppercase tracking-widest mb-1">Balance</p>
-               <p className="text-xl font-semibold text-white group-hover:text-primary transition-colors">₱{Number(user?.wallet_balance || 0).toLocaleString()}</p>
-            </Link>
-            <div className="bg-dark-bg p-5">
-               <p className="text-[11px] text-text-muted uppercase tracking-widest mb-1">In Vault</p>
-               <p className="text-xl font-semibold text-white">₱{trades.filter(t => ['active', 'verifying'].includes(t.status)).reduce((s, t) => s + Number(t.total_amount || 0), 0).toLocaleString()}</p>
-            </div>
-            <div className="bg-dark-bg p-5">
-               <p className="text-[11px] text-text-muted uppercase tracking-widest mb-1">Completed</p>
-               <p className="text-xl font-semibold text-white">{trades.filter(t => t.status === 'completed').length}</p>
-            </div>
-         </motion.div>
+         <div className="grid grid-cols-1 xl:grid-cols-12 gap-12">
+            
+            {/* Left Column (Main Architecture) */}
+            <div className="xl:col-span-8 flex flex-col gap-12">
+               
+               {/* Metrics Grid */}
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <DynamicCard hoverEffect className="dash-metric p-8 flex flex-col justify-between">
+                     <div className="flex items-center justify-between mb-8">
+                        <span className="text-xs font-black text-[#8892b0] uppercase tracking-widest">Available Balance</span>
+                        <Wallet className="w-5 h-5 text-primary" />
+                     </div>
+                     <p className="text-4xl lg:text-5xl font-black text-white tracking-tighter">
+                        <span className="text-[#8892b0] text-xl lg:text-3xl pr-1">₱</span>
+                        {Number(user?.wallet_balance || 0).toLocaleString()}
+                     </p>
+                  </DynamicCard>
+                  
+                  <DynamicCard hoverEffect className="dash-metric p-8 flex flex-col justify-between">
+                     <div className="flex items-center justify-between mb-8">
+                        <span className="text-xs font-black text-[#8892b0] uppercase tracking-widest">Secured In Vault</span>
+                        <ShieldCheck className="w-5 h-5 text-purple-400" />
+                     </div>
+                     <p className="text-4xl lg:text-5xl font-black text-white tracking-tighter">
+                        <span className="text-[#8892b0] text-xl lg:text-3xl pr-1">₱</span>
+                        {trades.filter(t => ['active', 'verifying'].includes(t.status)).reduce((s, t) => s + Number(t.total_amount || 0), 0).toLocaleString()}
+                     </p>
+                  </DynamicCard>
 
-         {/* Live Trades */}
-         {live.length > 0 && (
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="mb-10">
-               <h2 className="text-xs font-semibold text-text-muted uppercase tracking-widest mb-3">Live</h2>
-               <div className="rounded-xl border border-dark-border overflow-hidden divide-y divide-dark-border/50">
-                  {live.map(t => {
-                     const s = STATUS[t.status] || STATUS.agreement;
-                     const Icon = s.icon;
-                     return (
-                        <Link key={t.transaction_id} href={`/trade/${t.transaction_id}`} className="flex items-center justify-between px-5 py-3.5 bg-dark-bg hover:bg-dark-panel/40 transition-colors group">
-                           <div className="flex items-center gap-3 min-w-0">
-                              <Icon className={`w-4 h-4 ${s.color} shrink-0`} />
-                              <div className="min-w-0">
-                                 <p className="text-sm text-white font-medium truncate max-w-[240px] group-hover:text-primary transition-colors">{t.item_name || t.game_type}</p>
-                                 <p className="text-[11px] text-text-muted"><span className={`font-medium ${s.color}`}>{s.label}</span> · {getCounterparty(t)}</p>
+                  <DynamicCard hoverEffect className="dash-metric p-8 flex flex-col justify-between border-primary/20 bg-primary/[0.02]">
+                     <div className="flex items-center justify-between mb-8">
+                        <span className="text-xs font-black text-primary uppercase tracking-widest">Active Operations</span>
+                        <Activity className="w-5 h-5 text-primary" />
+                     </div>
+                     <p className="text-5xl lg:text-7xl font-black text-white tracking-tighter leading-none">
+                        {live.length}
+                     </p>
+                  </DynamicCard>
+               </div>
+
+               {/* Live Operations */}
+               <div className="flex flex-col gap-6">
+                  <h2 className="dash-header text-sm font-black text-white uppercase tracking-widest border-b border-white/[0.04] pb-4 flex justify-between items-center">
+                     <span>Active Operations</span>
+                     {live.length > 0 && <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />}
+                  </h2>
+                  
+                  {live.length === 0 ? (
+                      <div className="dash-header p-12 rounded-[2rem] border border-dashed border-white/10 flex flex-col items-center justify-center text-center">
+                         <div className="w-16 h-16 rounded-full bg-white/[0.02] flex items-center justify-center mb-4">
+                            <Send className="w-6 h-6 text-[#8892b0]" />
+                         </div>
+                         <p className="text-[#8892b0] font-medium mb-1">No active operations detected.</p>
+                         <p className="text-xs text-[#8892b0]/50 tracking-widest uppercase">System idle.</p>
+                      </div>
+                  ) : (
+                     <div className="flex flex-col gap-4">
+                        {live.map((t, i) => {
+                           const s = STATUS[t.status] || STATUS.agreement;
+                           const Icon = s.icon;
+                           return (
+                              <Link key={t.transaction_id} href={`/trade/${t.transaction_id}`} className="dash-item block">
+                                 <DynamicCard hoverEffect className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-6 group">
+                                    <div className="flex items-center gap-6 min-w-0 flex-1">
+                                       <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 border border-white/5 bg-white/[0.02] group-hover:border-primary/30 transition-colors`}>
+                                          <Icon className={`w-5 h-5 ${s.color}`} />
+                                       </div>
+                                       <div className="min-w-0">
+                                          <h3 className="text-2xl font-black text-white tracking-tight truncate group-hover:text-primary transition-colors">{t.item_name || t.game_type}</h3>
+                                          <div className="flex flex-wrap items-center gap-3 mt-1 text-xs font-bold uppercase tracking-widest text-[#8892b0]">
+                                             <span className={`${s.color}`}>{s.label}</span>
+                                             <span className="w-1 h-1 rounded-full bg-white/20" />
+                                             <span>OP: {getCounterparty(t) || 'UNKNOWN'}</span>
+                                             <span className="w-1 h-1 rounded-full bg-white/20" />
+                                             <span>{t.game_type}</span>
+                                          </div>
+                                       </div>
+                                    </div>
+                                    <div className="flex items-center justify-between md:justify-end gap-6 shrink-0 md:min-w-[200px]">
+                                       <span className="text-3xl font-black text-white tracking-tighter">₱{Number(t.agreed_price).toLocaleString()}</span>
+                                       <div className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center group-hover:bg-primary group-hover:border-primary group-hover:text-dark-bg transition-all">
+                                          <ArrowRight className="w-4 h-4" />
+                                       </div>
+                                    </div>
+                                 </DynamicCard>
+                              </Link>
+                           );
+                        })}
+                     </div>
+                  )}
+               </div>
+            </div>
+
+            {/* Right Column (History & Logs) */}
+            <div className="xl:col-span-4 flex flex-col gap-6 lg:pl-6 xl:border-l border-white/[0.04]">
+               <div className="dash-header flex items-center justify-between border-b border-white/[0.04] pb-4">
+                  <h2 className="text-sm font-black text-white uppercase tracking-widest">System Logs</h2>
+                  <Link href="/transactions" className="text-xs font-bold tracking-widest uppercase text-primary hover:brightness-110">Archive</Link>
+               </div>
+
+               {sorted.length === 0 ? (
+                   <p className="text-center text-[#8892b0] text-sm py-10 font-medium">Log empty.</p>
+               ) : (
+                  <div className="flex flex-col gap-4">
+                     {sorted.slice(0, 7).map((t, i) => {
+                        const s = STATUS[t.status] || STATUS.agreement;
+                        const Icon = s.icon;
+                        return (
+                           <Link key={t.transaction_id} href={`/trade/${t.transaction_id}`} className="dash-item flex items-center justify-between p-4 rounded-2xl hover:bg-white/[0.02] transition-colors border border-transparent hover:border-white/5 group">
+                              <div className="flex items-center gap-4 min-w-0">
+                                 <Icon className={`w-4 h-4 ${s.color} shrink-0 opacity-80`} />
+                                 <div className="min-w-0">
+                                    <p className="text-sm font-bold text-white truncate group-hover:text-primary transition-colors">{t.item_name || t.item_type || t.game_type}</p>
+                                    <p className={`text-[10px] font-bold uppercase tracking-widest ${s.color} opacity-80 mt-0.5`}>{s.label}</p>
+                                 </div>
                               </div>
-                           </div>
-                           <div className="flex items-center gap-3 shrink-0">
-                              <span className="text-sm text-white font-medium">₱{Number(t.agreed_price).toLocaleString()}</span>
-                              <ChevronRight className="w-3.5 h-3.5 text-dark-border group-hover:text-primary transition-colors" />
-                           </div>
-                        </Link>
-                     );
-                  })}
-               </div>
-            </motion.div>
-         )}
-
-         {/* Recent */}
-         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-            <div className="flex items-center justify-between mb-3">
-               <h2 className="text-xs font-semibold text-text-muted uppercase tracking-widest">Recent</h2>
-               <Link href="/transactions" className="text-[11px] text-text-muted hover:text-primary transition-colors font-medium">All trades <ArrowRight className="w-3 h-3 inline ml-0.5" /></Link>
+                              <div className="flex flex-col items-end gap-1 shrink-0">
+                                 <span className="text-sm font-black text-white">₱{Number(t.agreed_price).toLocaleString()}</span>
+                                 <span className="text-[10px] font-bold uppercase tracking-widest text-[#8892b0]">{timeAgo(t.updated_at || t.created_at)}</span>
+                              </div>
+                           </Link>
+                        );
+                     })}
+                  </div>
+               )}
             </div>
-
-            {sorted.length === 0 ? (
-               <div className="rounded-xl border border-dashed border-dark-border py-16 text-center">
-                  <p className="text-text-muted text-sm mb-4">No trades yet</p>
-                  <Link href="/create-trade">
-                     <NeonButton className="mx-auto gap-2 !text-sm">
-                        <PlusCircle className="w-4 h-4" /> Create Trade
-                     </NeonButton>
-                  </Link>
-               </div>
-            ) : (
-               <div className="rounded-xl border border-dark-border overflow-hidden divide-y divide-dark-border/50">
-                  {sorted.slice(0, 6).map(t => {
-                     const s = STATUS[t.status] || STATUS.agreement;
-                     const Icon = s.icon;
-                     return (
-                        <Link key={t.transaction_id} href={`/trade/${t.transaction_id}`} className="flex items-center justify-between px-5 py-3 bg-dark-bg hover:bg-dark-panel/40 transition-colors group">
-                           <div className="flex items-center gap-3 min-w-0">
-                              <Icon className={`w-3.5 h-3.5 ${s.color} shrink-0 opacity-60`} />
-                              <p className="text-sm text-white/80 truncate max-w-[200px] group-hover:text-primary transition-colors">{t.item_name || t.item_type || t.game_type}</p>
-                              <span className={`text-[10px] font-medium ${s.color} opacity-70`}>{s.label}</span>
-                           </div>
-                           <div className="flex items-center gap-4 shrink-0">
-                              <span className="text-xs text-text-muted">{timeAgo(t.updated_at || t.created_at)}</span>
-                              <span className="text-sm text-white/70 font-medium">₱{Number(t.agreed_price).toLocaleString()}</span>
-                           </div>
-                        </Link>
-                     );
-                  })}
-               </div>
-            )}
-         </motion.div>
+            
+         </div>
       </div>
    );
 }

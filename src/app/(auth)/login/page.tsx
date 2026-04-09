@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { motion } from "framer-motion";
+import { useState, useRef } from "react";
+import gsap from "gsap";
+import { useGSAP } from "@gsap/react";
 import Link from "next/link";
 import { ArrowRight, Lock, Mail, ShieldAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -14,6 +15,12 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useGSAP(() => {
+     gsap.fromTo(containerRef.current, { opacity: 0, scale: 0.95 }, { opacity: 1, scale: 1, duration: 0.8, ease: "power4.out" });
+  }, { scope: containerRef });
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,72 +55,70 @@ export default function Login() {
       {/* Background glow */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/5 blur-[120px] rounded-full pointer-events-none z-0" />
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="w-full max-w-md z-10"
+      <div
+        ref={containerRef}
+        className="w-full max-w-xl z-10 opacity-0"
       >
-        <div className="text-center mb-10">
-          <h1 className="text-3xl font-bold text-white mb-2">Secure Gateway</h1>
-          <p className="text-text-muted">No Blind Trust. Only Verified Traders.</p>
+        <div className="text-center mb-12">
+          <h1 className="text-5xl font-black text-white mb-4 tracking-tighter uppercase">Secure Gateway</h1>
+          <p className="text-[#8892b0] font-medium tracking-wide">No Blind Trust. Only Verified Protocol Traders.</p>
         </div>
 
-        <DynamicCard className="border border-dark-border/50 bg-dark-panel p-8" hoverEffect={false}>
+        <DynamicCard className="border border-white/5 bg-[#0a0d14]/80 p-8 md:p-12 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)]" hoverEffect={false}>
           {error && (
-            <div className="mb-6 p-3 bg-red-500/10 border border-red-500/30 rounded text-red-500 text-sm flex items-center gap-2">
-              <ShieldAlert className="w-4 h-4" /> {error}
+            <div className="mb-8 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-500 text-sm flex items-center gap-3 font-semibold">
+              <ShieldAlert className="w-5 h-5" /> {error}
             </div>
           )}
-          <form className="space-y-6" onSubmit={handleLogin}>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-text-muted">Verified Email</label>
+          <form className="space-y-8" onSubmit={handleLogin}>
+            <div className="space-y-3">
+              <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1">Verified Email</label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-text-muted" />
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <Mail className="h-5 w-5 text-[#8892b0]" />
                 </div>
                 <input
                   type="email"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  className="w-full bg-dark-bg border border-dark-border text-white rounded-lg pl-10 pr-4 py-3 focus:outline-none focus:border-primary/50 transition-colors"
+                  className="w-full bg-[#030407] border border-white/10 text-white rounded-2xl pl-12 pr-6 py-4 focus:outline-none focus:border-primary/50 transition-colors font-medium"
                   placeholder="name@domain.com"
                   required
                 />
               </div>
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-text-muted">Password</label>
+            <div className="space-y-3">
+              <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1">Password Layer</label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-text-muted" />
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <Lock className="h-5 w-5 text-[#8892b0]" />
                 </div>
                 <input
                   type="password"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
-                  className="w-full bg-dark-bg border border-dark-border text-white rounded-lg pl-10 pr-4 py-3 focus:outline-none focus:border-primary/50 transition-colors"
+                  className="w-full bg-[#030407] border border-white/10 text-white rounded-2xl pl-12 pr-6 py-4 focus:outline-none focus:border-primary/50 transition-colors font-medium"
                   placeholder="••••••••"
                   required
                 />
               </div>
             </div>
 
-            <NeonButton type="submit" className="w-full gap-2 mt-4" isLoading={isLoading}>
+            <NeonButton type="submit" className="w-full gap-3 mt-6 text-sm !py-5 tracking-widest uppercase" isLoading={isLoading}>
               Enter Escrow <ArrowRight className="w-4 h-4" />
             </NeonButton>
           </form>
 
-          <div className="mt-8 text-center">
-            <p className="text-sm text-text-muted">
-              First time here?{" "}
-              <Link href="/register" className="text-primary hover:text-white transition-colors font-medium">
+          <div className="mt-10 text-center border-t border-white/[0.04] pt-8">
+            <p className="text-sm text-[#8892b0] tracking-wide font-medium">
+              First time compiling?{" "}
+              <Link href="/register" className="text-primary hover:text-white transition-colors font-bold uppercase tracking-wider ml-2">
                 Create Secure Identity
               </Link>
             </p>
           </div>
         </DynamicCard>
-      </motion.div>
+      </div>
     </div>
   );
 }
