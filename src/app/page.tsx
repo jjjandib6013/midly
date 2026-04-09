@@ -91,7 +91,7 @@ export default function Home() {
               <span className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-primary" /> Supported Networks:</span>
               <span className="text-white">Dota 2</span>
               <span className="text-white">Valorant</span>
-              <span className="text-white">CS:GO 2</span>
+              <span className="text-white">CS2</span>
             </div>
           </div>
 

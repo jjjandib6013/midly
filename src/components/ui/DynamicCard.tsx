@@ -1,9 +1,15 @@
 "use client";
 
-import { motion, useMotionTemplate, useMotionValue } from "framer-motion";
-import { ReactNode, MouseEvent } from "react";
+import { useRef, MouseEvent, ReactNode } from "react";
+import gsap from "gsap";
+import { useGSAP } from "@gsap/react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+
+if (typeof window !== "undefined") {
+  gsap.registerPlugin(ScrollTrigger);
+}
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -22,79 +28,95 @@ export default function DynamicCard({
   hoverEffect = false,
   delay = 0,
 }: DynamicCardProps) {
-  const mouseX = useMotionValue(0);
-  const mouseY = useMotionValue(0);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const spotlight1Ref = useRef<HTMLDivElement>(null);
+  const spotlight2Ref = useRef<HTMLDivElement>(null);
 
-  function handleMouseMove({
-    currentTarget,
-    clientX,
-    clientY,
-  }: MouseEvent) {
+  const { contextSafe } = useGSAP({ scope: cardRef });
+
+  useGSAP(() => {
+    // Entrance animation using ScrollTrigger
+    gsap.fromTo(cardRef.current, 
+      { opacity: 0, y: 40 },
+      {
+        scrollTrigger: {
+          trigger: cardRef.current,
+          start: "top 95%",
+          toggleActions: "play none none none"
+        },
+        opacity: 1,
+        y: 0,
+        duration: 0.8,
+        delay: delay,
+        ease: "power3.out"
+      }
+    );
+  }, { scope: cardRef });
+
+  const handleMouseMove = (e: MouseEvent<HTMLDivElement>) => {
+    if (!hoverEffect || !cardRef.current || !spotlight1Ref.current || !spotlight2Ref.current) return;
+    const rect = cardRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    spotlight1Ref.current.style.setProperty("--x", `${x}px`);
+    spotlight1Ref.current.style.setProperty("--y", `${y}px`);
+    spotlight2Ref.current.style.setProperty("--x", `${x}px`);
+    spotlight2Ref.current.style.setProperty("--y", `${y}px`);
+  };
+
+  const handleMouseEnter = contextSafe(() => {
     if (!hoverEffect) return;
-    const { left, top } = currentTarget.getBoundingClientRect();
-    mouseX.set(clientX - left);
-    mouseY.set(clientY - top);
-  }
+    gsap.to([spotlight1Ref.current, spotlight2Ref.current], { opacity: 1, duration: 0.5, ease: "power2.out" });
+    gsap.to(cardRef.current, { y: -8, duration: 0.4, ease: "power2.out" });
+  });
+
+  const handleMouseLeave = contextSafe(() => {
+    if (!hoverEffect) return;
+    gsap.to([spotlight1Ref.current, spotlight2Ref.current], { opacity: 0, duration: 0.5, ease: "power2.out" });
+    gsap.to(cardRef.current, { y: 0, duration: 0.5, ease: "power2.out" });
+  });
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 30 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-50px" }}
-      transition={{ type: "spring", stiffness: 300, damping: 24, delay: delay }}
-      whileHover={
-        hoverEffect
-          ? {
-            y: -8,
-            transition: { duration: 0.2 },
-          }
-          : undefined
-      }
+    <div
+      ref={cardRef}
       onMouseMove={handleMouseMove}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       className={cn(
-        "group relative rounded-3xl p-8 overflow-hidden transition-all duration-500",
-        "bg-[#090b10] border border-white/5",
+        "group relative rounded-3xl p-8 overflow-hidden transition-colors duration-500",
+        "bg-[#090b10] border border-white/5 shadow-2xl",
         className
       )}
     >
       {/* Background Hover Spotlight */}
       {hoverEffect && (
-        <motion.div
-          className="pointer-events-none absolute -inset-px rounded-3xl opacity-0 transition duration-500 group-hover:opacity-100"
+        <div
+          ref={spotlight1Ref}
+          className="pointer-events-none absolute -inset-px rounded-3xl opacity-0 z-0"
           style={{
-            background: useMotionTemplate`
-              radial-gradient(
-                700px circle at ${mouseX}px ${mouseY}px,
-                rgba(63, 229, 108, 0.05),
-                transparent 80%
-              )
-            `,
+            background: `radial-gradient(700px circle at var(--x, 50%) var(--y, 50%), rgba(63, 229, 108, 0.05), transparent 80%)`
           }}
         />
       )}
       {/* Border Spotlight */}
       {hoverEffect && (
-        <motion.div
-          className="pointer-events-none absolute -inset-px rounded-3xl opacity-0 transition duration-500 group-hover:opacity-100"
+        <div
+          ref={spotlight2Ref}
+          className="pointer-events-none absolute -inset-px rounded-3xl opacity-0 z-0"
           style={{
-            background: useMotionTemplate`
-              radial-gradient(
-                400px circle at ${mouseX}px ${mouseY}px,
-                rgba(63, 229, 108, 0.4),
-                transparent 80%
-              )
-            `,
+            background: `radial-gradient(400px circle at var(--x, 50%) var(--y, 50%), rgba(63, 229, 108, 0.4), transparent 80%)`,
             maskImage: `linear-gradient(black, black)`,
             maskComposite: "exclude",
             WebkitMaskComposite: "destination-out",
-            padding: "1px", // the border width essentially
+            padding: "1px",
           }}
         >
-          <div className="bg-black w-full h-full rounded-[inherit] absolute inset-0 z-0" />
-        </motion.div>
+            <div className="bg-black w-full h-full rounded-[inherit] absolute inset-0 z-0" />
+        </div>
       )}
-
+      
       <div className="relative z-10">{children}</div>
-    </motion.div>
+    </div>
   );
 }
