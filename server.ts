@@ -119,9 +119,9 @@ const isTradeLockedForActions = (status: string): boolean => {
 
 app.post('/api/auth/register', async (req, res): Promise<any> => {
    try {
-      const { first_name, last_name, email, password, phone } = req.body;
-      if (!email || !password || !first_name || !last_name) {
-         return res.status(400).json({ error: 'Missing required fields' });
+      const { first_name, last_name, email, password, phone, birthdate } = req.body;
+      if (!email || !password || !first_name || !last_name || !birthdate) {
+         return res.status(400).json({ error: 'Missing required fields including Date of Birth' });
       }
       if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Invalid email format' });
@@ -131,7 +131,7 @@ app.post('/api/auth/register', async (req, res): Promise<any> => {
 
       const password_hash = await bcrypt.hash(password, 10);
       const user = await prisma.user.create({
-         data: { first_name, last_name, email, password_hash, phone, wallet_balance: 0.00 }
+         data: { first_name, last_name, email, password_hash, phone, birthdate: new Date(birthdate), wallet_balance: 0.00 }
       });
 
       const token = jwt.sign({ user_id: user.user_id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '24h' });
@@ -1000,25 +1000,109 @@ app.post('/api/admin/disputes/:txId/resolve', authenticateJWT, async (req, res):
    } catch (e) { res.status(500).json({ error: 'Server error' }); }
 });
 
-// KYC Submit
+import { z } from 'zod';
+import { encrypt } from './src/ai/cryptoUtils';
+import { kycQueue } from './src/ai/queue';
+import fs from 'fs';
+
+// Zod schema for KYC payload
+const kycSchema = z.object({
+  idType: z.string().min(2, "ID Type is required"),
+  idNumber: z.string().min(4, "Invalid ID Number"),
+  imageUrl: z.string().min(1, "Image path is required"),
+  livenessImage: z.string().min(1, "Liveness snapshot is required").nullable().optional()
+});
+
+// Dev Reset KYC
+app.post('/api/kyc/reset', authenticateJWT, async (req, res): Promise<any> => {
+   try {
+      await prisma.kycImage.deleteMany({ where: { kyc: { user_id: req.user.user_id } } });
+      await prisma.kycVerification.deleteMany({ where: { user_id: req.user.user_id } });
+      res.json({ message: 'KYC Reset Successfully' });
+   } catch (e: any) {
+      res.status(500).json({ error: 'Server error', msg: e.message });
+   }
+});
+
+// KYC Submit (Async AI Processing)
 app.post('/api/kyc', authenticateJWT, async (req, res): Promise<any> => {
    try {
-      const { idType, idNumber, idName, birthdate, imageUrl } = req.body;
+      // 1. Zod Validation
+      const parsedParams = kycSchema.safeParse(req.body);
+      if (!parsedParams.success) {
+         return res.status(400).json({ error: 'Validation failed', details: parsedParams.error.format() });
+      }
+      const { idType, idNumber, imageUrl, livenessImage } = parsedParams.data;
+
+      // 1.5 Fetch User Name & DOB
+      const user = await prisma.user.findUnique({ where: { user_id: req.user.user_id } });
+      if (!user) return res.status(404).json({ error: 'User missing' });
+      const idName = `${user.first_name} ${user.last_name}`;
+      const birthdate = user.birthdate || new Date();
+
+      // Ensure file actually exists before we queue it
+      const filename = path.basename(imageUrl);
+      const rawPath = path.join(__dirname, 'uploads', filename);
+      const kycDomainPath = path.join(__dirname, 'uploads', 'kyc', filename);
+
+      // Move file from general /uploads to protected /uploads/kyc domain
+      if (fs.existsSync(rawPath)) {
+         fs.renameSync(rawPath, kycDomainPath);
+      } else if (!fs.existsSync(kycDomainPath)) {
+          return res.status(400).json({ error: 'Image file not found on server.' });
+      }
+
+      let livenessDomainPath = null;
+      if (livenessImage) {
+         // Save base64 image to disk
+         const base64Data = livenessImage.replace(/^data:image\/jpeg;base64,/, "");
+         const livenessFilename = `liveness-${req.user.user_id}-${Date.now()}.jpg`;
+         livenessDomainPath = path.join(__dirname, 'uploads', 'kyc', livenessFilename);
+         fs.writeFileSync(livenessDomainPath, base64Data, 'base64');
+      }
+
+      // 2. Encrypt PII
+      const idNumberEncrypted = encrypt(idNumber);
+      const idNameEncrypted = encrypt(idName);
+
+      // 3. Save Pending Record 
       const kyc = await prisma.kycVerification.create({
          data: {
             user_id: req.user.user_id,
             id_type: idType,
-            id_number: idNumber,
-            id_name: idName,
-            birthdate: new Date(birthdate),
-            status: 'pending'
+            id_number: idNumberEncrypted, // Stored securely
+            id_name: idNameEncrypted,     // Stored securely
+            birthdate: birthdate,
+            status: 'pending', // Enforced Pending status
+            phase: 3 // Since we collect everything at once now
          }
       });
-      if (imageUrl) {
-         await prisma.kycImage.create({ data: { kyc_id: kyc.kyc_id, image_type: 'Front', file_path: imageUrl } });
+      
+      await prisma.kycImage.create({ 
+         data: { kyc_id: kyc.kyc_id, image_type: 'Front', file_path: `/uploads/kyc/${filename}` } 
+      });
+
+      if (livenessDomainPath) {
+         await prisma.kycImage.create({ 
+            data: { kyc_id: kyc.kyc_id, image_type: 'Selfie', file_path: `/uploads/kyc/${path.basename(livenessDomainPath)}` } 
+         });
       }
-      res.json({ status: 'PENDING' });
-   } catch (e) { res.status(500).json({ error: 'Server error' }); }
+
+      // 4. Dispatch Async Job via Queue
+      await kycQueue.add('verify-kyc', {
+         kycId: kyc.kyc_id,
+         filePath: kycDomainPath,
+         livenessFilePath: livenessDomainPath,
+         idNumberEncrypted,
+         idNameEncrypted
+      });
+
+      // 5. Fast Response
+      res.status(200).json({ status: 'VERIFYING', message: 'Identity processing queued. Please wait a few moments.' });
+
+   } catch (e: any) { 
+      res.status(500).json({ error: 'Server error', msg: e.message }); 
+   }
 });
 
 // Admin fetching KYC

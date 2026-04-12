@@ -54,7 +54,7 @@ export default function Register() {
         className="w-full max-w-2xl z-10 opacity-0"
       >
         <div className="text-center mb-10">
-          <h1 className="text-5xl font-black text-white mb-4 uppercase tracking-tighter">Create Identity</h1>
+          <h1 className="text-5xl font-black text-white mb-4 tracking-tighter">Create Account</h1>
           <p className="text-[#8892b0] font-medium tracking-wide">Register to interact securely via smart escrows.</p>
         </div>
 
@@ -85,39 +85,49 @@ export default function Register() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1">Email Address <span className="opacity-50">(Requires Sync)</span></label>
+              <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1">Email Address</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Mail className="h-5 w-5 text-[#8892b0]" /></div>
                 <input type="email" onChange={e => setFormData({...formData, email: e.target.value})} className="w-full bg-[#030407] border border-white/10 text-white rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-primary/50 font-medium" required />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1">Mobile Number Level Layer</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Phone className="h-5 w-5 text-[#8892b0]" /></div>
-                <input type="tel" onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full bg-[#030407] border border-white/10 text-white rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-primary/50 font-medium" />
-              </div>
+            <div className="grid grid-cols-2 gap-6">
+               {/* Phone Number */}
+               <div className="space-y-2 w-full">
+                 <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1">Phone Number</label>
+                 <div className="relative">
+                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Phone className="h-5 w-5 text-[#8892b0]" /></div>
+                   <input type="tel" onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full bg-[#030407] border border-white/10 text-white rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-primary/50 font-medium" />
+                 </div>
+               </div>
+               {/* Date of Birth */}
+               <div className="space-y-2 w-full">
+                 <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1">Date of Birth</label>
+                 <div className="relative">
+                   <input type="date" onChange={e => setFormData({...formData, birthdate: e.target.value} as any)} className="w-full bg-[#030407] border border-white/10 text-[#8892b0] rounded-2xl px-4 py-4 focus:outline-none focus:border-primary/50 font-medium focus:text-white" required />
+                 </div>
+               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1">Security Key (Password)</label>
+              <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1">Password</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Lock className="h-5 w-5 text-[#8892b0]" /></div>
                 <input type="password" onChange={e => setFormData({...formData, password: e.target.value})} className="w-full bg-[#030407] border border-white/10 text-white rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-primary/50 font-medium" required minLength={8}/>
               </div>
-              <p className="text-[10px] uppercase font-bold tracking-widest text-[#8892b0] pl-1">Minimum 8 cipher strength bits</p>
+              <p className="text-[10px] uppercase font-bold tracking-widest text-[#8892b0] pl-1">Minimum 8 characters</p>
             </div>
 
             <NeonButton type="submit" className="w-full gap-3 mt-8 text-sm uppercase tracking-widest !py-5" isLoading={isLoading}>
-              Next: Hardware Verification <ArrowRight className="w-5 h-5" />
+              Create Account <ArrowRight className="w-5 h-5" />
             </NeonButton>
           </form>
 
           <div className="mt-8 pt-8 border-t border-white/[0.04] text-center">
             <p className="text-sm text-[#8892b0] tracking-wide font-medium">
-              Identity compiled securely?{" "}
-              <Link href="/login" className="text-primary hover:text-white transition-colors font-bold tracking-wider uppercase ml-2">Log into Protocol</Link>
+              Already have an account?{" "}
+              <Link href="/login" className="text-primary hover:text-white transition-colors font-bold tracking-wider uppercase ml-2">Log in here</Link>
             </p>
           </div>
         </DynamicCard>

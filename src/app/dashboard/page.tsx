@@ -88,15 +88,15 @@ export default function Dashboard() {
                  System<br/> <span className="text-[#8892b0]">Overview</span>
                </h1>
             </div>
-            <div className="flex flex-col items-start md:items-end gap-6 border-l md:border-l-0 md:border-r-2 border-primary/50 pl-6 md:pl-0 md:pr-6">
-                <p className="text-sm font-bold text-[#8892b0] tracking-widest uppercase">
-                   {user?.first_name ? `Welcome back, ${user.first_name}` : 'Operator Identity Loaded'}
-                </p>
-               <Link href="/create-trade">
-                  <NeonButton className="gap-3 !py-4 w-full md:w-auto tracking-widest uppercase text-xs">
-                     <PlusCircle className="w-4 h-4" /> Initialize Escrow
-                  </NeonButton>
-               </Link>
+             <div className="flex flex-col items-start md:items-end gap-6 border-l md:border-l-0 md:border-r-2 border-primary/50 pl-6 md:pl-0 md:pr-6">
+                 <p className="text-sm font-bold text-[#8892b0] tracking-widest uppercase">
+                    {user?.first_name ? `Welcome back, ${user.first_name}` : 'Welcome back'}
+                 </p>
+                <Link href="/create-trade">
+                   <NeonButton className="gap-3 !py-4 w-full md:w-auto tracking-widest uppercase text-xs">
+                      <PlusCircle className="w-4 h-4" /> Create Escrow Transaction
+                   </NeonButton>
+                </Link>
             </div>
          </div>
 
@@ -143,7 +143,7 @@ export default function Dashboard() {
                {/* Live Operations */}
                <div className="flex flex-col gap-6">
                   <h2 className="dash-header text-sm font-black text-white uppercase tracking-widest border-b border-white/[0.04] pb-4 flex justify-between items-center">
-                     <span>Active Operations</span>
+                     <span>Active Transactions</span>
                      {live.length > 0 && <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />}
                   </h2>
                   
@@ -152,8 +152,8 @@ export default function Dashboard() {
                          <div className="w-16 h-16 rounded-full bg-white/[0.02] flex items-center justify-center mb-4">
                             <Send className="w-6 h-6 text-[#8892b0]" />
                          </div>
-                         <p className="text-[#8892b0] font-medium mb-1">No active operations detected.</p>
-                         <p className="text-xs text-[#8892b0]/50 tracking-widest uppercase">System idle.</p>
+                         <p className="text-[#8892b0] font-medium mb-1">No active transactions right now.</p>
+                         <p className="text-xs text-[#8892b0]/50 tracking-widest uppercase">History is clean.</p>
                       </div>
                   ) : (
                      <div className="flex flex-col gap-4">

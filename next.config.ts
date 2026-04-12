@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  serverExternalPackages: ['sharp', 'tesseract.js', '@vladmandic/face-api', 'canvas'],
 };
 
 export default nextConfig;
