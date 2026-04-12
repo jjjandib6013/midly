@@ -22,18 +22,18 @@ let modelsLoaded = false;
 async function loadModels() {
     if (modelsLoaded) return;
     try {
-       await faceapi.nets.ssdMobilenetv1.loadFromDisk(MODEL_DIR);
-       modelsLoaded = true;
-       console.log('FaceAPI Models loaded natively.');
-    } catch(e) {
-       console.error("Failed to load FaceAPI models:", e);
+        await faceapi.nets.ssdMobilenetv1.loadFromDisk(MODEL_DIR);
+        modelsLoaded = true;
+        console.log('FaceAPI Models loaded natively.');
+    } catch (e) {
+        console.error("Failed to load FaceAPI models:", e);
     }
 }
 
 export async function processKycJob(jobData: any) {
     const { kycId, filePath, livenessFilePath, idNumberEncrypted, idNameEncrypted } = jobData;
     console.log(`[AI Worker] Beginning processing for KYC ID: ${kycId}`);
-    
+
     try {
         if (!modelsLoaded) {
             await faceapi.nets.ssdMobilenetv1.loadFromDisk(MODEL_DIR);
@@ -48,9 +48,9 @@ export async function processKycJob(jobData: any) {
         console.log(`[AI Worker] Image optimized via Sharp.`);
 
         // 2. Text Verification (OCR)
-        const { data: { text } } = await Tesseract.recognize(optimizedBuffer, 'eng', { logger: m => {} });
+        const { data: { text } } = await Tesseract.recognize(optimizedBuffer, 'eng', { logger: m => { } });
         const textLower = text.toLowerCase();
-        
+
         const idNumber = decrypt(idNumberEncrypted);
         const idName = decrypt(idNameEncrypted);
 
@@ -76,20 +76,20 @@ export async function processKycJob(jobData: any) {
         let biometricMatch = false;
 
         if (livenessFilePath) {
-           const selfieBuffer = await sharp(livenessFilePath).resize(800).toBuffer();
-           const selfieImg = new Image();
-           selfieImg.src = selfieBuffer;
-           const selfieDetection = await faceapi.detectSingleFace(selfieImg as any).withFaceLandmarks().withFaceDescriptor();
-           
-           if (selfieDetection) {
-               faceFoundOnSelfie = true;
-               if (idDetection) {
-                  const distance = faceapi.euclideanDistance(idDetection.descriptor, selfieDetection.descriptor);
-                  console.log(`[AI Worker] Biometric Euclidean Distance: ${distance}`);
-                  // Distance < 0.6 is a standard threshold for FaceAPI match
-                  if (distance < 0.6) biometricMatch = true; 
-               }
-           }
+            const selfieBuffer = await sharp(livenessFilePath).resize(800).toBuffer();
+            const selfieImg = new Image();
+            selfieImg.src = selfieBuffer;
+            const selfieDetection = await faceapi.detectSingleFace(selfieImg as any).withFaceLandmarks().withFaceDescriptor();
+
+            if (selfieDetection) {
+                faceFoundOnSelfie = true;
+                if (idDetection) {
+                    const distance = faceapi.euclideanDistance(idDetection.descriptor, selfieDetection.descriptor);
+                    console.log(`[AI Worker] Biometric Euclidean Distance: ${distance}`);
+                    // Distance < 0.6 is a standard threshold for FaceAPI match
+                    if (distance < 0.6) biometricMatch = true;
+                }
+            }
         }
 
         console.log(`[AI Worker] Face Processing - ID: ${faceFoundOnId}, Selfie: ${faceFoundOnSelfie}, BiometricMatch: ${biometricMatch}`);
@@ -116,15 +116,15 @@ export async function processKycJob(jobData: any) {
         // Save Descriptor array as JSON into the database for future verification purposes
         await prisma.kycVerification.update({
             where: { kyc_id: kycId },
-            data: { 
-               status, 
-               face_descriptor: idDetection ? Array.from(idDetection.descriptor) : null 
+            data: {
+                status,
+                face_descriptor: idDetection ? Array.from(idDetection.descriptor) : null
             }
         });
 
         // Clean up selfie file
         if (livenessFilePath) {
-           fs.unlink(livenessFilePath, (err: any) => { if(err) console.error("Error removing selfie:", err); });
+            fs.unlink(livenessFilePath, (err: any) => { if (err) console.error("Error removing selfie:", err); });
         }
 
         return { status, reason };
@@ -133,7 +133,7 @@ export async function processKycJob(jobData: any) {
         console.error(`[AI Worker] Fatal Error processing KYC ${kycId}:`, error);
         await prisma.kycVerification.update({
             where: { kyc_id: kycId },
-            data: { status: 'rejected' } 
+            data: { status: 'rejected' }
         });
         throw error;
     }
@@ -142,10 +142,10 @@ export async function processKycJob(jobData: any) {
 // Initialize BullMQ worker if not falling back
 const USE_FALLBACK = true;
 if (!USE_FALLBACK) {
-   new Worker('kyc-processing', async job => {
-       await processKycJob(job.data);
-   }, {
-       connection: { host: REDIS_HOST, port: REDIS_PORT }
-   });
-   console.log('[BullMQ] Worker initialized and listening to kyc-processing queue');
+    new Worker('kyc-processing', async job => {
+        await processKycJob(job.data);
+    }, {
+        connection: { host: REDIS_HOST, port: REDIS_PORT }
+    });
+    console.log('[BullMQ] Worker initialized and listening to kyc-processing queue');
 }

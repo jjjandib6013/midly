@@ -98,8 +98,31 @@ export default function KYCVerification() {
           })
        });
        const data = await res.json();
-       if (!res.ok) throw new Error(data.error || "Verification Failed. Ensure your ID is clear.");
-       setIsAlreadyVerified(true);
+       if (!res.ok) throw new Error(data.error || "Submission failed. Please try again.");
+
+       // Poll for the real AI result instead of assuming success
+       const maxAttempts = 20; // 20 * 3s = 60 seconds max
+       for (let i = 0; i < maxAttempts; i++) {
+          await new Promise(r => setTimeout(r, 3000));
+          const profileRes = await fetch("http://localhost:5000/api/user/profile", {
+             headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` }
+          });
+          const profileData = await profileRes.json();
+          const status = profileData.kyc?.status;
+          
+          if (status === 'verified') {
+             setIsAlreadyVerified(true);
+             return;
+          }
+          if (status === 'rejected') {
+             throw new Error(
+                "Verification failed. The AI could not confirm your identity. " +
+                "Please ensure your ID photo is clear, well-lit, and the selfie matches."
+             );
+          }
+          // status is still 'pending' — keep polling
+       }
+       throw new Error("Verification timed out. Please try again later.");
     } catch (err: any) {
        setError(err.message);
     } finally {
@@ -265,12 +288,19 @@ export default function KYCVerification() {
                         </div>
                      </div>
                      
-                     <div className="flex gap-4">
-                        <NeonButton variant="ghost" className="flex-1 !py-5 text-sm uppercase font-bold" disabled={isProcessing} onClick={() => setStep(2)}>Back</NeonButton>
-                        <NeonButton className="flex-1 !py-5 text-sm uppercase font-bold tracking-widest" disabled={isProcessing || !livenessImage} onClick={handleComplete}>
-                           {isProcessing ? "Verifying..." : "Verify Identity"} <ShieldCheck className="w-5 h-5 ml-2" />
-                        </NeonButton>
-                     </div>
+                      {isProcessing && (
+                         <div className="flex items-center justify-center gap-3 p-4 rounded-2xl bg-primary/5 border border-primary/20 mb-6">
+                            <div className="w-5 h-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                            <span className="text-sm text-primary font-bold">AI is analyzing your identity documents...</span>
+                         </div>
+                      )}
+                      
+                      <div className="flex gap-4">
+                         <NeonButton variant="ghost" className="flex-1 !py-5 text-sm uppercase font-bold" disabled={isProcessing} onClick={() => setStep(2)}>Back</NeonButton>
+                         <NeonButton className="flex-1 !py-5 text-sm uppercase font-bold tracking-widest" disabled={isProcessing || !livenessImage} onClick={handleComplete}>
+                            {isProcessing ? "Processing..." : "Verify Identity"} <ShieldCheck className="w-5 h-5 ml-2" />
+                         </NeonButton>
+                      </div>
                   </DynamicCard>
             )}
           </div>
