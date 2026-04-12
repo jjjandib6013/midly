@@ -9,10 +9,9 @@ const USE_FALLBACK = true;
 export const kycQueue = USE_FALLBACK 
   ? { add: async (name: string, data: any) => {
         console.log(`[Queue Mock] Job ${name} added to local async queue.`);
-        // To prevent cyclic import in mock, we will defer the process execution to the caller
-        // Or trigger it via events.
-        const { processKycJob } = require('./worker');
-        setTimeout(() => processKycJob(data), 100);
+        const worker = require('./worker');
+        if (name === 'verify-kyc-phase2') setTimeout(() => worker.processKycPhase2(data), 100);
+        else if (name === 'verify-kyc-phase3') setTimeout(() => worker.processKycPhase3(data), 100);
         return { id: Math.random() };
      } }
   : new Queue('kyc-processing', {

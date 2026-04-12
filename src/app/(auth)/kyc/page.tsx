@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Webcam from "react-webcam";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
-import { ShieldCheck, UploadCloud, CheckCircle2, User, Camera, ArrowRight, ShieldAlert, RotateCcw } from "lucide-react";
+import { CheckCircle2, ShieldCheck, ArrowRight, ShieldAlert, RotateCcw, UploadCloud, Camera, X, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
@@ -80,33 +80,72 @@ export default function KYCVerification() {
       if (imageSrc) setLivenessImage(imageSrc);
   }, [webcamRef]);
 
-  const handleComplete = async () => {
+  const handlePhase1 = async () => {
+      setIsProcessing(true);
+      setError("");
+      try {
+         const res = await fetch("http://localhost:5000/api/kyc/phase1", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem('token')}` },
+            body: JSON.stringify({ idType: selectedID, idNumber: idNumber })
+         });
+         const data = await res.json();
+         if (!res.ok) throw new Error(data.error || "Failed to initialize Phase 1.");
+         setStep(2);
+      } catch (err: any) { setError(err.message); }
+      finally { setIsProcessing(false); }
+  };
+
+  const handlePhase2 = async () => {
     setIsProcessing(true);
     setError("");
     try {
-       const res = await fetch("http://localhost:5000/api/kyc", {
+       const res = await fetch("http://localhost:5000/api/kyc/phase2", {
           method: "POST",
-          headers: { 
-             "Content-Type": "application/json",
-             "Authorization": `Bearer ${localStorage.getItem('token')}`
-          },
-          body: JSON.stringify({
-             idType: selectedID,
-             idNumber: idNumber,
-             imageUrl: imageUrl, 
-             livenessImage: livenessImage
-          })
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem('token')}` },
+          body: JSON.stringify({ imageUrl: imageUrl })
        });
        const data = await res.json();
-       if (!res.ok) throw new Error(data.error || "Submission failed. Please try again.");
+       if (!res.ok) throw new Error(data.error || "Document upload failed.");
 
-       // Poll for the real AI result instead of assuming success
-       const maxAttempts = 20; // 20 * 3s = 60 seconds max
-       for (let i = 0; i < maxAttempts; i++) {
+       for (let i = 0; i < 20; i++) {
           await new Promise(r => setTimeout(r, 3000));
-          const profileRes = await fetch("http://localhost:5000/api/user/profile", {
-             headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` }
-          });
+          const profileRes = await fetch("http://localhost:5000/api/user/profile", { headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` } });
+          const profileData = await profileRes.json();
+          const status = profileData.kyc?.status;
+          
+          if (status === 'phase2_verified') {
+             setStep(3);
+             return;
+          }
+          if (status === 'rejected') {
+             setImageUrl("");
+             const reason = profileData.kyc?.rejection_reason || "AI could not extract required data from ID.";
+             throw new Error(`Verification failed. ${reason}`);
+          }
+       }
+       throw new Error("AI Processing timed out.");
+    } catch (err: any) { setError(err.message); } 
+    finally { setIsProcessing(false); }
+  };
+
+
+
+  const handlePhase3 = async () => {
+    setIsProcessing(true);
+    setError("");
+    try {
+       const res = await fetch("http://localhost:5000/api/kyc/phase3", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem('token')}` },
+          body: JSON.stringify({ livenessImage: livenessImage })
+       });
+       const data = await res.json();
+       if (!res.ok) throw new Error(data.error || "Selfie submission failed.");
+
+       for (let i = 0; i < 20; i++) {
+          await new Promise(r => setTimeout(r, 3000));
+          const profileRes = await fetch("http://localhost:5000/api/user/profile", { headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` } });
           const profileData = await profileRes.json();
           const status = profileData.kyc?.status;
           
@@ -115,19 +154,14 @@ export default function KYCVerification() {
              return;
           }
           if (status === 'rejected') {
-             throw new Error(
-                "Verification failed. The AI could not confirm your identity. " +
-                "Please ensure your ID photo is clear, well-lit, and the selfie matches."
-             );
+             setLivenessImage(null);
+             const reason = profileData.kyc?.rejection_reason || "Biometric match failed. Selfie does not match ID document.";
+             throw new Error(`Biometric Error: ${reason}`);
           }
-          // status is still 'pending' — keep polling
        }
-       throw new Error("Verification timed out. Please try again later.");
-    } catch (err: any) {
-       setError(err.message);
-    } finally {
-       setIsProcessing(false);
-    }
+       throw new Error("Verification timed out.");
+    } catch (err: any) { setError(err.message); } 
+    finally { setIsProcessing(false); }
   };
 
   const handleDevReset = async () => {
@@ -167,8 +201,11 @@ export default function KYCVerification() {
 
       <div className="max-w-3xl mx-auto" ref={containerRef}>
          {error && (
-            <div className="mb-8 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-500 text-sm flex items-center justify-center gap-3 font-bold tracking-wide">
-               <ShieldAlert className="w-5 h-5"/> {error}
+            <div className="mb-8 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-500 text-sm flex items-center justify-between gap-3 font-bold tracking-wide">
+               <div className="flex items-center gap-3">
+                 <ShieldAlert className="w-5 h-5"/> {error}
+               </div>
+               <button onClick={() => setError("")} className="hover:text-white transition-colors" type="button"><X className="w-4 h-4"/></button>
             </div>
          )}
          
@@ -214,8 +251,8 @@ export default function KYCVerification() {
                             <input type="text" value={idNumber} onChange={e => setIdNumber(e.target.value)} placeholder="000-000-0000" className="w-full bg-[#050608] border border-white/10 p-4 rounded-xl text-white focus:border-primary focus:outline-none placeholder:text-white/20" />
                          </div>
                      </div>
-                     <NeonButton className="w-full !py-5 text-sm uppercase tracking-widest font-black" disabled={!selectedID || !idNumber} onClick={handleNextStep}>
-                        Next Step <ArrowRight className="w-5 h-5 ml-3" />
+                     <NeonButton className="w-full !py-5 text-sm uppercase tracking-widest font-black" disabled={!selectedID || !idNumber || isProcessing} onClick={handlePhase1}>
+                        {isProcessing ? "Processing..." : "Next Step"} <ArrowRight className="w-5 h-5 ml-3" />
                      </NeonButton>
                   </DynamicCard>
             )}
@@ -226,7 +263,7 @@ export default function KYCVerification() {
                      <p className="text-[#8892b0] text-sm mb-8">Ensure the document is well-lit and all text is clearly visible.</p>
                      
                      <label className={`border-2 border-dashed ${imageUrl ? 'border-primary/50 bg-primary/5' : 'border-white/10 bg-[#050608]'} rounded-[2rem] p-16 flex flex-col items-center justify-center mb-10 hover:bg-white/[0.02] hover:border-primary/50 transition-all cursor-pointer group`}>
-                        <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} disabled={isUploading} />
+                        <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} disabled={isUploading || isProcessing} />
                         {isUploading ? (
                            <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin mb-4" />
                         ) : imageUrl ? (
@@ -237,10 +274,19 @@ export default function KYCVerification() {
                         <p className="text-white font-bold text-lg mb-1">{isUploading ? 'Uploading...' : imageUrl ? 'Document Uploaded' : 'Upload Image'}</p>
                         <p className="text-xs font-bold uppercase tracking-widest text-[#8892b0]">JPG or PNG, up to 5MB</p>
                      </label>
+
+                     {isProcessing && (
+                         <div className="flex items-center justify-center gap-3 p-4 rounded-2xl bg-primary/5 border border-primary/20 mb-6">
+                            <div className="w-5 h-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                            <span className="text-sm text-primary font-bold">AI is scanning your document...</span>
+                         </div>
+                      )}
                      
                      <div className="flex gap-4">
-                        <NeonButton variant="ghost" className="flex-1 !py-5 text-sm uppercase font-bold" onClick={() => setStep(1)}>Back</NeonButton>
-                        <NeonButton className="flex-1 !py-5 text-sm uppercase font-bold tracking-widest" disabled={!imageUrl || isUploading} onClick={handleNextStep}>Next Step <ArrowRight className="w-5 h-5 ml-2" /></NeonButton>
+                        <NeonButton variant="ghost" className="flex-1 !py-5 text-sm uppercase font-bold" disabled={isProcessing} onClick={() => setStep(1)}>Back</NeonButton>
+                        <NeonButton className="flex-1 !py-5 text-sm uppercase font-bold tracking-widest" disabled={!imageUrl || isUploading || isProcessing} onClick={handlePhase2}>
+                            {isProcessing ? "Validating..." : "Next Step"} <ArrowRight className="w-5 h-5 ml-2" />
+                        </NeonButton>
                      </div>
                   </DynamicCard>
             )}
@@ -297,7 +343,7 @@ export default function KYCVerification() {
                       
                       <div className="flex gap-4">
                          <NeonButton variant="ghost" className="flex-1 !py-5 text-sm uppercase font-bold" disabled={isProcessing} onClick={() => setStep(2)}>Back</NeonButton>
-                         <NeonButton className="flex-1 !py-5 text-sm uppercase font-bold tracking-widest" disabled={isProcessing || !livenessImage} onClick={handleComplete}>
+                         <NeonButton className="flex-1 !py-5 text-sm uppercase font-bold tracking-widest" disabled={isProcessing || !livenessImage} onClick={handlePhase3}>
                             {isProcessing ? "Processing..." : "Verify Identity"} <ShieldCheck className="w-5 h-5 ml-2" />
                          </NeonButton>
                       </div>

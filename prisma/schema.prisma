@@ -53,13 +53,14 @@ model KycVerification {
   kyc_id     Int        @id @default(autoincrement())
   user_id    Int        @unique
   user       User       @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
-  id_type    String     @db.VarChar(50)
-  id_number  String     @db.VarChar(100)
-  id_name    String     @db.VarChar(150)
+  id_type    String     @db.VarChar(100)
+  id_number  String     @db.VarChar(255)
+  id_name    String     @db.VarChar(255)
   birthdate  DateTime?  @db.Date
-  status     String?    @default("pending") @db.VarChar(20)
+  status     String?    @default("pending") @db.VarChar(50)
   phase      Int        @default(1)
   face_descriptor Json?
+  rejection_reason String? @db.VarChar(255)
   
   images     KycImage[]
 
