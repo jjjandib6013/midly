@@ -1,4 +1,5 @@
 "use client";
+import { useSession } from 'next-auth/react';
 
 import { useEffect, useState } from "react";
 import { ShieldAlert, Activity, CheckCircle, Search, FileText } from "lucide-react";
@@ -7,13 +8,16 @@ import DynamicCard from "@/components/ui/DynamicCard";
 import toast from "react-hot-toast";
 
 export default function AdminDashboard() {
+   const { data: session } = useSession();
+   const token = (session as any)?.accessToken;
+
   const [isAdmin, setIsAdmin] = useState(false);
   const [disputes, setDisputes] = useState<any[]>([]);
   const [kycs, setKycs] = useState<any[]>([]);
   
   const fetchDisputes = () => {
       fetch("http://localhost:5000/api/admin/disputes", {
-         headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` }
+         headers: { "Authorization": `Bearer ${token}` }
       })
       .then(res => res.json())
       .then(data => {
@@ -23,7 +27,7 @@ export default function AdminDashboard() {
 
   const fetchKycs = () => {
       fetch("http://localhost:5000/api/admin/kyc", {
-         headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` }
+         headers: { "Authorization": `Bearer ${token}` }
       })
       .then(res => res.json())
       .then(data => {
@@ -32,7 +36,7 @@ export default function AdminDashboard() {
   };
   
   useEffect(() => {
-     const token = localStorage.getItem('token');
+     const token = token;
      if (token) {
         try {
            const payload = JSON.parse(atob(token.split('.')[1]));
@@ -47,14 +51,14 @@ export default function AdminDashboard() {
      } else {
         window.location.href = "/";
      }
-  }, []);
+  }, [token]);
 
   const handleResolve = async (txId: number, action: 'REFUND_BUYER' | 'FORWARD_TO_SELLER') => {
       if (!confirm(`Are you absolutely sure you want to FORCE ${action}? This manipulates the global vault database instantly.`)) return;
       try {
          const res = await fetch(`http://localhost:5000/api/admin/disputes/${txId}/resolve`, {
             method: "POST",
-            headers: { "Authorization": `Bearer ${localStorage.getItem('token')}`, "Content-Type": "application/json" },
+            headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
             body: JSON.stringify({ action })
          });
          if (res.ok) {
@@ -72,7 +76,7 @@ export default function AdminDashboard() {
       try {
          const res = await fetch(`http://localhost:5000/api/admin/kyc/${kycId}/resolve`, {
             method: "POST",
-            headers: { "Authorization": `Bearer ${localStorage.getItem('token')}`, "Content-Type": "application/json" },
+            headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
             body: JSON.stringify({ status })
          });
          if (res.ok) {

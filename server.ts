@@ -4,6 +4,7 @@ import { PrismaClient } from '@prisma/client';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
+import { RegisterSchema } from './src/lib/validations';
 import multer from 'multer';
 import path from 'path';
 import { createServer } from 'http';
@@ -119,13 +120,13 @@ const requireKYC = async (req: Request, res: Response, next: NextFunction): Prom
 
    app.post('/api/auth/register', async (req, res): Promise<any> => {
       try {
-         const { first_name, last_name, email, password, phone, birthdate } = req.body;
-         if (!email || !password || !first_name || !last_name || !birthdate) {
-            return res.status(400).json({ error: 'Missing required fields including Date of Birth' });
+         const validation = RegisterSchema.safeParse(req.body);
+         if (!validation.success) {
+            return res.status(400).json({ error: validation.error.errors[0].message });
          }
-         if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
-         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Invalid email format' });
 
+         const { first_name, last_name, email, password, phone, birthdate } = validation.data;
+         
          const existingUser = await prisma.user.findUnique({ where: { email } });
          if (existingUser) return res.status(400).json({ error: 'Email already exists' });
 
@@ -141,22 +142,7 @@ const requireKYC = async (req: Request, res: Response, next: NextFunction): Prom
       }
    });
 
-   app.post('/api/auth/login', async (req, res): Promise<any> => {
-      try {
-         const { email, password } = req.body;
-         const user = await prisma.user.findUnique({ where: { email } });
-
-         if (!user) return res.status(401).json({ error: 'Invalid credentials' });
-
-         const isMatch = await bcrypt.compare(password, user.password_hash);
-         if (!isMatch) return res.status(401).json({ error: 'Invalid credentials' });
-
-         const token = jwt.sign({ user_id: user.user_id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '24h' });
-         res.json({ message: 'Login successful', token, user });
-      } catch (error: any) {
-         res.status(500).json({ error: 'Server error', msg: error.message });
-      }
-   });
+   // app.post('/api/auth/login') HAS BEEN DELETED: NextAuth.js now handles the complete login flow on Next.js side
 
    // ==========================================
    // PROTECTED API ROUTES

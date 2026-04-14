@@ -1,4 +1,5 @@
 "use client";
+import { useSession } from 'next-auth/react';
 
 import { useState, useRef } from "react";
 import gsap from "gsap";
@@ -10,6 +11,9 @@ import DynamicCard from "@/components/ui/DynamicCard";
 import toast from 'react-hot-toast';
 
 export default function CreateTrade() {
+   const { data: session } = useSession();
+   const token = (session as any)?.accessToken;
+
   const router = useRouter();
   const [role, setRole] = useState<"BUY" | "SELL">("BUY");
   const [tradeType, setTradeType] = useState("Game Account");
@@ -43,7 +47,7 @@ export default function CreateTrade() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${localStorage.getItem('token')}`
+          "Authorization": `Bearer ${token}`
         },
         body: JSON.stringify({
           role,

@@ -40,7 +40,11 @@ const STATUS: Record<string, { label: string; color: string; icon: any }> = {
    refunded: { label: "Refunded", color: "text-yellow-400", icon: Clock },
 };
 
+import { useSession } from "next-auth/react";
+
+// inside Dashboard
 export default function Dashboard() {
+   const { data: session, status } = useSession();
    const [user, setUser] = useState<any>(null);
    const [trades, setTrades] = useState<Trade[]>([]);
    const [isLoading, setIsLoading] = useState(true);
@@ -48,8 +52,12 @@ export default function Dashboard() {
    const containerRef = useRef<HTMLDivElement>(null);
 
    useEffect(() => {
-      const token = localStorage.getItem('token');
-      if (!token) return;
+      // @ts-ignore - accessToken is injected via our custom jwt callback bridge
+      const token = session?.accessToken;
+      if (!token) {
+         if (status === "unauthenticated") setIsLoading(false);
+         return;
+      }
       Promise.all([
          fetch("http://localhost:5000/api/user/profile", { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
          fetch("http://localhost:5000/api/transactions", { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
@@ -58,7 +66,7 @@ export default function Dashboard() {
          if (t.trades) setTrades(t.trades);
          setIsLoading(false);
       }).catch(() => setIsLoading(false));
-   }, []);
+   }, [session, status]);
 
    useGSAP(() => {
       if (isLoading) return;
@@ -69,7 +77,7 @@ export default function Dashboard() {
         .fromTo(".dash-item", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.4, stagger: 0.05, ease: "power2.out" }, "-=0.2");
    }, { scope: containerRef, dependencies: [isLoading] });
 
-   const getMyUserId = () => { try { return JSON.parse(atob(localStorage.getItem('token')!.split('.')[1])).user_id; } catch { return 0; } };
+   const getMyUserId = () => { try { return JSON.parse(atob(token!.split('.')[1])).user_id; } catch { return 0; } };
    const getCounterparty = (t: Trade) => t.buyer_id === getMyUserId() ? t.seller?.first_name || t.seller?.email?.split('@')[0] : t.buyer?.first_name || t.buyer?.email?.split('@')[0];
    const timeAgo = (d: string) => { const m = Math.floor((Date.now() - new Date(d).getTime()) / 60000); if (m < 1) return "now"; if (m < 60) return `${m}m`; const h = Math.floor(m / 60); if (h < 24) return `${h}h`; return `${Math.floor(h / 24)}d`; };
 

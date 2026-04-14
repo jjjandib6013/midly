@@ -1,4 +1,5 @@
 "use client";
+import { useSession, signOut } from 'next-auth/react';
 
 import { useState, useEffect, useRef } from "react";
 import gsap from "gsap";
@@ -10,6 +11,9 @@ import DynamicCard from "@/components/ui/DynamicCard";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 export default function Profile() {
+   const { data: session } = useSession();
+   const token = (session as any)?.accessToken;
+
   const [profile, setProfile] = useState<any>(null);
   const [methods, setMethods] = useState<any[]>([]);
   const [sessions, setSessions] = useState<any[]>([]);
@@ -22,7 +26,7 @@ export default function Profile() {
 
   const fetchProfileData = () => {
     fetch(`${API_URL}/api/user/profile`, {
-       headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` }
+       headers: { "Authorization": `Bearer ${token}` }
     })
       .then(res => res.json())
       .then(data => { if (data.email) setProfile(data); })
@@ -30,14 +34,14 @@ export default function Profile() {
       .finally(() => setIsLoading(false));
       
     fetch(`${API_URL}/api/user/payment-methods`, {
-       headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` }
+       headers: { "Authorization": `Bearer ${token}` }
     })
       .then(res => res.json())
       .then(data => { if(data.methods) setMethods(data.methods); })
       .catch(()=>{});
 
     fetch(`${API_URL}/api/user/sessions`, {
-       headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` }
+       headers: { "Authorization": `Bearer ${token}` }
     })
       .then(res => res.json())
       .then(data => { if(data.sessions) setSessions(data.sessions); })
@@ -46,7 +50,7 @@ export default function Profile() {
 
   useEffect(() => {
     fetchProfileData();
-  }, []);
+  }, [token]);
 
   useGSAP(() => {
      if (tabContentRef.current && !isLoading) {
@@ -62,7 +66,7 @@ export default function Profile() {
      try {
         const res = await fetch(`${API_URL}/api/user/payment-methods`, {
            method: "POST",
-           headers: { "Authorization": `Bearer ${localStorage.getItem('token')}`, "Content-Type": "application/json" },
+           headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
            body: JSON.stringify({ ...newMethod, is_default: methods.length === 0 })
         });
         if (res.ok) {
@@ -77,16 +81,14 @@ export default function Profile() {
      try {
         const res = await fetch(`${API_URL}/api/user/payment-methods/${id}`, {
            method: "DELETE",
-           headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` }
+           headers: { "Authorization": `Bearer ${token}` }
         });
         if (res.ok) fetchProfileData();
      } catch(e) {}
   };
 
-  const handleLogout = () => {
-      localStorage.removeItem("token");
-      document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
-      window.location.href = "/login";
+  const handleLogout = async () => {
+      await signOut({ callbackUrl: "/" });
   };
 
   if (isLoading) {

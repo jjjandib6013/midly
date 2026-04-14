@@ -8,10 +8,13 @@ import { ArrowRight, Lock, Mail, User, Phone, ShieldAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
 import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
+import { signIn } from "next-auth/react";
+import toast from "react-hot-toast";
+import { RegisterSchema } from "@/lib/validations";
 
 export default function Register() {
   const router = useRouter();
-  const [formData, setFormData] = useState({ first_name: '', last_name: '', email: '', password: '', phone: '' });
+  const [formData, setFormData] = useState({ first_name: '', last_name: '', email: '', password: '', phone: '', birthdate: '' });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
@@ -25,6 +28,16 @@ export default function Register() {
     setIsLoading(true);
     setError("");
 
+    // Zod Client-Side Zero-Trust Block
+    const validation = RegisterSchema.safeParse(formData);
+    if (!validation.success) {
+      setIsLoading(false);
+      const firstError = validation.error?.issues?.[0]?.message || "Invalid input parameters.";
+      toast.error(firstError);
+      setError(firstError);
+      return;
+    }
+
     try {
        const res = await fetch("http://localhost:5000/api/auth/register", {
           method: "POST",
@@ -35,10 +48,24 @@ export default function Register() {
        
        if (!res.ok) throw new Error(data.error || "Registration Failed");
        
-       localStorage.setItem("token", data.token); // Store token
-       document.cookie = `token=${data.token}; path=/; max-age=86400`;
-       router.push("/kyc"); // Enforce KYC logic immediately
+       toast.success("Account created! Logging you in securely...");
+
+       // Instead of setting localStorage, immediately sign in to create the NextAuth Cookie Session
+       const signInRes = await signIn("credentials", {
+          email: formData.email,
+          password: formData.password,
+          redirect: false
+       });
+
+       if (signInRes?.error) {
+          throw new Error("Account was created, but automatic login failed. Please try logging in manually.");
+       }
+
+       toast.success("Verifying identity...");
+       // Force absolute browser redirect so Next.js resets session context
+       window.location.href = "/kyc";
     } catch (err: any) {
+       toast.error(err.message);
        setError(err.message);
     } finally {
        setIsLoading(false);
@@ -65,7 +92,7 @@ export default function Register() {
              </div>
           )}
           <form className="space-y-6" onSubmit={handleRegister}>
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                {/* First Name */}
                <div className="space-y-2 w-full">
                  <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1">First Name</label>
@@ -92,7 +119,7 @@ export default function Register() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                {/* Phone Number */}
                <div className="space-y-2 w-full">
                  <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1">Phone Number</label>

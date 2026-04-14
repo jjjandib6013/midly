@@ -8,8 +8,12 @@ import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 
 export default function Wallet() {
+  const { data: session } = useSession();
+  const token = (session as any)?.accessToken;
+
   const router = useRouter();
   const [balance, setBalance] = useState("0.00");
   const [isVerified, setIsVerified] = useState(false);
@@ -22,7 +26,7 @@ export default function Wallet() {
   const modalWithdrawRef = useRef<HTMLDivElement>(null);
 
   const fetchWallet = async () => {
-    const token = localStorage.getItem('token');
+    const token = token;
     if (!token) return;
 
     try {
@@ -47,7 +51,7 @@ export default function Wallet() {
 
   useEffect(() => {
     fetchWallet();
-  }, []);
+  }, [token]);
 
   useGSAP(() => {
     const tl = gsap.timeline();
@@ -79,7 +83,7 @@ export default function Wallet() {
     try {
       const res = await fetch(`http://localhost:5000/api/wallet/deposit`, {
         method: "POST",
-        headers: { "Authorization": `Bearer ${localStorage.getItem('token')}`, "Content-Type": "application/json" },
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ amount })
       });
       if (res.ok) {
@@ -102,7 +106,7 @@ export default function Wallet() {
     try {
       const res = await fetch(`http://localhost:5000/api/wallet/withdraw`, {
         method: "POST",
-        headers: { "Authorization": `Bearer ${localStorage.getItem('token')}`, "Content-Type": "application/json" },
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ amount })
       });
       const data = await res.json();

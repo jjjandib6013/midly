@@ -8,8 +8,12 @@ import { CheckCircle2, ShieldCheck, ArrowRight, ShieldAlert, RotateCcw, UploadCl
 import { useRouter } from "next/navigation";
 import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
+import { useSession } from "next-auth/react";
 
 export default function KYCVerification() {
+  const { data: session } = useSession();
+  const token = (session as any)?.accessToken;
+
   const router = useRouter();
   const containerRef = useRef(null);
   const stepContainerRef = useRef(null);
@@ -31,7 +35,7 @@ export default function KYCVerification() {
   const fetchProfile = useCallback(() => {
      setIsLoadingProfile(true);
      fetch("http://localhost:5000/api/user/profile", {
-         headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` }
+         headers: { "Authorization": `Bearer ${token}` }
      })
      .then(res => res.json())
      .then(data => {
@@ -40,7 +44,7 @@ export default function KYCVerification() {
          setIsLoadingProfile(false);
      })
      .catch(() => setIsLoadingProfile(false));
-  }, []);
+  }, [token]);
 
   useEffect(() => {
      fetchProfile();
@@ -86,7 +90,7 @@ export default function KYCVerification() {
       try {
          const res = await fetch("http://localhost:5000/api/kyc/phase1", {
             method: "POST",
-            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem('token')}` },
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
             body: JSON.stringify({ idType: selectedID, idNumber: idNumber })
          });
          const data = await res.json();
@@ -102,7 +106,7 @@ export default function KYCVerification() {
     try {
        const res = await fetch("http://localhost:5000/api/kyc/phase2", {
           method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem('token')}` },
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
           body: JSON.stringify({ imageUrl: imageUrl })
        });
        const data = await res.json();
@@ -110,7 +114,7 @@ export default function KYCVerification() {
 
        for (let i = 0; i < 20; i++) {
           await new Promise(r => setTimeout(r, 3000));
-          const profileRes = await fetch("http://localhost:5000/api/user/profile", { headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` } });
+          const profileRes = await fetch("http://localhost:5000/api/user/profile", { headers: { "Authorization": `Bearer ${token}` } });
           const profileData = await profileRes.json();
           const status = profileData.kyc?.status;
           
@@ -137,7 +141,7 @@ export default function KYCVerification() {
     try {
        const res = await fetch("http://localhost:5000/api/kyc/phase3", {
           method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem('token')}` },
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
           body: JSON.stringify({ livenessImage: livenessImage })
        });
        const data = await res.json();
@@ -145,7 +149,7 @@ export default function KYCVerification() {
 
        for (let i = 0; i < 20; i++) {
           await new Promise(r => setTimeout(r, 3000));
-          const profileRes = await fetch("http://localhost:5000/api/user/profile", { headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` } });
+          const profileRes = await fetch("http://localhost:5000/api/user/profile", { headers: { "Authorization": `Bearer ${token}` } });
           const profileData = await profileRes.json();
           const status = profileData.kyc?.status;
           
@@ -169,7 +173,7 @@ export default function KYCVerification() {
          setIsLoadingProfile(true);
          await fetch("http://localhost:5000/api/kyc/reset", {
              method: "POST",
-             headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` }
+             headers: { "Authorization": `Bearer ${token}` }
          });
          fetchProfile();
          setStep(1);

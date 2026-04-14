@@ -7,8 +7,12 @@ import { ShieldCheck, User, Menu, Bell, Wallet, LayoutDashboard, X, LogOut, Arro
 import NeonButton from "@/components/ui/NeonButton";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
+import { useSession, signOut } from "next-auth/react";
 
 export default function Navbar() {
+  const { data: session, status } = useSession();
+  const token = (session as any)?.accessToken;
+
   const pathname = usePathname();
   const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -26,52 +30,49 @@ export default function Navbar() {
   const { contextSafe } = useGSAP({ scope: navRef });
 
   const fetchNotifs = () => {
+    if (!token) return;
     fetch("http://localhost:5000/api/notifications", {
-       headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` }
+      headers: { "Authorization": `Bearer ${token}` }
     }).then(res => res.json()).then(data => {
-       if (data.notifications) {
-           setNotifications(data.notifications);
-           setHasNewNotifs(data.notifications.some((n: any) => !n.is_read));
-       }
+      if (data.notifications) {
+        setNotifications(data.notifications);
+        setHasNewNotifs(data.notifications.some((n: any) => !n.is_read));
+      }
     }).catch(console.error);
   };
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    setIsAuthenticated(!!token);
+    setIsAuthenticated(status === "authenticated");
 
     if (token) {
-        try {
-           const payload = JSON.parse(atob(token.split('.')[1]));
-           if (payload.role === 'admin') setIsAdmin(true);
-        } catch(e) {}
-        fetchNotifs(); 
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload.role === 'admin') setIsAdmin(true);
+      } catch (e) { }
+      fetchNotifs();
     }
-    
+
     // Initial entrance animation
-    gsap.fromTo(navRef.current, 
-      { y: -100, opacity: 0 }, 
+    gsap.fromTo(navRef.current,
+      { y: -100, opacity: 0 },
       { y: 0, opacity: 1, duration: 1, ease: "power4.out", delay: 0.2 }
     );
-  }, [pathname]);
+  }, [pathname, status, token]);
 
   const handleAcceptInvite = async (tradeId: number) => {
-     try {
-        const res = await fetch(`http://localhost:5000/api/transactions/${tradeId}/accept-invite`, {
-           method: "PUT",
-           headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` }
-        });
-        if (res.ok) {
-           window.location.href = `/trade/${tradeId}`;
-        }
-     } catch(e) {}
+    try {
+      const res = await fetch(`http://localhost:5000/api/transactions/${tradeId}/accept-invite`, {
+        method: "PUT",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        window.location.href = `/trade/${tradeId}`;
+      }
+    } catch (e) { }
   };
 
-  const handleLogout = () => {
-     localStorage.removeItem("token");
-     document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
-     setIsAuthenticated(false);
-     router.push("/");
+  const handleLogout = async () => {
+    await signOut({ callbackUrl: "/" });
   };
 
   const navLinks: any[] = isAuthenticated ? [
@@ -85,7 +86,7 @@ export default function Navbar() {
   // GSAP animations for mobile menu
   useEffect(() => {
     if (!mobileMenuRef.current || !menuLinksRef.current) return;
-    
+
     if (isMobileMenuOpen) {
       document.body.style.overflow = 'hidden';
       gsap.to(mobileMenuRef.current, { y: "0%", duration: 0.6, ease: "power4.inOut" });
@@ -105,12 +106,12 @@ export default function Navbar() {
     if (!notifMenuRef.current) return;
     if (showNotifs) {
       notifMenuRef.current.style.display = 'block';
-      gsap.fromTo(notifMenuRef.current, 
+      gsap.fromTo(notifMenuRef.current,
         { opacity: 0, y: 10, scale: 0.95 },
         { opacity: 1, y: 0, scale: 1, duration: 0.3, ease: "power3.out" }
       );
     } else {
-      gsap.to(notifMenuRef.current, { 
+      gsap.to(notifMenuRef.current, {
         opacity: 0, y: -10, scale: 0.95, duration: 0.2, ease: "power3.in",
         onComplete: () => { if (notifMenuRef.current) notifMenuRef.current.style.display = 'none'; }
       });
@@ -120,7 +121,7 @@ export default function Navbar() {
   return (
     <>
       {/* High-End Absolute Glass Header */}
-      <div 
+      <div
         ref={navRef}
         className="fixed top-0 left-0 w-full z-50 bg-[#030407]/80 backdrop-blur-2xl border-b border-white/[0.04]"
       >
@@ -131,15 +132,14 @@ export default function Navbar() {
               <ShieldCheck className="relative z-10 h-8 w-8 text-primary drop-shadow-[0_0_15px_rgba(63,229,108,0.3)]" />
               <span className="relative z-10 text-2xl font-black tracking-tighter text-white uppercase translate-y-[1px]">MIDLY</span>
             </Link>
-            
+
             <div className="hidden md:flex items-center gap-8 pl-8 border-l border-white/[0.04] h-8">
               {navLinks.map((link) => (
                 <Link
                   key={link.name}
                   href={link.href}
-                  className={`text-xs font-bold tracking-widest uppercase transition-all flex items-center gap-2 ${
-                    pathname === link.href ? "text-primary" : "text-[#8892b0] hover:text-white"
-                  }`}
+                  className={`text-xs font-bold tracking-widest uppercase transition-all flex items-center gap-2 ${pathname === link.href ? "text-primary" : "text-[#8892b0] hover:text-white"
+                    }`}
                 >
                   {link.icon && <link.icon className="w-4 h-4" />}
                   {link.name}
@@ -154,39 +154,39 @@ export default function Navbar() {
                 <Link href="/wallet" className="hidden md:flex items-center gap-2 text-xs font-bold tracking-widest uppercase text-[#8892b0] hover:text-primary transition-colors">
                   <Wallet className="w-4 h-4" /> Vault
                 </Link>
-                
+
                 <div className="relative">
-                  <button 
-                      onClick={() => setShowNotifs(!showNotifs)}
-                      className="relative p-2 text-[#8892b0] hover:text-white transition-colors"
+                  <button
+                    onClick={() => setShowNotifs(!showNotifs)}
+                    className="relative p-2 text-[#8892b0] hover:text-white transition-colors"
                   >
-                      <Bell className="w-5 h-5" />
-                      {hasNewNotifs && <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse" />}
+                    <Bell className="w-5 h-5" />
+                    {hasNewNotifs && <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse" />}
                   </button>
-                  
-                  <div 
+
+                  <div
                     ref={notifMenuRef}
                     className="hidden absolute right-0 mt-6 w-96 bg-[#090b10] border border-white/5 shadow-[0_30px_60px_rgba(0,0,0,0.8)] rounded-3xl overflow-hidden z-50"
                   >
                     <div className="p-6 border-b border-white/5 flex justify-between items-center bg-[#050608]">
-                        <h4 className="text-xs font-black text-[#8892b0] tracking-widest uppercase">NOTIFICATIONS</h4>
+                      <h4 className="text-xs font-black text-[#8892b0] tracking-widest uppercase">NOTIFICATIONS</h4>
                     </div>
                     <div className="max-h-[350px] overflow-y-auto custom-scrollbar bg-[#090b10]">
-                        {notifications.length === 0 ? (
-                          <p className="p-8 text-sm text-[#8892b0] text-center font-medium">All caught up.</p>
-                        ) : (
-                          notifications.map(notif => (
-                              <div key={notif.notification_id} className={`p-5 border-b border-white/5 last:border-b-0 hover:bg-white/[0.02] transition-colors ${notif.is_read ? '' : 'bg-primary/[0.02]'}`}>
-                                <p className="text-sm text-white font-medium leading-relaxed">{notif.message}</p>
-                                <p className="text-xs text-[#8892b0] mt-3 font-semibold uppercase tracking-wider">{new Date(notif.created_at).toLocaleDateString()}</p>
-                                {notif.type === 'escrow_invite' && notif.reference_id && (
-                                    <button className="mt-4 text-xs bg-primary text-dark-bg hover:brightness-110 px-5 py-2.5 rounded-full font-bold transition-all w-full flex items-center justify-center gap-2" onClick={() => handleAcceptInvite(notif.reference_id)}>
-                                      ACCEPT ESCROW <ArrowRight className="w-3 h-3" />
-                                    </button>
-                                )}
-                              </div>
-                          ))
-                        )}
+                      {notifications.length === 0 ? (
+                        <p className="p-8 text-sm text-[#8892b0] text-center font-medium">All caught up.</p>
+                      ) : (
+                        notifications.map(notif => (
+                          <div key={notif.notification_id} className={`p-5 border-b border-white/5 last:border-b-0 hover:bg-white/[0.02] transition-colors ${notif.is_read ? '' : 'bg-primary/[0.02]'}`}>
+                            <p className="text-sm text-white font-medium leading-relaxed">{notif.message}</p>
+                            <p className="text-xs text-[#8892b0] mt-3 font-semibold uppercase tracking-wider">{new Date(notif.created_at).toLocaleDateString()}</p>
+                            {notif.type === 'escrow_invite' && notif.reference_id && (
+                              <button className="mt-4 text-xs bg-primary text-dark-bg hover:brightness-110 px-5 py-2.5 rounded-full font-bold transition-all w-full flex items-center justify-center gap-2" onClick={() => handleAcceptInvite(notif.reference_id)}>
+                                ACCEPT ESCROW <ArrowRight className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
                 </div>
@@ -196,7 +196,7 @@ export default function Navbar() {
                   className="hidden md:block"
                 >
                   <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary hover:bg-primary hover:text-dark-bg transition-colors duration-300">
-                     <User className="h-4 w-4" />
+                    <User className="h-4 w-4" />
                   </div>
                 </Link>
               </>
@@ -206,8 +206,8 @@ export default function Navbar() {
                 <Link href="/register"><NeonButton className="!py-2.5 !px-8 text-xs tracking-widest uppercase">Launch App</NeonButton></Link>
               </div>
             )}
-            
-            <button 
+
+            <button
               className="md:hidden p-2 text-white"
               onClick={() => setIsMobileMenuOpen(true)}
             >
@@ -227,7 +227,7 @@ export default function Navbar() {
             <ShieldCheck className="h-8 w-8 text-primary" />
             <span className="text-2xl font-black tracking-tighter text-white uppercase pt-1">MIDLY</span>
           </Link>
-          <button 
+          <button
             className="p-3 text-[#8892b0] hover:text-white rounded-full bg-white/5 transition-colors"
             onClick={() => setIsMobileMenuOpen(false)}
           >
@@ -247,9 +247,9 @@ export default function Navbar() {
               </Link>
             </div>
           ))}
-          
+
           {isAuthenticated && (
-             <div className="overflow-hidden mt-8">
+            <div className="overflow-hidden mt-8">
               <Link
                 href="/wallet"
                 onClick={() => setIsMobileMenuOpen(false)}
@@ -260,7 +260,7 @@ export default function Navbar() {
             </div>
           )}
           {isAuthenticated && (
-             <div className="overflow-hidden">
+            <div className="overflow-hidden">
               <Link
                 href="/profile"
                 onClick={() => setIsMobileMenuOpen(false)}

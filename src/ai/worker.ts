@@ -40,6 +40,38 @@ async function loadModels() {
     }
 }
 
+function levenshteinDistance(s1: string, s2: string): number {
+    s1 = s1.toLowerCase();
+    s2 = s2.toLowerCase();
+    const costs = new Array(s2.length + 1);
+    for (let i = 0; i <= s1.length; i++) {
+        let lastValue = i;
+        for (let j = 0; j <= s2.length; j++) {
+            if (i == 0) costs[j] = j;
+            else {
+                if (j > 0) {
+                    let newValue = costs[j - 1];
+                    if (s1.charAt(i - 1) != s2.charAt(j - 1))
+                        newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;
+                    costs[j - 1] = lastValue;
+                    lastValue = newValue;
+                }
+            }
+        }
+        if (i > 0) costs[s2.length] = lastValue;
+    }
+    return costs[s2.length];
+}
+
+function stringSimilarity(s1: string, s2: string): number {
+    let longer = s1;
+    let shorter = s2;
+    if (s1.length < s2.length) { longer = s2; shorter = s1; }
+    let longerLength = longer.length;
+    if (longerLength == 0) return 1.0;
+    return (longerLength - levenshteinDistance(longer, shorter)) / parseFloat(longerLength.toString());
+}
+
 export async function processKycPhase2(jobData: any) {
     const { kycId, filePath, idType, idNumberEncrypted, idNameEncrypted, birthdate } = jobData;
     console.log(`[AI Worker] Phase 2 processing for KYC ID: ${kycId}`);
@@ -78,34 +110,66 @@ export async function processKycPhase2(jobData: any) {
 
         // 3. OCR (Fallback Priority)
         if (!foundData) {
-            console.log(`[AI Worker] Falling back to OCR...`);
+            console.log(`[AI Worker] Falling back to OCR... strictly evaluating text matrices.`);
             const optimizedBuffer = await sharp(buffer).grayscale().normalize().toBuffer();
             const { data: { text } } = await Tesseract.recognize(optimizedBuffer, 'eng');
-            const textLower = text.toLowerCase();
+            
+            // Clean text by replacing non-alphanumeric (except spaces) with spaces, and normalizing whitespace
+            const cleanText = text.replace(/[^a-zA-Z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+            const rawWords = cleanText.split(' ').map(w => w.toLowerCase());
             
             const nameParts = textLowerIdName.split(' ');
-            let nameHits = nameParts.filter(p => p.length > 2 && textLower.includes(p)).length;
+            let nameHits = 0;
             
-            console.log(`[AI Worker] OCR extracted length: ${textLower.length} chars. Name Hits: ${nameHits}/${nameParts.length}. ID Type: ${idType}`);
+            // Strict Levenshtein based Word Matching (Looking for 85% similarity on Names)
+            for (const part of nameParts) {
+                if (part.length < 3) continue; // Skip very short initials
+                let matched = false;
+                for (const word of rawWords) {
+                    if (word.length >= 3 && stringSimilarity(word, part) > 0.85) {
+                        matched = true;
+                        break;
+                    }
+                }
+                if (matched) nameHits++;
+            }
             
-            if (nameHits >= 1 && textLower.includes(idNumber.toLowerCase())) {
+            // Exact ID Match using Regex Boundary (Ensures no substring false-positives)
+            const idEscaped = idNumber.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // Sanitize
+            const exactIdRegex = new RegExp(`\\b${idEscaped}\\b`, 'i');
+            const hasExactIdMatch = exactIdRegex.test(cleanText) || rawWords.includes(idNumber.toLowerCase());
+
+            console.log(`[AI Worker] OCR Exact ID Match: ${hasExactIdMatch}, Name Hits: ${nameHits}/${nameParts.length}`);
+            
+            if (hasExactIdMatch || nameHits >= 2) {
+                // Fintech Standard: Either we precisely extract their ID number, OR we heavily match at least 2 parts of their name (First + Last)
                 foundData = true;
-            } else if (idType.toLowerCase() === "passport" && textLower.includes("passport")) {
-                foundData = true; // Permissive for passports if name slightly mismatched due to font
-            } else if (nameHits >= 1) {
-                // If it's not a passport, but we got at least 1 name match, we can optionally be permissive for testing
-                foundData = true; 
+                console.log(`[AI Worker] Strict Validation Passed on OCR.`);
             }
         }
 
         // 4. Face Detection on Document
         const idImg = new Image();
         idImg.src = buffer;
-        const idDetection = await faceapi.detectSingleFace(idImg as any).withFaceLandmarks().withFaceDescriptor();
         
-        if (!idDetection) {
-            throw new Error("Rejected: No human face detected on provided ID document.");
+        // Lower confidence to handle glare/print, extract ALL faces to handle ghost holograms
+        const detectOptions = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.35 });
+        const allDetections = await faceapi.detectAllFaces(idImg as any, detectOptions)
+            .withFaceLandmarks()
+            .withFaceDescriptors();
+        
+        if (!allDetections || allDetections.length === 0) {
+            throw new Error("Rejected: No human face detected on provided ID document. Ensure the image is clear and glare-free.");
         }
+
+        // Sort faces by bounding box area (largest first) to ensure we pick the Primary ID Photo, not the ghost
+        allDetections.sort((a, b) => {
+            const areaA = a.detection.box.width * a.detection.box.height;
+            const areaB = b.detection.box.width * b.detection.box.height;
+            return areaB - areaA;
+        });
+
+        const idDetection = allDetections[0]; // The largest face
         if (!foundData) {
             throw new Error("Rejected: Submitted data does not match the physical document text or QR Code.");
         }
@@ -142,8 +206,22 @@ export async function processKycPhase3(jobData: any) {
              throw new Error("Missing Phase 2 document record.");
         }
         
-        const savedDescriptorArray = kycRecord.face_descriptor as number[];
-        const savedDescriptor = new Float32Array(savedDescriptorArray);
+        // Safely extract the DB Json payload to avoid JSON Object collapse into Float32Array
+        const dbData = kycRecord.face_descriptor as any;
+        let descriptorValues: number[] = [];
+        
+        if (Array.isArray(dbData)) {
+             descriptorValues = dbData;
+        } else if (dbData && typeof dbData === 'object') {
+             // Prisma sometimes serializes plain arrays into { "0": -0.04, "1": 0.05 }
+             descriptorValues = Object.values(dbData);
+        }
+
+        if (!descriptorValues || descriptorValues.length !== 128) {
+             throw new Error("Rejected: Corrupted biometric baseline descriptor stored in Database.");
+        }
+
+        const savedDescriptor = new Float32Array(descriptorValues);
 
         const selfieBuffer = await sharp(livenessFilePath).resize(800).toBuffer();
         const selfieImg = new Image();
@@ -157,8 +235,8 @@ export async function processKycPhase3(jobData: any) {
         const distance = faceapi.euclideanDistance(savedDescriptor, selfieDetection.descriptor);
         console.log(`[AI Worker] Biometric Euclidean Distance: ${distance}`);
         
-        // Strict biometric threshold
-        if (distance >= 0.55) {
+        // Strict biometric threshold WITH NaN guard
+        if (isNaN(distance) || distance >= 0.55 || distance <= 0) {
              throw new Error("Rejected: Live selfie does not strictly match the provided ID document.");
         }
 

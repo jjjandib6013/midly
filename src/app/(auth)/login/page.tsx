@@ -8,6 +8,9 @@ import { ArrowRight, Lock, Mail, ShieldAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
 import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
+import { signIn } from "next-auth/react";
+import toast from "react-hot-toast";
+import { LoginSchema } from "@/lib/validations";
 
 export default function Login() {
   const router = useRouter();
@@ -22,27 +25,39 @@ export default function Login() {
      gsap.fromTo(containerRef.current, { opacity: 0, scale: 0.95 }, { opacity: 1, scale: 1, duration: 0.8, ease: "power4.out" });
   }, { scope: containerRef });
 
+  // Inside handleLogin
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError("");
 
+    // Zod Client-Side Zero-Trust Block
+    const validation = LoginSchema.safeParse({ email, password });
+    if (!validation.success) {
+      setIsLoading(false);
+      const firstError = validation.error?.issues?.[0]?.message || "Invalid input";
+      toast.error(firstError);
+      setError(firstError);
+      return;
+    }
+
     try {
-      const res = await fetch("http://localhost:5000/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password })
+      const res = await signIn("credentials", {
+        email,
+        password,
+        redirect: false
       });
-      const data = await res.json();
 
-      if (!res.ok) throw new Error(data.error || "Login Failed");
+      if (res?.error) {
+         // NextAuth scrubs error messages to 'CredentialsSignin' for security if null is returned
+         const errorMsg = res.error === "CredentialsSignin" ? "Invalid email or password" : "Login encountered an unexpected error.";
+         toast.error(errorMsg);
+         throw new Error(errorMsg);
+      }
 
-      // Store token
-      localStorage.setItem("token", data.token);
-      document.cookie = `token=${data.token}; path=/; max-age=86400`;
-
-      // Redirect to Dashboard
-      router.push("/dashboard");
+      toast.success("Welcome back to Midly");
+      // Force hard refresh to Next.js dashboard so session cookie is definitively swept up
+      window.location.href = "/dashboard";
     } catch (err: any) {
       setError(err.message);
     } finally {

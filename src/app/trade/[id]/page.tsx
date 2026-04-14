@@ -1,4 +1,5 @@
 "use client";
+import { useSession } from 'next-auth/react';
 
 import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
@@ -11,6 +12,9 @@ import toast from "react-hot-toast";
 type Message = { id: string; text: string; sender: "user" | "other" | "ai"; timestamp: string };
 
 export default function TradeHub() {
+   const { data: session } = useSession();
+   const token = (session as any)?.accessToken;
+
    const params = useParams();
    const tradeId = params.id as string;
 
@@ -60,7 +64,7 @@ export default function TradeHub() {
 
    const fetchTrade = () => {
       fetch(`http://localhost:5000/api/transactions/${tradeId}`, {
-         headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` }
+         headers: { "Authorization": `Bearer ${token}` }
       })
          .then(res => res.json())
          .then(data => {
@@ -86,12 +90,12 @@ export default function TradeHub() {
 
    const fetchMessages = () => {
       fetch(`http://localhost:5000/api/messages/${tradeId}`, {
-         headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` }
+         headers: { "Authorization": `Bearer ${token}` }
       })
          .then(res => res.json())
          .then(data => {
             if (data.messages && data.messages.length > 0) {
-               const myUserId = parseInt(JSON.parse(atob(localStorage.getItem('token')!.split('.')[1])).user_id);
+               const myUserId = parseInt(JSON.parse(atob(token!.split('.')[1])).user_id);
                const formatted = data.messages.map((m: any) => ({
                   id: m.message_id.toString(),
                   text: m.message_text,
@@ -107,7 +111,7 @@ export default function TradeHub() {
 
    const fetchWallet = () => {
       fetch(`http://localhost:5000/api/user/wallet`, {
-         headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` }
+         headers: { "Authorization": `Bearer ${token}` }
       })
          .then(res => res.json())
          .then(data => {
@@ -132,7 +136,7 @@ export default function TradeHub() {
 
       // Listen for incoming messages
       socket.on("new_message", (msg: any) => {
-         const myUserId = parseInt(JSON.parse(atob(localStorage.getItem('token')!.split('.')[1])).user_id);
+         const myUserId = parseInt(JSON.parse(atob(token!.split('.')[1])).user_id);
          setMessages(prev => [...prev, {
             id: msg.message_id.toString(),
             text: msg.message_text,
@@ -181,7 +185,7 @@ export default function TradeHub() {
 
          await fetch(`http://localhost:5000/api/messages/${tradeId}`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem('token')}` },
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
             body: JSON.stringify({ text, riskLevel: isHighRisk ? "High" : "Safe" })
          });
 
@@ -191,7 +195,7 @@ export default function TradeHub() {
                const aiMsgText = "Warning: Attempting to take payments outside Midly violates terms and voids escrow protection.";
                await fetch(`http://localhost:5000/api/messages/${tradeId}`, {
                   method: "POST",
-                  headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem('token')}` },
+                  headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
                   body: JSON.stringify({ text: aiMsgText, isAi: true, riskLevel: "High" })
                });
             }, 1500);
@@ -234,7 +238,7 @@ export default function TradeHub() {
       try {
          const res = await fetch(`http://localhost:5000/api/transactions/${tradeId}/auto-release`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ forceDemo: true })
          });
          if (res.ok) {
@@ -255,7 +259,7 @@ export default function TradeHub() {
             try {
                const res = await fetch(`http://localhost:5000/api/transactions/${tradeId}/progress`, {
                   method: "PUT",
-                  headers: { "Authorization": `Bearer ${localStorage.getItem('token')}`, "Content-Type": "application/json" },
+                  headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
                   body: JSON.stringify({ action, paymentMethod })
                });
                if (res.ok) fetchTrade();
@@ -273,7 +277,7 @@ export default function TradeHub() {
          setIsLoading(true);
          const res = await fetch(`http://localhost:5000/api/transactions/${tradeId}/progress`, {
             method: "PUT",
-            headers: { "Authorization": `Bearer ${localStorage.getItem('token')}`, "Content-Type": "application/json" },
+            headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
             body: JSON.stringify({ action, paymentMethod: action === 'PAY' ? paymentMethod : undefined, credentials: action === 'DELIVER' ? (trade?.trade_category === 'Game Account' ? `Username: ${vaultUser} | Password: ${vaultPass}` : credentialsInput) : undefined })
          });
          const data = await res.json();
@@ -299,7 +303,7 @@ export default function TradeHub() {
          setIsLoading(true);
          const res = await fetch(`http://localhost:5000/api/transactions/${tradeId}/dispute`, {
             method: "POST",
-            headers: { "Authorization": `Bearer ${localStorage.getItem('token')}`, "Content-Type": "application/json" },
+            headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
             body: JSON.stringify({ reason })
          });
          if (res.ok) {
@@ -324,7 +328,7 @@ export default function TradeHub() {
          setIsLoading(true);
          const res = await fetch(`http://localhost:5000/api/transactions/${tradeId}/cancel`, {
             method: "POST",
-            headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` }
+            headers: { "Authorization": `Bearer ${token}` }
          });
          if (res.ok) { toast.success("Trade Permanently Cancelled!"); fetchTrade(); }
          else toast.error("Cancellation failed.");
@@ -336,7 +340,7 @@ export default function TradeHub() {
          setIsLoading(true);
          const res = await fetch(`http://localhost:5000/api/transactions/${tradeId}/accept-invite`, {
             method: "PUT",
-            headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` }
+            headers: { "Authorization": `Bearer ${token}` }
          });
          if (res.ok) {
             toast.success("Trade Accepted! Agreement Phase is now active.");
@@ -354,7 +358,7 @@ export default function TradeHub() {
          setIsLoading(true);
          const res = await fetch(`http://localhost:5000/api/transactions/${tradeId}/request-cancel`, {
             method: "POST",
-            headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` }
+            headers: { "Authorization": `Bearer ${token}` }
          });
          if (res.ok) { toast.success("Mutual Cancellation Request Sent to Seller."); }
       } catch (e) { } finally { setIsLoading(false); }
@@ -364,7 +368,7 @@ export default function TradeHub() {
       try {
          const res = await fetch(`http://localhost:5000/api/user/rate/${trade.seller_id}`, {
             method: "POST",
-            headers: { "Authorization": `Bearer ${localStorage.getItem('token')}`, "Content-Type": "application/json" },
+            headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
             body: JSON.stringify({ score })
          });
          if (res.ok) {

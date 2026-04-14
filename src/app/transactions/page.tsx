@@ -1,4 +1,5 @@
 "use client";
+import { useSession } from 'next-auth/react';
 
 import { useState, useEffect, useRef } from "react";
 import gsap from "gsap";
@@ -9,6 +10,9 @@ import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
 
 export default function Transactions() {
+   const { data: session } = useSession();
+   const token = (session as any)?.accessToken;
+
   const [filter, setFilter] = useState("ALL");
   const [trades, setTrades] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -16,7 +20,7 @@ export default function Transactions() {
 
   useEffect(() => {
     fetch("http://localhost:5000/api/transactions", {
-       headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` }
+       headers: { "Authorization": `Bearer ${token}` }
     })
       .then(res => res.json())
       .then(data => {
@@ -36,7 +40,7 @@ export default function Transactions() {
       })
       .catch(console.error)
       .finally(() => setIsLoading(false));
-  }, []);
+  }, [token]);
 
   const filtered = filter === "ALL" ? trades : trades.filter(t => t.status === filter);
 
@@ -48,7 +52,7 @@ export default function Transactions() {
 
   useGSAP(() => {
      gsap.fromTo(".page-header", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.8, ease: "power4.out" });
-  }, []);
+  }, [token]);
 
   return (
     <div ref={containerRef} className="flex-1 w-full max-w-[1400px] mx-auto px-4 sm:px-8 py-12">

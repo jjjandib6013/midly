@@ -1,4 +1,5 @@
 "use client";
+import { useSession } from 'next-auth/react';
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -17,6 +18,9 @@ type Listing = {
 };
 
 export default function Marketplace() {
+   const { data: session } = useSession();
+   const token = (session as any)?.accessToken;
+
    const router = useRouter();
    const [listings, setListings] = useState<Listing[]>([]);
    const [showModal, setShowModal] = useState(false);
@@ -36,22 +40,22 @@ export default function Marketplace() {
 
    useEffect(() => {
       fetchListings();
-      if (localStorage.getItem('token')) {
+      if (token) {
          fetch("http://localhost:5000/api/user/profile", {
-            headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` }
+            headers: { "Authorization": `Bearer ${token}` }
          })
             .then(res => res.json())
             .then(data => { if (data.kyc?.status === 'approved') setIsVerified(true); })
             .catch(console.error);
       }
-   }, []);
+   }, [token]);
 
    const handleCreateListing = async (e: React.FormEvent) => {
       e.preventDefault();
       try {
          const res = await fetch("http://localhost:5000/api/listings", {
             method: "POST",
-            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem('token')}` },
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
             body: JSON.stringify({ gameType: newGameType, itemName: newItemName, price: newPrice })
          });
          if (res.ok) {
@@ -69,7 +73,7 @@ export default function Marketplace() {
    };
 
    const handleBuyNow = async (listingId: number) => {
-      if (!localStorage.getItem('token')) {
+      if (!token) {
          toast.error("You must log in to buy items.");
          return router.push('/login');
       }
@@ -80,7 +84,7 @@ export default function Marketplace() {
       try {
          const res = await fetch(`http://localhost:5000/api/listings/buy/${listingId}`, {
             method: "POST",
-            headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` }
+            headers: { "Authorization": `Bearer ${token}` }
          });
          const data = await res.json();
          if (res.ok) {
@@ -104,7 +108,7 @@ export default function Marketplace() {
                <p className="text-text-muted mt-2 text-lg">Browse public listings. When you buy, Midly locks the Escrow automatically.</p>
             </div>
             <NeonButton onClick={() => {
-               if (!localStorage.getItem('token')) return router.push('/login');
+               if (!token) return router.push('/login');
                if (!isVerified) {
                   toast.error("AML Law: Identity Verification Required to sell items.");
                   return router.push('/kyc');

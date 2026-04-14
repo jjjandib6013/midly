@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { getToken } from "next-auth/jwt";
 
-export function middleware(request: NextRequest) {
-  const token = request.cookies.get('token')?.value;
+export async function middleware(request: NextRequest) {
+  // Use NextAuth to decrypt the session token
+  const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET || "default_secret" });
   const { pathname } = request.nextUrl;
 
   // 1. Immediately redirect marketplace to dashboard (disabled feature)
