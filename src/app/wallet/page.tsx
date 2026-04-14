@@ -26,7 +26,6 @@ export default function Wallet() {
   const modalWithdrawRef = useRef<HTMLDivElement>(null);
 
   const fetchWallet = async () => {
-    const token = token;
     if (!token) return;
 
     try {
@@ -130,7 +129,7 @@ export default function Wallet() {
             </div>
             <div>
                <h1 className="text-6xl md:text-8xl font-black tracking-tighter text-white uppercase leading-none">
-                  Smart <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-emerald-900 drop-shadow-[0_0_20px_rgba(63,229,108,0.2)]">Vault</span>
+                  Digital <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-emerald-900 drop-shadow-[0_0_20px_rgba(63,229,108,0.2)]">Wallet</span>
                </h1>
             </div>
          </div>
@@ -148,7 +147,7 @@ export default function Wallet() {
             <div className="relative z-10">
               <h2 className="text-primary font-bold tracking-widest text-sm mb-6 uppercase flex items-center gap-2">
                  <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                 Global Ledger Balance
+                 Available Balance
               </h2>
               <div className="wallet-balance text-6xl sm:text-8xl md:text-[8rem] font-black text-white tracking-tighter mb-16 leading-none flex items-start">
                 <span className="text-[#8892b0] font-light mr-4 text-4xl sm:text-6xl mt-2 block">₱</span>
@@ -159,7 +158,7 @@ export default function Wallet() {
 
               <div className="flex flex-col sm:flex-row gap-6 w-full lg:w-3/4">
                 <NeonButton onClick={() => setIsDepositModalOpen(true)} className="flex-1 text-sm md:text-base !py-6 tracking-widest uppercase shadow-[0_0_30px_-5px_rgba(63,229,108,0.2)]">
-                  <ArrowDownLeft className="w-5 h-5 mr-3" /> Initiate Deposit
+                  <ArrowDownLeft className="w-5 h-5 mr-3" /> Deposit Funds
                 </NeonButton>
                 <NeonButton 
                   onClick={() => {
@@ -173,7 +172,7 @@ export default function Wallet() {
                   variant="secondary" 
                   className="flex-1 text-sm md:text-base !py-6 tracking-widest uppercase hover:border-white"
                 >
-                  <ArrowUpRight className="w-5 h-5 mr-3" /> Execute Payout
+                  <ArrowUpRight className="w-5 h-5 mr-3" /> Withdraw Funds
                 </NeonButton>
               </div>
             </div>
@@ -186,9 +185,9 @@ export default function Wallet() {
               <ShieldCheck className="w-8 h-8" />
             </div>
             <div>
-              <h3 className="text-2xl text-white font-black tracking-tight mb-3 uppercase">Hardware Encrypted Vault Layer</h3>
+              <h3 className="text-2xl text-white font-black tracking-tight mb-3 uppercase">Bank-Grade Security</h3>
               <p className="text-[#8892b0] leading-relaxed font-medium text-lg">
-                Your capital is immutably mapped to your hardware-verified identity. Our protocol mathematically enforces zero money laundering constraints and prohibits fraudulent manual withdrawals.
+                Your funds are securely encrypted and protected by our advanced escrow protocol. We enforce strict compliance to prohibit unauthorized withdrawals.
               </p>
             </div>
           </div>
@@ -198,7 +197,7 @@ export default function Wallet() {
         <div className="xl:col-span-4 h-full flex flex-col">
           <DynamicCard delay={0.2} className="wallet-card h-full flex flex-col p-10 bg-[#07090d]">
             <div className="flex items-center justify-between mb-10 pb-6 border-b border-white/[0.04]">
-              <h3 className="text-sm font-black text-[#8892b0] tracking-widest uppercase">Transaction Ledger</h3>
+              <h3 className="text-sm font-black text-[#8892b0] tracking-widest uppercase">Transaction History</h3>
               <History className="w-4 h-4 text-[#8892b0]" />
             </div>
             
@@ -206,8 +205,8 @@ export default function Wallet() {
                <div className="w-20 h-20 rounded-full border border-dashed border-[#8892b0] flex items-center justify-center mb-6">
                   <History className="w-8 h-8 text-[#8892b0]" />
                </div>
-               <p className="text-[#8892b0] font-bold uppercase tracking-widest text-sm mb-2">Immutable Log Empty</p>
-               <p className="text-xs text-[#8892b0]/60 text-center uppercase tracking-wider font-semibold max-w-[200px]">Network history will index here post-transaction.</p>
+               <p className="text-[#8892b0] font-bold uppercase tracking-widest text-sm mb-2">No Transactions Yet</p>
+               <p className="text-xs text-[#8892b0]/60 text-center uppercase tracking-wider font-semibold max-w-[200px]">Your transaction history will be displayed here.</p>
             </div>
           </DynamicCard>
         </div>
@@ -222,7 +221,7 @@ export default function Wallet() {
                   <X className="w-5 h-5" />
                </button>
                <h2 className="text-4xl font-black text-white mb-2 tracking-tight uppercase">Deposit Funds</h2>
-               <p className="text-[#8892b0] mb-10 font-medium">Add fiat capital into the Midly Protocol Vault.</p>
+               <p className="text-[#8892b0] mb-10 font-medium">Add fiat capital into your Midly Wallet.</p>
                <form onSubmit={handleDeposit} className="space-y-8">
                   <div className="relative">
                   <span className="absolute left-8 top-1/2 -translate-y-1/2 text-3xl text-white font-light">₱</span>
@@ -235,7 +234,7 @@ export default function Wallet() {
                      className="w-full bg-[#050608] border border-white/10 rounded-3xl py-8 pl-20 pr-8 text-white focus:outline-none focus:border-primary focus:shadow-[0_0_20px_rgba(63,229,108,0.1)] text-5xl font-black tracking-tighter transition-all" 
                   />
                   </div>
-                  <NeonButton type="submit" className="w-full justify-center text-lg !py-6 tracking-widest uppercase">CONFIRM INJECTION</NeonButton>
+                  <NeonButton type="submit" className="w-full justify-center text-lg !py-6 tracking-widest uppercase">CONFIRM DEPOSIT</NeonButton>
                </form>
             </div>
          </div>
@@ -248,7 +247,7 @@ export default function Wallet() {
                <button className="absolute top-8 right-8 text-[#8892b0] hover:text-white transition-colors bg-white/5 p-2 rounded-full" onClick={() => setIsWithdrawModalOpen(false)}>
                   <X className="w-5 h-5" />
                </button>
-               <h2 className="text-4xl font-black text-white mb-2 tracking-tight uppercase">Execute Payout</h2>
+               <h2 className="text-4xl font-black text-white mb-2 tracking-tight uppercase">Withdraw Funds</h2>
                
                <div className="flex justify-between items-center mb-10 bg-[#030407] p-5 rounded-2xl border border-white/5">
                   <span className="text-[#8892b0] text-xs uppercase font-bold tracking-widest flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" /> Accessible Balance</span>

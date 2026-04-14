@@ -76,9 +76,9 @@ export default function Navbar() {
   };
 
   const navLinks: any[] = isAuthenticated ? [
-    ...(isAdmin ? [{ name: "Command Center", href: "/admin", icon: ShieldCheck }] : []),
+    ...(isAdmin ? [{ name: "Admin Panel", href: "/admin", icon: ShieldCheck }] : []),
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { name: "Validation", href: "/kyc", icon: ShieldCheck }
+    { name: "Identity Verification", href: "/kyc", icon: ShieldCheck }
   ] : [
     { name: "Platform", href: "/" },
   ];
@@ -152,7 +152,7 @@ export default function Navbar() {
             {isAuthenticated ? (
               <>
                 <Link href="/wallet" className="hidden md:flex items-center gap-2 text-xs font-bold tracking-widest uppercase text-[#8892b0] hover:text-primary transition-colors">
-                  <Wallet className="w-4 h-4" /> Vault
+                  <Wallet className="w-4 h-4" /> Wallet
                 </Link>
 
                 <div className="relative">
@@ -255,7 +255,7 @@ export default function Navbar() {
                 onClick={() => setIsMobileMenuOpen(false)}
                 className="text-5xl font-black tracking-tighter text-white hover:text-primary transition-colors flex items-center gap-4"
               >
-                Vault
+                Wallet
               </Link>
             </div>
           )}
@@ -276,13 +276,13 @@ export default function Navbar() {
           <div className="mt-auto pt-10 pb-4 flex justify-between items-center border-t border-white/[0.04]">
             <span className="text-sm font-bold text-[#8892b0] uppercase tracking-widest">SECURE SESSION</span>
             <button onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }} className="flex items-center gap-2 text-[#8892b0] hover:text-red-500 font-bold uppercase tracking-widest text-xs transition-colors">
-              <LogOut className="h-4 w-4" /> Terminate Access
+              <LogOut className="h-4 w-4" /> Log Out
             </button>
           </div>
         ) : (
           <div className="mt-auto flex flex-col gap-4 pb-4">
-            <Link href="/login" onClick={() => setIsMobileMenuOpen(false)} className="text-center py-5 text-sm font-bold tracking-widest uppercase text-white bg-white/5 rounded-full">Enter Access Code</Link>
-            <Link href="/register" onClick={() => setIsMobileMenuOpen(false)}><NeonButton className="w-full !py-5 text-sm tracking-widest uppercase">Create Identity</NeonButton></Link>
+            <Link href="/login" onClick={() => setIsMobileMenuOpen(false)} className="text-center py-5 text-sm font-bold tracking-widest uppercase text-white bg-white/5 rounded-full">Log In</Link>
+            <Link href="/register" onClick={() => setIsMobileMenuOpen(false)}><NeonButton className="w-full !py-5 text-sm tracking-widest uppercase">Register</NeonButton></Link>
           </div>
         )}
       </div>

@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import Navbar from "@/components/layout/Navbar";
 import { Toaster } from "react-hot-toast";
 import { Providers } from "@/components/Providers";
+import SmoothScroll from "@/components/layout/SmoothScroll";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -32,11 +33,13 @@ export default function RootLayout({
     >
       <body className="min-h-screen text-text-main bg-dark-bg flex flex-col antialiased">
         <Providers>
-          <Toaster position="top-right" toastOptions={{ style: { background: '#1c1c1f', color: '#fff', border: '1px solid #333' } }} />
-          <Navbar />
-          <main className="flex-1 flex flex-col pt-[104px]">
-            {children}
-          </main>
+          <SmoothScroll>
+            <Toaster position="top-right" toastOptions={{ style: { background: '#1c1c1f', color: '#fff', border: '1px solid #333' } }} />
+            <Navbar />
+            <main className="flex-1 flex flex-col pt-[104px]">
+              {children}
+            </main>
+          </SmoothScroll>
         </Providers>
       </body>
     </html>

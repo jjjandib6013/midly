@@ -93,7 +93,7 @@ export default function Dashboard() {
          <div className="dash-header flex flex-col md:flex-row items-start md:items-end justify-between mb-16 gap-8 border-b border-white/[0.04] pb-8">
             <div>
                <h1 className="text-6xl md:text-7xl font-black text-white tracking-tighter uppercase leading-none">
-                 System<br/> <span className="text-[#8892b0]">Overview</span>
+                 Your<br/> <span className="text-[#8892b0]">Dashboard</span>
                </h1>
             </div>
              <div className="flex flex-col items-start md:items-end gap-6 border-l md:border-l-0 md:border-r-2 border-primary/50 pl-6 md:pl-0 md:pr-6">
@@ -102,7 +102,7 @@ export default function Dashboard() {
                  </p>
                 <Link href="/create-trade">
                    <NeonButton className="gap-3 !py-4 w-full md:w-auto tracking-widest uppercase text-xs">
-                      <PlusCircle className="w-4 h-4" /> Create Escrow Transaction
+                      <PlusCircle className="w-4 h-4" /> New Trade
                    </NeonButton>
                 </Link>
             </div>
@@ -128,7 +128,7 @@ export default function Dashboard() {
                   
                   <DynamicCard hoverEffect className="dash-metric p-8 flex flex-col justify-between">
                      <div className="flex items-center justify-between mb-8">
-                        <span className="text-xs font-black text-[#8892b0] uppercase tracking-widest">Secured In Vault</span>
+                        <span className="text-xs font-black text-[#8892b0] uppercase tracking-widest">In Escrow</span>
                         <ShieldCheck className="w-5 h-5 text-purple-400" />
                      </div>
                      <p className="text-4xl lg:text-5xl font-black text-white tracking-tighter">
@@ -139,7 +139,7 @@ export default function Dashboard() {
 
                   <DynamicCard hoverEffect className="dash-metric p-8 flex flex-col justify-between border-primary/20 bg-primary/[0.02]">
                      <div className="flex items-center justify-between mb-8">
-                        <span className="text-xs font-black text-primary uppercase tracking-widest">Active Operations</span>
+                        <span className="text-xs font-black text-primary uppercase tracking-widest">Active Trades</span>
                         <Activity className="w-5 h-5 text-primary" />
                      </div>
                      <p className="text-5xl lg:text-7xl font-black text-white tracking-tighter leading-none">
@@ -204,7 +204,7 @@ export default function Dashboard() {
             {/* Right Column (History & Logs) */}
             <div className="xl:col-span-4 flex flex-col gap-6 lg:pl-6 xl:border-l border-white/[0.04]">
                <div className="dash-header flex items-center justify-between border-b border-white/[0.04] pb-4">
-                  <h2 className="text-sm font-black text-white uppercase tracking-widest">System Logs</h2>
+                  <h2 className="text-sm font-black text-white uppercase tracking-widest">Recent Activity</h2>
                   <Link href="/transactions" className="text-xs font-bold tracking-widest uppercase text-primary hover:brightness-110">Archive</Link>
                </div>
 

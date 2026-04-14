@@ -50,14 +50,14 @@ const downloadFile = (file: string): Promise<boolean> => {
             resolve(true);
           });
         }).on('error', (err) => {
-          fs.unlink(filePath, () => {});
+          fs.unlink(filePath, () => { });
           reject(err);
         });
         return;
       }
 
       if (response.statusCode !== 200) {
-        fs.unlink(filePath, () => {});
+        fs.unlink(filePath, () => { });
         console.error(`  ✗ Failed ${file}: HTTP ${response.statusCode}`);
         return reject(new Error(`HTTP ${response.statusCode} for ${file}`));
       }
@@ -70,7 +70,7 @@ const downloadFile = (file: string): Promise<boolean> => {
         resolve(true);
       });
     }).on('error', (err) => {
-      fs.unlink(filePath, () => {});
+      fs.unlink(filePath, () => { });
       console.error(`  ✗ Error downloading ${file}: ${err.message}`);
       reject(err);
     });

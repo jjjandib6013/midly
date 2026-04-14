@@ -488,7 +488,7 @@ export default function TradeHub() {
 
             {/* TRADE PAYLOAD (Moved up for visibility) */}
             <DynamicCard hoverEffect={false} className="border border-dark-border bg-dark-bg/50 p-6 shrink-0">
-               <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider text-text-muted">Trade Payload</h3>
+               <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider text-text-muted">Trade Summary</h3>
                <div className="space-y-3">
                   <div className="flex justify-between border-b border-dark-border pb-2">
                      <span className="text-text-muted text-sm">Item ID</span>
@@ -509,7 +509,7 @@ export default function TradeHub() {
             <DynamicCard hoverEffect={false} className="border border-dark-border bg-dark-panel p-6 shrink-0 mb-4">
                <div className="flex items-center gap-3 mb-6">
                   <ShieldCheck className="w-6 h-6 text-primary glow-icon" />
-                  <h2 className="text-xl font-bold text-white tracking-tight">Escrow Tracker</h2>
+                  <h2 className="text-xl font-bold text-white tracking-tight">Transaction Status</h2>
                </div>
 
                <div className="relative border-l-2 border-dark-border ml-3 space-y-8 pb-4">
@@ -673,7 +673,7 @@ export default function TradeHub() {
                                        <div className="absolute -top-4 -right-4 p-2 opacity-10"><Key className="w-24 h-24 text-primary" /></div>
                                        <div className="flex items-center gap-2 mb-2 relative z-10">
                                           <ShieldCheck className="w-5 h-5 text-primary" />
-                                          <p className="text-sm text-primary font-bold uppercase tracking-wider">Secure Credential Payload</p>
+                                          <p className="text-sm text-primary font-bold uppercase tracking-wider">Account Credentials</p>
                                        </div>
                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-10">
                                           <div>
@@ -729,7 +729,7 @@ export default function TradeHub() {
                   )}
                   {currentStep === 4 && (
                      <>
-                        <h4 className="text-white font-bold text-sm">Retrieval Lock & Verification</h4>
+                        <h4 className="text-white font-bold text-sm">Verification Phase</h4>
 
                         {trade.status === 'disputed' ? (
                            <div className="p-4 rounded-xl border border-red-500/30 bg-red-500/10 flex items-start gap-4 animate-pulse">

@@ -69,11 +69,11 @@ export default function NeonButton({
 
   const variants = {
     primary:
-      "bg-primary text-dark-bg hover:shadow-[0_0_40px_-5px_rgba(63,229,108,0.5)] px-8 py-3",
+      "bg-primary text-white hover:bg-primary-hover shadow-lg shadow-primary/20 border border-primary/20 px-8 py-3",
     secondary:
-      "bg-dark-panel/80 backdrop-blur-md border border-white/5 text-white shadow-xl hover:border-primary/50 hover:text-primary px-8 py-3",
+      "bg-dark-panel backdrop-blur-md border border-dark-border text-text-muted hover:border-text-muted/50 hover:text-white px-8 py-3",
     danger:
-      "bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500/20 hover:border-red-500/50 px-8 py-3",
+      "bg-[#111] border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-white px-8 py-3",
     ghost: "bg-transparent text-text-muted hover:text-white px-6 py-2",
   };
 
@@ -89,12 +89,12 @@ export default function NeonButton({
       disabled={disabled || isLoading}
       {...props}
     >
-      {/* Spotlight Hover Effect via CSS Variables */}
+      {/* Subtle Hover Effect */}
       <div
         ref={spotlightRef}
         className="pointer-events-none absolute -inset-px rounded-full opacity-0 z-0"
         style={{
-          background: `radial-gradient(75px circle at var(--x, 50%) var(--y, 50%), ${isPrimary ? 'rgba(255,255,255,0.4)' : 'rgba(63, 229, 108, 0.2)'}, transparent 100%)`
+          background: `radial-gradient(75px circle at var(--x, 50%) var(--y, 50%), rgba(255,255,255,0.05), transparent 100%)`
         }}
       />
       

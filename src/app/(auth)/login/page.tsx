@@ -75,8 +75,8 @@ export default function Login() {
         className="w-full max-w-xl z-10 opacity-0"
       >
         <div className="text-center mb-12">
-          <h1 className="text-5xl font-black text-white mb-4 tracking-tighter uppercase">Secure Gateway</h1>
-          <p className="text-[#8892b0] font-medium tracking-wide">No Blind Trust. Only Verified Protocol Traders.</p>
+          <h1 className="text-5xl font-black text-white mb-4 tracking-tighter uppercase">Log In</h1>
+          <p className="text-[#8892b0] font-medium tracking-wide">Welcome back to Midly.</p>
         </div>
 
         <DynamicCard className="border border-white/5 bg-[#0a0d14]/80 p-8 md:p-12 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)]" hoverEffect={false}>
@@ -103,7 +103,7 @@ export default function Login() {
               </div>
             </div>
             <div className="space-y-3">
-              <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1">Password Layer</label>
+              <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1">Password</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                   <Lock className="h-5 w-5 text-[#8892b0]" />
@@ -117,18 +117,23 @@ export default function Login() {
                   required
                 />
               </div>
+              <div className="flex justify-end pt-2">
+                <Link href="/forgot-password" className="text-xs text-primary hover:text-white transition-colors font-bold uppercase tracking-widest">
+                  Forgot Password?
+                </Link>
+              </div>
             </div>
 
             <NeonButton type="submit" className="w-full gap-3 mt-6 text-sm !py-5 tracking-widest uppercase" isLoading={isLoading}>
-              Enter Escrow <ArrowRight className="w-4 h-4" />
+              Log In <ArrowRight className="w-4 h-4" />
             </NeonButton>
           </form>
 
           <div className="mt-10 text-center border-t border-white/[0.04] pt-8">
             <p className="text-sm text-[#8892b0] tracking-wide font-medium">
-              First time compiling?{" "}
+              Don't have an account?{" "}
               <Link href="/register" className="text-primary hover:text-white transition-colors font-bold uppercase tracking-wider ml-2">
-                Create Secure Identity
+                Register Here
               </Link>
             </p>
           </div>

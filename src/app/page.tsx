@@ -46,6 +46,23 @@ export default function Home() {
       { opacity: 0, y: 50 },
       { scrollTrigger: { trigger: ".section-header", start: "top 80%" }, opacity: 1, y: 0, duration: 0.8, ease: "power3.out" }
     );
+
+    // Parallax logic for Awwwards-style depth
+    gsap.utils.toArray<HTMLElement>("[data-speed]").forEach((el) => {
+      const speed = parseFloat(el.getAttribute("data-speed") || "0");
+      if (speed !== 0) {
+        gsap.to(el, {
+          yPercent: speed * 100,
+          ease: "none",
+          scrollTrigger: {
+            trigger: el.parentElement || "body",
+            start: "top bottom",
+            end: "bottom top",
+            scrub: true
+          }
+        });
+      }
+    });
   }, { scope: containerRef });
 
   return (
@@ -53,8 +70,8 @@ export default function Home() {
 
       {/* Asymmetric Hero Section */}
       <section className="relative w-full min-h-[calc(100vh-104px)] flex items-center pt-10 pb-20 px-6 lg:px-16 max-w-[1600px] mx-auto">
-        <div className="absolute top-0 right-0 w-[50vw] h-[100vh] bg-primary/5 blur-[180px] rounded-full pointer-events-none -z-10 translate-x-1/3 -translate-y-1/4" />
-        <div className="absolute bottom-0 left-0 w-[40vw] h-[40vw] bg-white/[0.02] blur-[120px] rounded-full pointer-events-none -z-10 -translate-x-1/2 translate-y-1/2" />
+        <div data-speed="-0.15" className="absolute top-0 right-0 w-[50vw] h-[100vh] bg-primary/5 blur-[180px] rounded-full pointer-events-none -z-10 translate-x-1/3 -translate-y-1/4" />
+        <div data-speed="-0.25" className="absolute bottom-0 left-0 w-[40vw] h-[40vw] bg-white/[0.02] blur-[120px] rounded-full pointer-events-none -z-10 -translate-x-1/2 translate-y-1/2" />
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 lg:gap-8 w-full items-center">
           <div className="lg:col-span-7 flex flex-col items-start relative z-10">
@@ -95,8 +112,8 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Right Side Visual Graphic */}
-          <div className="lg:col-span-5 hidden lg:flex justify-end relative">
+          {/* Right Side Visual Graphic with Parallax depth */}
+          <div data-speed="0.1" className="lg:col-span-5 hidden lg:flex justify-end relative">
             <div className="w-[500px] h-[600px] rounded-[3rem] border border-white/5 bg-[#090b10]/40 backdrop-blur-3xl relative overflow-hidden flex items-center justify-center p-10 shadow-2xl">
               <div className="absolute top-0 right-0 p-12 opacity-5">
                 <ShieldCheck className="w-full h-full" />

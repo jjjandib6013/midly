@@ -1,13 +1,10 @@
 "use client";
 import { useSession } from 'next-auth/react';
-
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
-import { ShieldCheck, Mail, Info, Calculator, ArrowRight, ShieldAlert } from "lucide-react";
+import { ShieldCheck, Mail, Info, Calculator, ArrowRight, ShieldAlert, LockKeyhole } from "lucide-react";
 import { useRouter } from "next/navigation";
-import NeonButton from "@/components/ui/NeonButton";
-import DynamicCard from "@/components/ui/DynamicCard";
 import toast from 'react-hot-toast';
 
 export default function CreateTrade() {
@@ -23,11 +20,35 @@ export default function CreateTrade() {
   const [email, setEmail] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState("");
+  
+  // KYC Lock State
+  const [isVerified, setIsVerified] = useState(true); // Default to true to prevent flash, false after fetch if locked
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+
   const containerRef = useRef<HTMLDivElement>(null);
+  const lockRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!token) return;
+    fetch(`http://localhost:5000/api/user/profile`, {
+        headers: { "Authorization": `Bearer ${token}` }
+    })
+    .then(res => res.json())
+    .then(data => {
+        setIsVerified(data.kyc?.status === 'verified');
+        setIsLoadingProfile(false);
+    })
+    .catch(() => setIsLoadingProfile(false));
+  }, [token]);
 
   useGSAP(() => {
-    gsap.fromTo(containerRef.current, { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.6, ease: "power3.out" });
-  }, { scope: containerRef });
+    if (!isLoadingProfile && isVerified) {
+       gsap.fromTo(containerRef.current, { opacity: 0, y: 15 }, { opacity: 1, y: 0, duration: 0.6, ease: "power2.out" });
+    }
+    if (!isLoadingProfile && !isVerified) {
+       gsap.fromTo(lockRef.current, { opacity: 0, scale: 0.95 }, { opacity: 1, scale: 1, duration: 0.5, ease: "back.out(1.2)" });
+    }
+  }, [isLoadingProfile, isVerified]);
 
   const categories = ["VALORANT", "ROBLOX", "GENSHIN IMPACT", "MOBILE LEGENDS", "CS2", "CUSTOM"];
   const tradeTypes = ["Game Account", "In-Game Item", "Currency", "Service/Boosting"];
@@ -70,159 +91,200 @@ export default function CreateTrade() {
     }
   };
 
+  if (isLoadingProfile) {
+      return (
+          <div className="flex-1 flex items-center justify-center min-h-[calc(100vh-64px)]">
+              <div className="w-10 h-10 rounded-full border-4 border-dark-border border-t-primary animate-spin"/>
+          </div>
+      );
+  }
+
+  // Progressive Profiling Lock Screen
+  if (!isVerified) {
+      return (
+         <div className="flex-1 flex items-center justify-center min-h-[calc(100vh-64px)] px-4">
+            <div ref={lockRef} className="max-w-md w-full bg-dark-panel border border-dark-border rounded-3xl p-8 shadow-2xl text-center">
+                <div className="w-20 h-20 bg-dark-border rounded-full flex items-center justify-center mx-auto mb-6 text-text-muted">
+                    <LockKeyhole className="w-10 h-10" />
+                </div>
+                <h2 className="text-2xl font-bold font-sans text-white mb-4">Verification Required</h2>
+                <p className="text-text-muted mb-8">
+                   To protect the integrity of the escrow network and comply with anti-fraud regulations, you must verify your identity before creating a trade.
+                </p>
+                <button 
+                  onClick={() => router.push('/kyc')}
+                  className="w-full bg-primary text-white py-4 rounded-xl font-semibold hover:bg-primary-hover hover:shadow-lg hover:shadow-primary/20 transition-all"
+                >
+                   Verify Identity Now
+                </button>
+            </div>
+         </div>
+      );
+  }
+
   return (
-    <div ref={containerRef} className="flex-1 w-full max-w-[1400px] mx-auto px-4 sm:px-8 py-12">
-      <div className="mb-12 border-b border-white/[0.04] pb-8">
-        <h1 className="text-5xl md:text-7xl font-black text-white tracking-tighter uppercase mb-4 flex items-center gap-4">
-          Establish <span className="text-primary">Hub</span>
+    <div ref={containerRef} className="flex-1 w-full max-w-[1200px] mx-auto px-4 sm:px-8 py-12 font-sans">
+      <div className="mb-10">
+        <h1 className="text-4xl font-bold text-white mb-2">
+          Initialize Transfer
         </h1>
-        <p className="text-[#8892b0] text-lg font-medium max-w-2xl">Initialize a smart escrow contract matrix. Funds will be held safely until both parties verify execution.</p>
+        <p className="text-text-muted text-base max-w-xl">Create a secure escrow contract bridging two parties. Funds will be mathematically secured until trade terms are physically verified.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-        <div className="md:col-span-2 space-y-8">
-          <DynamicCard hoverEffect={false} className="border border-white/5 bg-[#0a0d14]/80 p-8 md:p-12 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)]">
-            <h2 className="text-2xl font-black text-white uppercase tracking-tight mb-8">Contract Matrix Parameters</h2>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-dark-panel border border-dark-border rounded-3xl p-8">
+            <h2 className="text-xl font-semibold text-white mb-6">Contract Specifications</h2>
 
             {error && (
-              <div className="mb-8 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-500 text-sm flex items-center gap-3 font-semibold">
+              <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-500 text-sm flex items-center gap-3 font-medium">
                 <ShieldAlert className="w-5 h-5" /> {error}
               </div>
             )}
 
             <div className="space-y-8">
               <div>
-                <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1 mb-3 block">My Intended Role</label>
-                <div className="flex bg-[#050608] p-2 rounded-2xl border border-white/5 shadow-[inset_0_0_20px_rgba(0,0,0,0.5)]">
+                <label className="text-sm font-medium text-text-muted mb-3 block">Your Position</label>
+                <div className="flex bg-dark-bg p-1.5 rounded-xl border border-white/5 shadow-inner">
                   <button
                     onClick={() => setRole("BUY")}
-                    className={`flex-1 py-4 text-sm font-black uppercase tracking-widest rounded-xl transition-all ${role === "BUY" ? "bg-primary text-black shadow-[0_0_20px_rgba(63,229,108,0.3)]" : "text-[#8892b0] hover:text-white"}`}
+                    className={`flex-1 py-3 text-sm font-semibold rounded-lg transition-all ${role === "BUY" ? "bg-dark-border text-white shadow-sm" : "text-text-muted hover:text-white"}`}
                   >
-                    Asset Buyer
+                    I AM BUYING
                   </button>
                   <button
                     onClick={() => setRole("SELL")}
-                    className={`flex-1 py-4 text-sm font-black uppercase tracking-widest rounded-xl transition-all ${role === "SELL" ? "bg-yellow-500 text-black shadow-[0_0_20px_rgba(234,179,8,0.3)]" : "text-[#8892b0] hover:text-white"}`}
+                    className={`flex-1 py-3 text-sm font-semibold rounded-lg transition-all ${role === "SELL" ? "bg-dark-border text-white shadow-sm" : "text-text-muted hover:text-white"}`}
                   >
-                    Asset Vector (Seller)
+                    I AM SELLING
                   </button>
                 </div>
               </div>
 
-              <div>
-                <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1 mb-3 block">Counterparty Identification Address</label>
-                <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 text-[#8892b0]" />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder={`Enter the ${isBuyer ? 'seller' : 'buyer'}'s registered Midly address`}
-                    className="w-full bg-[#030407] border border-white/10 rounded-2xl pl-14 pr-6 py-5 text-white font-medium focus:border-primary/50 focus:outline-none transition-colors text-lg focus:shadow-[0_0_20px_rgba(63,229,108,0.1)]"
-                  />
-                </div>
-                <p className="text-xs text-[#8892b0] font-bold uppercase tracking-widest mt-3 flex items-center gap-2 pl-1">
-                  <Info className="w-4 h-4" /> Identity must be compiled into Midly database.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                <div>
-                  <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1 mb-3 block">Digital Index</label>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="w-full bg-[#030407] border border-white/10 rounded-2xl px-5 py-4 text-white font-medium focus:border-primary/50 focus:outline-none appearance-none"
-                  >
-                    {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1 mb-3 block">Matrix Type</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-text-muted block">Asset Classification</label>
                   <select
                     value={tradeType}
                     onChange={(e) => setTradeType(e.target.value)}
-                    className="w-full bg-[#030407] border border-white/10 rounded-2xl px-5 py-4 text-white font-medium focus:border-primary/50 focus:outline-none appearance-none"
+                    className="w-full bg-dark-bg shadow-inner border border-dark-border text-white rounded-xl px-4 py-3.5 focus:outline-none focus:border-primary/50 transition-colors"
                   >
-                    {tradeTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                    {tradeTypes.map(t => <option key={t}>{t}</option>)}
                   </select>
                 </div>
-                <div>
-                  <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1 mb-3 block">Identifier Name</label>
-                  <input
-                    type="text"
-                    value={item}
-                    onChange={e => setItem(e.target.value)}
-                    placeholder="e.g. Vandal Skin Vector"
-                    className="w-full bg-[#030407] border border-white/10 rounded-2xl px-5 py-4 text-white font-medium focus:border-primary/50 focus:outline-none placeholder:text-white/20"
-                  />
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-text-muted block">Platform</label>
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="w-full bg-dark-bg shadow-inner border border-dark-border text-white rounded-xl px-4 py-3.5 focus:outline-none focus:border-primary/50 transition-colors"
+                  >
+                    {categories.map(c => <option key={c}>{c}</option>)}
+                  </select>
                 </div>
               </div>
 
-              <div>
-                <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1 mb-3 block">Agreed Consensus Value (PHP)</label>
-                <div className="relative">
-                  <span className="absolute left-5 top-1/2 -translate-y-1/2 font-black text-2xl text-[#8892b0]">₱</span>
-                  <input
-                    type="text"
-                    value={amount}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/[^0-9.]/g, '');
-                      setAmount(val);
-                    }}
-                    placeholder="0.00"
-                    className="w-full bg-[#030407] border border-white/10 rounded-[2rem] pl-16 pr-8 py-6 text-4xl md:text-5xl font-black tracking-tighter text-white focus:border-primary/50 focus:outline-none focus:shadow-[0_0_30px_rgba(63,229,108,0.1)] transition-all"
-                  />
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-text-muted block">Asset Description</label>
+                <textarea
+                  value={item}
+                  onChange={(e) => setItem(e.target.value)}
+                  placeholder="E.g., Radiant Account with Protocol Bundle"
+                  className="w-full bg-dark-bg border border-white/10 text-white rounded-xl px-4 py-4 focus:outline-none focus:border-primary/50 transition-colors resize-none h-28 shadow-inner"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-text-muted block">Agreed Valuation (PHP)</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted font-bold tracking-wider">₱</span>
+                    <input
+                      type="number"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full bg-dark-bg border border-white/10 text-white rounded-xl pl-10 pr-4 py-3.5 focus:outline-none focus:border-primary/50 transition-colors shadow-inner"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-text-muted block">Counterparty Email</label>
+                  <div className="relative">
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted w-4 h-4" />
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="trader@example.com"
+                      className="w-full bg-dark-bg border border-white/10 text-white rounded-xl pl-12 pr-4 py-3.5 focus:outline-none focus:border-primary/50 transition-colors shadow-inner"
+                      required
+                    />
+                  </div>
                 </div>
               </div>
+
             </div>
-          </DynamicCard>
+          </div>
         </div>
 
-        <div className="md:col-span-1">
-          <DynamicCard hoverEffect={false} className="border border-white/5 bg-[#050608] sticky top-32 p-8 md:p-10 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)]">
-            <h3 className="text-xl font-black text-white uppercase tracking-tight mb-8 flex items-center gap-3">
-              <Calculator className="w-6 h-6 text-primary" /> Cost Ledger
+        <div className="lg:col-span-1 space-y-6">
+          <div className="bg-dark-panel border border-dark-border rounded-3xl p-8 sticky top-24">
+            <h3 className="text-lg font-semibold text-white mb-6 flex items-center justify-between">
+              Order Summary
+              <Calculator className="w-5 h-5 text-text-muted" />
             </h3>
 
-            <div className="space-y-6 mb-8">
-              <div className="flex justify-between items-center bg-[#030407] border border-white/5 p-4 rounded-xl">
-                <span className="text-[#8892b0] font-bold text-xs uppercase tracking-widest">Base Item Node</span>
-                <span className="text-white font-black">₱ {parsedAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+            <div className="space-y-4 mb-8">
+              <div className="flex justify-between text-sm">
+                <span className="text-text-muted">Asset Valuation</span>
+                <span className="text-white font-medium">₱{parsedAmount.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between items-center bg-[#030407] border border-white/5 p-4 rounded-xl">
-                <span className="text-[#8892b0] font-bold text-xs uppercase tracking-widest flex flex-col gap-1">
-                  Midly Guard Layer (5%)
-                  <span className="text-[10px] text-primary">Fully refundable if canceled</span>
+              <div className="flex justify-between text-sm">
+                <span className="text-text-muted flex items-center gap-1">
+                  Escrow Fee (5%)
+                  <Info className="w-3 h-3" />
                 </span>
-                <span className="text-white font-black">₱ {serviceFee.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                <span className="text-white font-medium">₱{serviceFee.toFixed(2)}</span>
+              </div>
+              
+              <div className="pt-4 border-t border-dark-border">
+                {isBuyer ? (
+                  <div className="flex justify-between items-center">
+                    <span className="text-white font-semibold">Total Debit</span>
+                    <span className="text-2xl font-bold text-primary">₱{buyerTotal.toFixed(2)}</span>
+                  </div>
+                ) : (
+                  <div className="flex justify-between items-center">
+                    <span className="text-white font-semibold">Net Payout</span>
+                    <span className="text-2xl font-bold text-primary">₱{sellerReceives.toFixed(2)}</span>
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="border-t border-white/10 pt-8 mb-10">
-              <div className="flex justify-between items-end">
-                <span className="text-xs font-black text-[#8892b0] uppercase tracking-widest">
-                  {isBuyer ? "Total Liability" : "Expected Income"}
-                </span>
-                <span className={`text-4xl font-black tracking-tighter ${isBuyer ? "text-primary" : "text-yellow-500"}`}>
-                  ₱ {(isBuyer ? buyerTotal : sellerReceives).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                </span>
-              </div>
-            </div>
-
-            <NeonButton
-              className="w-full justify-center !py-6 text-sm uppercase tracking-widest font-black"
-              onClick={handleCreate}
-              isLoading={isProcessing}
-              disabled={parsedAmount <= 0 || !email}
+            <button
+               onClick={handleCreate}
+               disabled={isProcessing || !parsedAmount || !email || !item}
+               className="w-full flex items-center justify-center gap-3 bg-white text-black py-4 rounded-xl font-bold hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed group"
             >
-              Deploy Smart Contract <ArrowRight className="w-5 h-5 ml-2" />
-            </NeonButton>
-
-            <p className="text-xs text-center text-[#8892b0] font-bold uppercase tracking-widest mt-6">
-              Contract signal dispatched to <span className="text-white mx-1">{email || "Counterparty"}</span> upon deployment.
+               {isProcessing ? (
+                   <span className="flex items-center gap-2">
+                       <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin"/> Processing...
+                   </span>
+               ) : (
+                   <>
+                       Execute Contract <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                   </>
+               )}
+            </button>
+            <p className="text-center text-xs text-text-muted mt-4 flex items-center justify-center gap-1.5">
+               <ShieldCheck className="w-3.5 h-3.5" /> Secured by Midly Protocol
             </p>
-          </DynamicCard>
+          </div>
         </div>
       </div>
     </div>

@@ -14,7 +14,7 @@ import { RegisterSchema } from "@/lib/validations";
 
 export default function Register() {
   const router = useRouter();
-  const [formData, setFormData] = useState({ first_name: '', last_name: '', email: '', password: '', phone: '', birthdate: '' });
+  const [formData, setFormData] = useState({ first_name: '', last_name: '', email: '', password: '', confirmPassword: '', phone: '', birthdate: '' });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
@@ -27,6 +27,13 @@ export default function Register() {
     e.preventDefault();
     setIsLoading(true);
     setError("");
+
+    if (formData.password !== formData.confirmPassword) {
+      setIsLoading(false);
+      toast.error("Passwords do not match");
+      setError("Passwords do not match");
+      return;
+    }
 
     // Zod Client-Side Zero-Trust Block
     const validation = RegisterSchema.safeParse(formData);
@@ -82,7 +89,7 @@ export default function Register() {
       >
         <div className="text-center mb-10">
           <h1 className="text-5xl font-black text-white mb-4 tracking-tighter">Create Account</h1>
-          <p className="text-[#8892b0] font-medium tracking-wide">Register to interact securely via smart escrows.</p>
+          <p className="text-[#8892b0] font-medium tracking-wide">Register to trade securely.</p>
         </div>
 
         <DynamicCard className="border border-white/5 bg-[#0a0d14]/80 p-10 md:p-14 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)]" hoverEffect={false}>
@@ -137,13 +144,22 @@ export default function Register() {
                </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1">Password</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Lock className="h-5 w-5 text-[#8892b0]" /></div>
-                <input type="password" onChange={e => setFormData({...formData, password: e.target.value})} className="w-full bg-[#030407] border border-white/10 text-white rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-primary/50 font-medium" required minLength={8}/>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2 w-full">
+                <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1">Password</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Lock className="h-5 w-5 text-[#8892b0]" /></div>
+                  <input type="password" onChange={e => setFormData({...formData, password: e.target.value})} className="w-full bg-[#030407] border border-white/10 text-white rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-primary/50 font-medium" required minLength={8}/>
+                </div>
+                <p className="text-[10px] uppercase font-bold tracking-widest text-[#8892b0] pl-1">Minimum 8 characters</p>
               </div>
-              <p className="text-[10px] uppercase font-bold tracking-widest text-[#8892b0] pl-1">Minimum 8 characters</p>
+              <div className="space-y-2 w-full">
+                <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1">Confirm Password</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Lock className="h-5 w-5 text-[#8892b0]" /></div>
+                  <input type="password" onChange={e => setFormData({...formData, confirmPassword: e.target.value})} className="w-full bg-[#030407] border border-white/10 text-white rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-primary/50 font-medium" required minLength={8}/>
+                </div>
+              </div>
             </div>
 
             <NeonButton type="submit" className="w-full gap-3 mt-8 text-sm uppercase tracking-widest !py-5" isLoading={isLoading}>

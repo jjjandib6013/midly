@@ -68,7 +68,7 @@ export default function DynamicCard({
   const handleMouseEnter = contextSafe(() => {
     if (!hoverEffect) return;
     gsap.to([spotlight1Ref.current, spotlight2Ref.current], { opacity: 1, duration: 0.5, ease: "power2.out" });
-    gsap.to(cardRef.current, { y: -8, duration: 0.4, ease: "power2.out" });
+    gsap.to(cardRef.current, { y: -4, duration: 0.4, ease: "power2.out" });
   });
 
   const handleMouseLeave = contextSafe(() => {
@@ -85,7 +85,7 @@ export default function DynamicCard({
       onMouseLeave={handleMouseLeave}
       className={cn(
         "group relative rounded-3xl p-8 overflow-hidden transition-colors duration-500",
-        "bg-[#090b10] border border-white/5 shadow-2xl",
+        "bg-dark-panel border border-white/5 shadow-xl",
         className
       )}
     >
@@ -95,7 +95,7 @@ export default function DynamicCard({
           ref={spotlight1Ref}
           className="pointer-events-none absolute -inset-px rounded-3xl opacity-0 z-0"
           style={{
-            background: `radial-gradient(700px circle at var(--x, 50%) var(--y, 50%), rgba(63, 229, 108, 0.05), transparent 80%)`
+            background: `radial-gradient(700px circle at var(--x, 50%) var(--y, 50%), rgba(255, 255, 255, 0.03), transparent 80%)`
           }}
         />
       )}
@@ -105,7 +105,7 @@ export default function DynamicCard({
           ref={spotlight2Ref}
           className="pointer-events-none absolute -inset-px rounded-3xl opacity-0 z-0"
           style={{
-            background: `radial-gradient(400px circle at var(--x, 50%) var(--y, 50%), rgba(63, 229, 108, 0.4), transparent 80%)`,
+            background: `radial-gradient(400px circle at var(--x, 50%) var(--y, 50%), rgba(255, 255, 255, 0.15), transparent 80%)`,
             maskImage: `linear-gradient(black, black)`,
             maskComposite: "exclude",
             WebkitMaskComposite: "destination-out",
