@@ -163,7 +163,7 @@ export async function processKycPhase2(jobData: any) {
         }
 
         // Sort faces by bounding box area (largest first) to ensure we pick the Primary ID Photo, not the ghost
-        allDetections.sort((a, b) => {
+        allDetections.sort((a: any, b: any) => {
             const areaA = a.detection.box.width * a.detection.box.height;
             const areaB = b.detection.box.width * b.detection.box.height;
             return areaB - areaA;
@@ -181,7 +181,7 @@ export async function processKycPhase2(jobData: any) {
             where: { kyc_id: kycId },
             data: {
                 status: 'phase2_verified',
-                face_descriptor: Array.from(idDetection.descriptor)
+                face_descriptor: Array.from(idDetection.descriptor) as any
             }
         });
 
