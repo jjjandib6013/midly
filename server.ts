@@ -12,6 +12,8 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { rateLimit } from 'express-rate-limit';
 import sgMail from '@sendgrid/mail';
+import { createClient } from 'redis';
+import { createAdapter } from '@socket.io/redis-adapter';
 
 dotenv.config();
 
@@ -21,6 +23,18 @@ const httpServer = createServer(app);
 const io = new Server(httpServer, {
    cors: { origin: process.env.CLIENT_URL || "http://localhost:3000", methods: ["GET", "POST", "PUT", "DELETE"] }
 });
+
+if (process.env.REDIS_URL) {
+    const pubClient = createClient({ url: process.env.REDIS_URL });
+    const subClient = pubClient.duplicate();
+    
+    Promise.all([pubClient.connect(), subClient.connect()]).then(() => {
+        io.adapter(createAdapter(pubClient, subClient));
+        console.log("Redis Pub/Sub Adapter securely activated for Distributed WebSockets.");
+    }).catch(err => {
+        console.error("Failed to connect Redis for WebSockets", err);
+    });
+}
 
 io.on("connection", (socket) => {
    socket.on("join_trade", (tradeId) => {
