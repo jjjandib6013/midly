@@ -51,6 +51,8 @@
     "socket.io-client": "^4.8.3",
     "tailwind-merge": "^3.5.0",
     "tesseract.js": "^7.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -68,8 +70,6 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
     "tailwindcss": "^4",
-    "ts-node": "^10.9.2",
-    "tsx": "^4.21.0",
-    "typescript": "^6.0.2"
+    "ts-node": "^10.9.2"
   }
 }
