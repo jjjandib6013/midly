@@ -8,6 +8,7 @@
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "build": "next build",
     "start": "next start",
+    "start:backend": "npx tsx server.ts",
     "lint": "eslint",
     "seed": "tsx prisma/seed.ts"
   },

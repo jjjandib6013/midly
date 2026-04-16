@@ -16,7 +16,7 @@ dotenv.config();
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-   cors: { origin: "http://localhost:3000", methods: ["GET", "POST", "PUT", "DELETE"] }
+   cors: { origin: process.env.CLIENT_URL || "http://localhost:3000", methods: ["GET", "POST", "PUT", "DELETE"] }
 });
 
 io.on("connection", (socket) => {
@@ -44,7 +44,8 @@ const upload = multer({ storage });
 // POST Upload Image Proof
 app.post('/api/upload', upload.single('file'), (req, res): void => {
    if (!req.file) { res.status(400).json({ error: 'No file uploaded' }); return; }
-   const url = `http://localhost:${PORT}/uploads/${req.file.filename}`;
+   const baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || `http://localhost:${PORT}`;
+   const url = `${baseUrl}/uploads/${req.file.filename}`;
    res.json({ url });
 });
 
@@ -163,7 +164,8 @@ app.post('/api/auth/forgot-password', async (req, res): Promise<any> => {
          data: { reset_password_token: token, reset_password_expires: expires }
       });
 
-      const resetUrl = `http://localhost:3000/reset-password?token=${token}`;
+      const clientUrl = process.env.CLIENT_URL || "http://localhost:3000";
+      const resetUrl = `${clientUrl}/reset-password?token=${token}`;
 
       try {
          const nodemailer = require('nodemailer');
