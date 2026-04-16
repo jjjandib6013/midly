@@ -124,7 +124,7 @@ app.post('/api/auth/register', async (req, res): Promise<any> => {
    try {
       const validation = RegisterSchema.safeParse(req.body);
       if (!validation.success) {
-         return res.status(400).json({ error: validation.error.errors[0].message });
+         return res.status(400).json({ error: validation.error.issues[0].message });
       }
 
       const { first_name, last_name, email, password, phone, birthdate } = validation.data;
