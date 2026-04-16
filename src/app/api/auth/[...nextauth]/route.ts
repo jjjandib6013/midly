@@ -18,30 +18,25 @@ const handler = NextAuth({
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
-        try {
-          const user = await prisma.user.findUnique({
-            where: { email: credentials.email }
-          });
+        const user = await prisma.user.findUnique({
+          where: { email: credentials.email }
+        });
 
-          // Generic rejection to prevent user enumeration attacks
-          if (!user || !user.password_hash) return null;
+        // Generic rejection to prevent user enumeration attacks
+        if (!user || !user.password_hash) return null;
 
-          const isValid = await bcrypt.compare(credentials.password, user.password_hash);
-          if (!isValid) return null;
+        const isValid = await bcrypt.compare(credentials.password, user.password_hash);
+        if (!isValid) return null;
 
-          if (!(user as any).is_email_verified) {
-             throw new Error("Please verify your email address first.");
-          }
-
-          return {
-             id: user.user_id.toString(),
-             email: user.email,
-             name: `${user.first_name} ${user.last_name}`,
-          };
-        } catch (error) {
-          console.error("NextAuth Authorize Error:", error);
-          return null;
+        if (!(user as any).is_email_verified) {
+            throw new Error("Please verify your email address first.");
         }
+
+        return {
+            id: user.user_id.toString(),
+            email: user.email,
+            name: `${user.first_name} ${user.last_name}`,
+        };
       }
     })
   ],

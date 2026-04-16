@@ -342,8 +342,9 @@ app.post('/api/auth/reset-password', async (req, res): Promise<any> => {
          data: {
             password_hash,
             reset_password_token: null,
-            reset_password_expires: null
-         }
+            reset_password_expires: null,
+            is_email_verified: true
+         } as any
       });
 
       res.json({ message: 'Password has been securely updated. You can now log in.' });
