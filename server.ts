@@ -169,7 +169,7 @@ app.post('/api/auth/register', authLimiter, async (req, res): Promise<any> => {
             wallet_balance: 0.00,
             is_email_verified: false,
             email_verification_token: verification_token
-         }
+         } as any
       });
 
       // Send Verification Email
@@ -211,15 +211,15 @@ app.post('/api/auth/verify-email', authLimiter, async (req, res): Promise<any> =
       const { email, token } = req.body;
       if (!email || !token) return res.status(400).json({ error: 'Email and token required.' });
 
-      const user = await prisma.user.findFirst({
-         where: { email, email_verification_token: token }
+      const user: any = await prisma.user.findFirst({
+         where: { email, email_verification_token: token } as any
       });
 
       if (!user) return res.status(400).json({ error: 'Invalid verification token or email.' });
 
       await prisma.user.update({
          where: { user_id: user.user_id },
-         data: { is_email_verified: true, email_verification_token: null }
+         data: { is_email_verified: true, email_verification_token: null } as any
       });
 
       res.json({ message: 'Email successfully verified!' });
@@ -233,9 +233,8 @@ app.get('/api/auth/check-verification', async (req, res): Promise<any> => {
       const email = req.query.email as string;
       if (!email) return res.status(400).json({ error: 'Email required' });
       
-      const user = await prisma.user.findUnique({
-         where: { email },
-         select: { is_email_verified: true }
+      const user: any = await prisma.user.findUnique({
+         where: { email }
       });
       
       if (!user) return res.status(404).json({ error: 'User not found' });
