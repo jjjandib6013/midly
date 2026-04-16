@@ -85,23 +85,23 @@ export async function processKycPhase2(jobData: any) {
             .ensureAlpha()
             .raw()
             .toBuffer({ resolveWithObject: true });
-            
+
         // 2. JSQR Decoding (First Priority)
         const jsQR = require('jsqr');
         const code = jsQR(new Uint8ClampedArray(rawImg.data), rawImg.info.width, rawImg.info.height);
-        
+
         const idNumber = decrypt(idNumberEncrypted);
         const idName = decrypt(idNameEncrypted);
         const textLowerIdName = idName.toLowerCase();
-        
+
         let foundData = false;
-        
+
         if (code && code.data) {
             console.log(`[AI Worker] QR Code Detected! Payload:`, code.data);
             const qrText = code.data.toLowerCase();
             const nameParts = textLowerIdName.split(' ');
             let nameHits = nameParts.filter(p => p.length > 2 && qrText.includes(p)).length;
-            
+
             if (nameHits >= 1 || qrText.includes(idNumber.toLowerCase())) {
                 foundData = true;
                 console.log(`[AI Worker] QR Code strongly validated Identity.`);
@@ -113,14 +113,14 @@ export async function processKycPhase2(jobData: any) {
             console.log(`[AI Worker] Falling back to OCR... strictly evaluating text matrices.`);
             const optimizedBuffer = await sharp(buffer).grayscale().normalize().toBuffer();
             const { data: { text } } = await Tesseract.recognize(optimizedBuffer, 'eng');
-            
+
             // Clean text by replacing non-alphanumeric (except spaces) with spaces, and normalizing whitespace
             const cleanText = text.replace(/[^a-zA-Z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
             const rawWords = cleanText.split(' ').map(w => w.toLowerCase());
-            
+
             const nameParts = textLowerIdName.split(' ');
             let nameHits = 0;
-            
+
             // Strict Levenshtein based Word Matching (Looking for 85% similarity on Names)
             for (const part of nameParts) {
                 if (part.length < 3) continue; // Skip very short initials
@@ -133,14 +133,14 @@ export async function processKycPhase2(jobData: any) {
                 }
                 if (matched) nameHits++;
             }
-            
+
             // Exact ID Match using Regex Boundary (Ensures no substring false-positives)
             const idEscaped = idNumber.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // Sanitize
             const exactIdRegex = new RegExp(`\\b${idEscaped}\\b`, 'i');
             const hasExactIdMatch = exactIdRegex.test(cleanText) || rawWords.includes(idNumber.toLowerCase());
 
             console.log(`[AI Worker] OCR Exact ID Match: ${hasExactIdMatch}, Name Hits: ${nameHits}/${nameParts.length}`);
-            
+
             if (hasExactIdMatch || nameHits >= 2) {
                 // Fintech Standard: Either we precisely extract their ID number, OR we heavily match at least 2 parts of their name (First + Last)
                 foundData = true;
@@ -151,13 +151,13 @@ export async function processKycPhase2(jobData: any) {
         // 4. Face Detection on Document
         const idImg = new Image();
         idImg.src = buffer;
-        
+
         // Lower confidence to handle glare/print, extract ALL faces to handle ghost holograms
         const detectOptions = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.35 });
         const allDetections = await faceapi.detectAllFaces(idImg as any, detectOptions)
             .withFaceLandmarks()
             .withFaceDescriptors();
-        
+
         if (!allDetections || allDetections.length === 0) {
             throw new Error("Rejected: No human face detected on provided ID document. Ensure the image is clear and glare-free.");
         }
@@ -171,7 +171,7 @@ export async function processKycPhase2(jobData: any) {
 
         const idDetection = allDetections[0]; // The largest face
         if (!foundData) {
-            throw new Error("Rejected: Submitted data does not match the physical document text or QR Code.");
+            throw new Error("Rejected: Submitted ID number does not match the physical document text or QR Code.");
         }
 
         console.log(`[AI Worker] Phase 2 Document Validated. Saving Face Descriptor and Phase.`);
@@ -203,22 +203,22 @@ export async function processKycPhase3(jobData: any) {
 
         const kycRecord = await prisma.kycVerification.findUnique({ where: { kyc_id: kycId } });
         if (!kycRecord || !kycRecord.face_descriptor) {
-             throw new Error("Missing Phase 2 document record.");
+            throw new Error("Missing Phase 2 document record.");
         }
-        
+
         // Safely extract the DB Json payload to avoid JSON Object collapse into Float32Array
         const dbData = kycRecord.face_descriptor as any;
         let descriptorValues: number[] = [];
-        
+
         if (Array.isArray(dbData)) {
-             descriptorValues = dbData;
+            descriptorValues = dbData;
         } else if (dbData && typeof dbData === 'object') {
-             // Prisma sometimes serializes plain arrays into { "0": -0.04, "1": 0.05 }
-             descriptorValues = Object.values(dbData);
+            // Prisma sometimes serializes plain arrays into { "0": -0.04, "1": 0.05 }
+            descriptorValues = Object.values(dbData);
         }
 
         if (!descriptorValues || descriptorValues.length !== 128) {
-             throw new Error("Rejected: Corrupted biometric baseline descriptor stored in Database.");
+            throw new Error("Rejected: Corrupted biometric baseline descriptor stored in Database.");
         }
 
         const savedDescriptor = new Float32Array(descriptorValues);
@@ -229,15 +229,15 @@ export async function processKycPhase3(jobData: any) {
         const selfieDetection = await faceapi.detectSingleFace(selfieImg as any).withFaceLandmarks().withFaceDescriptor();
 
         if (!selfieDetection) {
-             throw new Error("Rejected: Could not detect human face in live selfie.");
+            throw new Error("Rejected: Could not detect human face in live selfie.");
         }
 
         const distance = faceapi.euclideanDistance(savedDescriptor, selfieDetection.descriptor);
         console.log(`[AI Worker] Biometric Euclidean Distance: ${distance}`);
-        
+
         // Strict biometric threshold WITH NaN guard
         if (isNaN(distance) || distance >= 0.55 || distance <= 0) {
-             throw new Error("Rejected: Live selfie does not strictly match the provided ID document.");
+            throw new Error("Rejected: Live selfie does not strictly match the provided ID document.");
         }
 
         console.log(`[AI Worker] KYC Fully Verified! Match Distance: ${distance}`);

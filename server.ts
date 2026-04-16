@@ -10,6 +10,8 @@ import multer from 'multer';
 import path from 'path';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import { rateLimit } from 'express-rate-limit';
+import sgMail from '@sendgrid/mail';
 
 dotenv.config();
 
@@ -67,8 +69,20 @@ declare global {
 }
 
 // ==========================================
-// MIDDLEWARE
+// MIDDLEWARE & SECURE RATE LIMITING
 // ==========================================
+
+const authLimiter = rateLimit({
+   windowMs: 15 * 60 * 1000, // 15 minutes
+   limit: 10,
+   message: { error: 'Too many requests from this IP, please try again after 15 minutes.' }
+});
+
+const aiKycLimiter = rateLimit({
+   windowMs: 15 * 60 * 1000,
+   limit: 10,
+   message: { error: 'LLM Analysis Limit exceeded. Please try again after 15 minutes.' }
+});
 
 const authenticateJWT = (req: Request, res: Response, next: NextFunction): void => {
    const authHeader = req.headers.authorization;
@@ -128,7 +142,7 @@ const isTradeLockedForActions = (status: string): boolean => {
 // AUTH ROUTES
 // ==========================================
 
-app.post('/api/auth/register', async (req, res): Promise<any> => {
+app.post('/api/auth/register', authLimiter, async (req, res): Promise<any> => {
    try {
       const validation = RegisterSchema.safeParse(req.body);
       if (!validation.success) {
@@ -154,7 +168,7 @@ app.post('/api/auth/register', async (req, res): Promise<any> => {
 
 // app.post('/api/auth/login') HAS BEEN DELETED: NextAuth.js now handles the complete login flow on Next.js side
 
-app.post('/api/auth/forgot-password', async (req, res): Promise<any> => {
+app.post('/api/auth/forgot-password', authLimiter, async (req, res): Promise<any> => {
    try {
       const { email } = req.body;
       if (!email) return res.status(400).json({ error: 'Email is required' });
@@ -176,27 +190,11 @@ app.post('/api/auth/forgot-password', async (req, res): Promise<any> => {
       const resetUrl = `${clientUrl}/reset-password?token=${token}`;
 
       try {
-         const nodemailer = require('nodemailer');
-         const transporter = nodemailer.createTransport(
-            process.env.SENDGRID_API_KEY ? {
-               host: 'smtp.sendgrid.net',
-               port: 587,
-               auth: {
-                  user: 'apikey',
-                  pass: process.env.SENDGRID_API_KEY
-               }
-            } : {
-               service: 'gmail',
-               auth: {
-                  user: process.env.EMAIL_USER,
-                  pass: process.env.EMAIL_PASS
-               }
-            }
-         );
+         sgMail.setApiKey(process.env.SENDGRID_API_KEY || '');
 
-         const mailOptions = {
-            from: `"Midly Support" <${process.env.EMAIL_USER || 'noreply@midly.com'}>`,
+         const msg = {
             to: user.email,
+            from: process.env.EMAIL_USER || 'noreply@midly.com',
             subject: 'Midly - Password Reset Request',
             html: `
                   <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #0a0d14; padding: 40px; border-radius: 12px; color: #fff; border: 1px solid #1f2937;">
@@ -214,10 +212,10 @@ app.post('/api/auth/forgot-password', async (req, res): Promise<any> => {
                `
          };
 
-         await transporter.sendMail(mailOptions);
+         await sgMail.send(msg);
          res.json({ message: 'If that email is registered, a password reset link has been sent.' });
-      } catch (emailError) {
-         console.error("Nodemailer missing or environment variables not configured. Falling back to DEV mode.");
+      } catch (emailError: any) {
+         console.error("SendGrid missing or environment variables not configured. Falling back to DEV mode.", emailError.response?.body || emailError);
          console.log(`[DEV ONLY] Reset Password Link: ${resetUrl}`);
          res.json({ message: 'If that email is registered, a password reset link has been sent.', _devToken: token });
       }
@@ -1133,7 +1131,7 @@ app.post('/api/kyc/reset', authenticateJWT, async (req, res): Promise<any> => {
 });
 
 // Phase 1: Identity Sync
-app.post('/api/kyc/phase1', authenticateJWT, async (req, res): Promise<any> => {
+app.post('/api/kyc/phase1', authenticateJWT, aiKycLimiter, async (req, res): Promise<any> => {
    try {
       const parsedParams = kycPhase1Schema.safeParse(req.body);
       if (!parsedParams.success) return res.status(400).json({ error: 'Validation failed' });
@@ -1168,7 +1166,7 @@ app.post('/api/kyc/phase1', authenticateJWT, async (req, res): Promise<any> => {
 });
 
 // Phase 2: Document Processing Upload
-app.post('/api/kyc/phase2', authenticateJWT, async (req, res): Promise<any> => {
+app.post('/api/kyc/phase2', authenticateJWT, aiKycLimiter, async (req, res): Promise<any> => {
    try {
       const parsedParams = kycPhase2Schema.safeParse(req.body);
       if (!parsedParams.success) return res.status(400).json({ error: 'Validation failed' });
@@ -1211,7 +1209,7 @@ app.post('/api/kyc/phase2', authenticateJWT, async (req, res): Promise<any> => {
 });
 
 // Phase 3: Liveness Verification Upload
-app.post('/api/kyc/phase3', authenticateJWT, async (req, res): Promise<any> => {
+app.post('/api/kyc/phase3', authenticateJWT, aiKycLimiter, async (req, res): Promise<any> => {
    try {
       const parsedParams = kycPhase3Schema.safeParse(req.body);
       if (!parsedParams.success) return res.status(400).json({ error: 'Validation failed' });
