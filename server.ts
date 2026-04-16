@@ -177,13 +177,22 @@ app.post('/api/auth/forgot-password', async (req, res): Promise<any> => {
 
       try {
          const nodemailer = require('nodemailer');
-         const transporter = nodemailer.createTransport({
-            service: 'gmail',
-            auth: {
-               user: process.env.EMAIL_USER,
-               pass: process.env.EMAIL_PASS
+         const transporter = nodemailer.createTransport(
+            process.env.SENDGRID_API_KEY ? {
+               host: 'smtp.sendgrid.net',
+               port: 587,
+               auth: {
+                  user: 'apikey',
+                  pass: process.env.SENDGRID_API_KEY
+               }
+            } : {
+               service: 'gmail',
+               auth: {
+                  user: process.env.EMAIL_USER,
+                  pass: process.env.EMAIL_PASS
+               }
             }
-         });
+         );
 
          const mailOptions = {
             from: `"Midly Support" <${process.env.EMAIL_USER || 'noreply@midly.com'}>`,
