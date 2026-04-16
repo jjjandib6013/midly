@@ -8,6 +8,7 @@ import Link from "next/link";
 import { ListFilter, Search, ArrowRight, ShieldCheck, XCircle } from "lucide-react";
 import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
+import { API_URL } from "@/lib/api";
 
 export default function Transactions() {
    const { data: session } = useSession();
@@ -19,7 +20,8 @@ export default function Transactions() {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetch("http://localhost:5000/api/transactions", {
+    if (!token) return;
+    fetch(`${API_URL}//api/transactions`, {
        headers: { "Authorization": `Bearer ${token}` }
     })
       .then(res => res.json())

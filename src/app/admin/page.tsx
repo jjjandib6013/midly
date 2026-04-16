@@ -6,6 +6,7 @@ import { ShieldAlert, Activity, CheckCircle, Search, FileText } from "lucide-rea
 import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
 import toast from "react-hot-toast";
+import { API_URL } from "@/lib/api";
 
 export default function AdminDashboard() {
    const { data: session } = useSession();
@@ -16,7 +17,7 @@ export default function AdminDashboard() {
   const [kycs, setKycs] = useState<any[]>([]);
   
   const fetchDisputes = () => {
-      fetch("http://localhost:5000/api/admin/disputes", {
+      fetch(`${API_URL}/api/admin/disputes`, {
          headers: { "Authorization": `Bearer ${token}` }
       })
       .then(res => res.json())
@@ -26,7 +27,7 @@ export default function AdminDashboard() {
   };
 
   const fetchKycs = () => {
-      fetch("http://localhost:5000/api/admin/kyc", {
+      fetch(`${API_URL}/api/admin/kyc`, {
          headers: { "Authorization": `Bearer ${token}` }
       })
       .then(res => res.json())
@@ -36,7 +37,7 @@ export default function AdminDashboard() {
   };
   
   useEffect(() => {
-     const token = token;
+     
      if (token) {
         try {
            const payload = JSON.parse(atob(token.split('.')[1]));
@@ -56,7 +57,7 @@ export default function AdminDashboard() {
   const handleResolve = async (txId: number, action: 'REFUND_BUYER' | 'FORWARD_TO_SELLER') => {
       if (!confirm(`Are you absolutely sure you want to FORCE ${action}? This manipulates the global vault database instantly.`)) return;
       try {
-         const res = await fetch(`http://localhost:5000/api/admin/disputes/${txId}/resolve`, {
+         const res = await fetch(`${API_URL}/api/admin/disputes/${txId}/resolve`, {
             method: "POST",
             headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
             body: JSON.stringify({ action })
@@ -74,7 +75,7 @@ export default function AdminDashboard() {
 
   const handleResolveKyc = async (kycId: number, status: 'approved' | 'rejected') => {
       try {
-         const res = await fetch(`http://localhost:5000/api/admin/kyc/${kycId}/resolve`, {
+         const res = await fetch(`${API_URL}/api/admin/kyc/${kycId}/resolve`, {
             method: "POST",
             headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
             body: JSON.stringify({ status })

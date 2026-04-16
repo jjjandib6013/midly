@@ -7,6 +7,7 @@ import { Store, Tag, PlusSquare } from "lucide-react";
 import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
 import toast from "react-hot-toast";
+import { API_URL } from "@/lib/api";
 
 type Listing = {
    listing_id: number;
@@ -30,7 +31,7 @@ export default function Marketplace() {
    const [isVerified, setIsVerified] = useState(false);
 
    const fetchListings = () => {
-      fetch("http://localhost:5000/api/listings")
+      fetch(`${API_URL}/api/listings`)
          .then(res => res.json())
          .then(data => {
             if (data.listings) setListings(data.listings);
@@ -41,7 +42,7 @@ export default function Marketplace() {
    useEffect(() => {
       fetchListings();
       if (token) {
-         fetch("http://localhost:5000/api/user/profile", {
+         fetch(`${API_URL}/api/user/profile`, {
             headers: { "Authorization": `Bearer ${token}` }
          })
             .then(res => res.json())
@@ -53,7 +54,7 @@ export default function Marketplace() {
    const handleCreateListing = async (e: React.FormEvent) => {
       e.preventDefault();
       try {
-         const res = await fetch("http://localhost:5000/api/listings", {
+         const res = await fetch(`${API_URL}/api/listings`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
             body: JSON.stringify({ gameType: newGameType, itemName: newItemName, price: newPrice })
@@ -82,7 +83,7 @@ export default function Marketplace() {
          return router.push('/kyc');
       }
       try {
-         const res = await fetch(`http://localhost:5000/api/listings/buy/${listingId}`, {
+         const res = await fetch(`${API_URL}/api/listings/buy/${listingId}`, {
             method: "POST",
             headers: { "Authorization": `Bearer ${token}` }
          });

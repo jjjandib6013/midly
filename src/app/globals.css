@@ -75,3 +75,23 @@ body {
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
+
+/* Sleek custom scrollbar for panels */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--color-dark-border);
+  border-radius: 3px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+
+/* Subtle glow animation for icons */
+.glow-icon {
+  filter: drop-shadow(0 0 6px rgba(63, 229, 108, 0.4));
+}

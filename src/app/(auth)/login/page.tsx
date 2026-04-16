@@ -87,32 +87,34 @@ export default function Login() {
           )}
           <form className="space-y-8" onSubmit={handleLogin}>
             <div className="space-y-3">
-              <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1">Verified Email</label>
+              <label htmlFor="login-email" className="text-xs font-black text-text-muted uppercase tracking-widest pl-1">Verified Email</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-[#8892b0]" />
+                  <Mail className="h-5 w-5 text-text-muted" />
                 </div>
                 <input
+                  id="login-email"
                   type="email"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  className="w-full bg-[#030407] border border-white/10 text-white rounded-2xl pl-12 pr-6 py-4 focus:outline-none focus:border-primary/50 transition-colors font-medium"
+                  className="w-full bg-dark-bg border border-dark-border text-white rounded-2xl pl-12 pr-6 py-4 focus:outline-none focus:border-primary/50 transition-colors font-medium"
                   placeholder="name@domain.com"
                   required
                 />
               </div>
             </div>
             <div className="space-y-3">
-              <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1">Password</label>
+              <label htmlFor="login-password" className="text-xs font-black text-text-muted uppercase tracking-widest pl-1">Password</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-[#8892b0]" />
+                  <Lock className="h-5 w-5 text-text-muted" />
                 </div>
                 <input
+                  id="login-password"
                   type="password"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
-                  className="w-full bg-[#030407] border border-white/10 text-white rounded-2xl pl-12 pr-6 py-4 focus:outline-none focus:border-primary/50 transition-colors font-medium"
+                  className="w-full bg-dark-bg border border-dark-border text-white rounded-2xl pl-12 pr-6 py-4 focus:outline-none focus:border-primary/50 transition-colors font-medium"
                   placeholder="••••••••"
                   required
                 />

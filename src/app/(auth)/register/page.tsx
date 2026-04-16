@@ -11,6 +11,7 @@ import DynamicCard from "@/components/ui/DynamicCard";
 import { signIn } from "next-auth/react";
 import toast from "react-hot-toast";
 import { RegisterSchema } from "@/lib/validations";
+import { API_URL } from "@/lib/api";
 
 export default function Register() {
   const router = useRouter();
@@ -46,7 +47,7 @@ export default function Register() {
     }
 
     try {
-       const res = await fetch("http://localhost:5000/api/auth/register", {
+       const res = await fetch(`${API_URL}/api/auth/register`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(formData)
@@ -102,62 +103,62 @@ export default function Register() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                {/* First Name */}
                <div className="space-y-2 w-full">
-                 <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1">First Name</label>
+                 <label htmlFor="reg-first-name" className="text-xs font-black text-text-muted uppercase tracking-widest pl-1">First Name</label>
                  <div className="relative">
-                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><User className="h-5 w-5 text-[#8892b0]" /></div>
-                   <input type="text" onChange={e => setFormData({...formData, first_name: e.target.value})} className="w-full bg-[#030407] border border-white/10 text-white rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-primary/50 font-medium" required />
+                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><User className="h-5 w-5 text-text-muted" /></div>
+                   <input id="reg-first-name" type="text" value={formData.first_name} onChange={e => setFormData({...formData, first_name: e.target.value})} className="w-full bg-dark-bg border border-dark-border text-white rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-primary/50 font-medium" required />
                  </div>
                </div>
                {/* Last Name */}
                <div className="space-y-2 w-full">
-                 <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1">Last Name</label>
+                 <label htmlFor="reg-last-name" className="text-xs font-black text-text-muted uppercase tracking-widest pl-1">Last Name</label>
                  <div className="relative">
-                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><User className="h-5 w-5 text-[#8892b0]" /></div>
-                   <input type="text" onChange={e => setFormData({...formData, last_name: e.target.value})} className="w-full bg-[#030407] border border-white/10 text-white rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-primary/50 font-medium" required />
+                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><User className="h-5 w-5 text-text-muted" /></div>
+                   <input id="reg-last-name" type="text" value={formData.last_name} onChange={e => setFormData({...formData, last_name: e.target.value})} className="w-full bg-dark-bg border border-dark-border text-white rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-primary/50 font-medium" required />
                  </div>
                </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1">Email Address</label>
+              <label htmlFor="reg-email" className="text-xs font-black text-text-muted uppercase tracking-widest pl-1">Email Address</label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Mail className="h-5 w-5 text-[#8892b0]" /></div>
-                <input type="email" onChange={e => setFormData({...formData, email: e.target.value})} className="w-full bg-[#030407] border border-white/10 text-white rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-primary/50 font-medium" required />
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Mail className="h-5 w-5 text-text-muted" /></div>
+                <input id="reg-email" type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full bg-dark-bg border border-dark-border text-white rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-primary/50 font-medium" required />
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                {/* Phone Number */}
                <div className="space-y-2 w-full">
-                 <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1">Phone Number</label>
+                 <label htmlFor="reg-phone" className="text-xs font-black text-text-muted uppercase tracking-widest pl-1">Phone Number</label>
                  <div className="relative">
-                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Phone className="h-5 w-5 text-[#8892b0]" /></div>
-                   <input type="tel" onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full bg-[#030407] border border-white/10 text-white rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-primary/50 font-medium" />
+                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Phone className="h-5 w-5 text-text-muted" /></div>
+                   <input id="reg-phone" type="tel" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full bg-dark-bg border border-dark-border text-white rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-primary/50 font-medium" />
                  </div>
                </div>
                {/* Date of Birth */}
                <div className="space-y-2 w-full">
-                 <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1">Date of Birth</label>
+                 <label htmlFor="reg-birthdate" className="text-xs font-black text-text-muted uppercase tracking-widest pl-1">Date of Birth</label>
                  <div className="relative">
-                   <input type="date" onChange={e => setFormData({...formData, birthdate: e.target.value} as any)} className="w-full bg-[#030407] border border-white/10 text-[#8892b0] rounded-2xl px-4 py-4 focus:outline-none focus:border-primary/50 font-medium focus:text-white" required />
+                   <input id="reg-birthdate" type="date" value={formData.birthdate} onChange={e => setFormData({...formData, birthdate: e.target.value} as any)} className="w-full bg-dark-bg border border-dark-border text-text-muted rounded-2xl px-4 py-4 focus:outline-none focus:border-primary/50 font-medium focus:text-white" required />
                  </div>
                </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2 w-full">
-                <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1">Password</label>
+                <label htmlFor="reg-password" className="text-xs font-black text-text-muted uppercase tracking-widest pl-1">Password</label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Lock className="h-5 w-5 text-[#8892b0]" /></div>
-                  <input type="password" onChange={e => setFormData({...formData, password: e.target.value})} className="w-full bg-[#030407] border border-white/10 text-white rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-primary/50 font-medium" required minLength={8}/>
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Lock className="h-5 w-5 text-text-muted" /></div>
+                  <input id="reg-password" type="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="w-full bg-dark-bg border border-dark-border text-white rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-primary/50 font-medium" required minLength={8}/>
                 </div>
-                <p className="text-[10px] uppercase font-bold tracking-widest text-[#8892b0] pl-1">Minimum 8 characters</p>
+                <p className="text-[10px] uppercase font-bold tracking-widest text-text-muted pl-1">Minimum 8 characters</p>
               </div>
               <div className="space-y-2 w-full">
-                <label className="text-xs font-black text-[#8892b0] uppercase tracking-widest pl-1">Confirm Password</label>
+                <label htmlFor="reg-confirm-password" className="text-xs font-black text-text-muted uppercase tracking-widest pl-1">Confirm Password</label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Lock className="h-5 w-5 text-[#8892b0]" /></div>
-                  <input type="password" onChange={e => setFormData({...formData, confirmPassword: e.target.value})} className="w-full bg-[#030407] border border-white/10 text-white rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-primary/50 font-medium" required minLength={8}/>
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Lock className="h-5 w-5 text-text-muted" /></div>
+                  <input id="reg-confirm-password" type="password" value={formData.confirmPassword} onChange={e => setFormData({...formData, confirmPassword: e.target.value})} className="w-full bg-dark-bg border border-dark-border text-white rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:border-primary/50 font-medium" required minLength={8}/>
                 </div>
               </div>
             </div>

@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
 import { useSession } from "next-auth/react";
+import { API_URL } from "@/lib/api";
 
 export default function KYCVerification() {
   const { data: session } = useSession();
@@ -34,7 +35,7 @@ export default function KYCVerification() {
 
   const fetchProfile = useCallback(() => {
      setIsLoadingProfile(true);
-     fetch("http://localhost:5000/api/user/profile", {
+     fetch(`${API_URL}/api/user/profile`, {
          headers: { "Authorization": `Bearer ${token}` }
      })
      .then(res => res.json())
@@ -47,9 +48,10 @@ export default function KYCVerification() {
   }, [token]);
 
   useEffect(() => {
-     fetchProfile();
+      if (!token) return;
+      fetchProfile();
      setIsMounted(true);
-  }, [fetchProfile]);
+  }, [fetchProfile, token]);
 
   useGSAP(() => {
      gsap.fromTo(containerRef.current, { opacity: 0, scale: 0.95 }, { opacity: 1, scale: 1, duration: 0.5, ease: "power2.out" });
@@ -71,7 +73,7 @@ export default function KYCVerification() {
       const formData = new FormData();
       formData.append("file", file);
       try {
-          const res = await fetch("http://localhost:5000/api/upload", { method: "POST", body: formData });
+          const res = await fetch(`${API_URL}/api/upload`, { method: "POST", body: formData });
           const data = await res.json();
           if (data.url) setImageUrl(data.url);
           else setError("Upload failed from server.");
@@ -88,7 +90,7 @@ export default function KYCVerification() {
       setIsProcessing(true);
       setError("");
       try {
-         const res = await fetch("http://localhost:5000/api/kyc/phase1", {
+         const res = await fetch(`${API_URL}/api/kyc/phase1`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
             body: JSON.stringify({ idType: selectedID, idNumber: idNumber })
@@ -104,7 +106,7 @@ export default function KYCVerification() {
     setIsProcessing(true);
     setError("");
     try {
-       const res = await fetch("http://localhost:5000/api/kyc/phase2", {
+       const res = await fetch(`${API_URL}/api/kyc/phase2`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
           body: JSON.stringify({ imageUrl: imageUrl })
@@ -114,7 +116,7 @@ export default function KYCVerification() {
 
        for (let i = 0; i < 20; i++) {
           await new Promise(r => setTimeout(r, 3000));
-          const profileRes = await fetch("http://localhost:5000/api/user/profile", { headers: { "Authorization": `Bearer ${token}` } });
+          const profileRes = await fetch(`${API_URL}/api/user/profile`, { headers: { "Authorization": `Bearer ${token}` } });
           const profileData = await profileRes.json();
           const status = profileData.kyc?.status;
           
@@ -139,7 +141,7 @@ export default function KYCVerification() {
     setIsProcessing(true);
     setError("");
     try {
-       const res = await fetch("http://localhost:5000/api/kyc/phase3", {
+       const res = await fetch(`${API_URL}/api/kyc/phase3`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
           body: JSON.stringify({ livenessImage: livenessImage })
@@ -149,7 +151,7 @@ export default function KYCVerification() {
 
        for (let i = 0; i < 20; i++) {
           await new Promise(r => setTimeout(r, 3000));
-          const profileRes = await fetch("http://localhost:5000/api/user/profile", { headers: { "Authorization": `Bearer ${token}` } });
+          const profileRes = await fetch(`${API_URL}/api/user/profile`, { headers: { "Authorization": `Bearer ${token}` } });
           const profileData = await profileRes.json();
           const status = profileData.kyc?.status;
           
@@ -171,7 +173,7 @@ export default function KYCVerification() {
   const handleDevReset = async () => {
      try {
          setIsLoadingProfile(true);
-         await fetch("http://localhost:5000/api/kyc/reset", {
+         await fetch(`${API_URL}/api/kyc/reset`, {
              method: "POST",
              headers: { "Authorization": `Bearer ${token}` }
          });

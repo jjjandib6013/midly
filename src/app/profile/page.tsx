@@ -3,10 +3,10 @@ import { useSession, signOut } from 'next-auth/react';
 import { useState, useEffect, useRef } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
-import { ShieldCheck, User, Mail, Settings, LogOut, CheckCircle2, CreditCard, Plus, Trash2, Wallet, Activity, Laptop, LockKeyhole, ArrowRight } from "lucide-react";
+import { ShieldCheck, User, Mail, Settings, LogOut, CheckCircle2, CreditCard, Plus, Trash2, Wallet, Activity, Laptop, Smartphone, LockKeyhole, ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+import { API_URL } from "@/lib/api";
 
 export default function Profile() {
   const { data: session } = useSession();

@@ -8,6 +8,8 @@ import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
 import { io } from "socket.io-client";
 import toast from "react-hot-toast";
+import { API_URL } from "@/lib/api";
+
 
 type Message = { id: string; text: string; sender: "user" | "other" | "ai"; timestamp: string };
 
@@ -63,7 +65,7 @@ export default function TradeHub() {
    }, [trade?.status, trade?.item_delivered_at]);
 
    const fetchTrade = () => {
-      fetch(`http://localhost:5000/api/transactions/${tradeId}`, {
+      fetch(`${API_URL}/api/transactions/${tradeId}`, {
          headers: { "Authorization": `Bearer ${token}` }
       })
          .then(res => res.json())
@@ -89,13 +91,13 @@ export default function TradeHub() {
    };
 
    const fetchMessages = () => {
-      fetch(`http://localhost:5000/api/messages/${tradeId}`, {
+      fetch(`${API_URL}/api/messages/${tradeId}`, {
          headers: { "Authorization": `Bearer ${token}` }
       })
          .then(res => res.json())
          .then(data => {
             if (data.messages && data.messages.length > 0) {
-               const myUserId = parseInt(JSON.parse(atob(token!.split('.')[1])).user_id);
+               const myUserId = parseInt(JSON.parse(atob(token?.split('.')[1])).user_id);
                const formatted = data.messages.map((m: any) => ({
                   id: m.message_id.toString(),
                   text: m.message_text,
@@ -110,7 +112,7 @@ export default function TradeHub() {
    };
 
    const fetchWallet = () => {
-      fetch(`http://localhost:5000/api/user/wallet`, {
+      fetch(`${API_URL}/api/user/wallet`, {
          headers: { "Authorization": `Bearer ${token}` }
       })
          .then(res => res.json())
@@ -126,17 +128,19 @@ export default function TradeHub() {
    }, [messages]);
 
    useEffect(() => {
+      if (!token) return; // Wait for session to load
+
       fetchTrade();
       fetchMessages();
       fetchWallet();
 
       // WebSockets Real-Time Engine
-      const socket = io("http://localhost:5000");
+      const socket = io(API_URL);
       socket.emit("join_trade", tradeId);
 
       // Listen for incoming messages
       socket.on("new_message", (msg: any) => {
-         const myUserId = parseInt(JSON.parse(atob(token!.split('.')[1])).user_id);
+         const myUserId = parseInt(JSON.parse(atob(token?.split('.')[1])).user_id);
          setMessages(prev => [...prev, {
             id: msg.message_id.toString(),
             text: msg.message_text,
@@ -158,7 +162,7 @@ export default function TradeHub() {
       return () => {
          socket.disconnect();
       };
-   }, [tradeId]);
+   }, [tradeId, token]);
 
    const steps = [
       { id: 1, label: "Agreement", status: currentStep > 1 ? "completed" : currentStep === 1 ? "current" : "pending" },
@@ -183,7 +187,7 @@ export default function TradeHub() {
             || textLower.includes("black app")
             || textLower.includes("orange app");
 
-         await fetch(`http://localhost:5000/api/messages/${tradeId}`, {
+         await fetch(`${API_URL}/api/messages/${tradeId}`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
             body: JSON.stringify({ text, riskLevel: isHighRisk ? "High" : "Safe" })
@@ -193,7 +197,7 @@ export default function TradeHub() {
             toast.error("AI Warning: High Risk keyword detected.");
             setTimeout(async () => {
                const aiMsgText = "Warning: Attempting to take payments outside Midly violates terms and voids escrow protection.";
-               await fetch(`http://localhost:5000/api/messages/${tradeId}`, {
+               await fetch(`${API_URL}/api/messages/${tradeId}`, {
                   method: "POST",
                   headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
                   body: JSON.stringify({ text: aiMsgText, isAi: true, riskLevel: "High" })
@@ -217,7 +221,7 @@ export default function TradeHub() {
       try {
          setIsAiProcessing(true); // Re-use spinner for UI feedback
          toast.success("Uploading image proof...");
-         const uploadRes = await fetch("http://localhost:5000/api/upload", {
+         const uploadRes = await fetch(`${API_URL}/api/upload`, {
             method: "POST",
             body: formData
          });
@@ -236,7 +240,7 @@ export default function TradeHub() {
 
    const handleAutoRelease = async () => {
       try {
-         const res = await fetch(`http://localhost:5000/api/transactions/${tradeId}/auto-release`, {
+         const res = await fetch(`${API_URL}/api/transactions/${tradeId}/auto-release`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ forceDemo: true })
@@ -257,7 +261,7 @@ export default function TradeHub() {
          setIsPaymentSimulating(true);
          setTimeout(async () => {
             try {
-               const res = await fetch(`http://localhost:5000/api/transactions/${tradeId}/progress`, {
+               const res = await fetch(`${API_URL}/api/transactions/${tradeId}/progress`, {
                   method: "PUT",
                   headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
                   body: JSON.stringify({ action, paymentMethod })
@@ -275,7 +279,7 @@ export default function TradeHub() {
 
       try {
          setIsLoading(true);
-         const res = await fetch(`http://localhost:5000/api/transactions/${tradeId}/progress`, {
+         const res = await fetch(`${API_URL}/api/transactions/${tradeId}/progress`, {
             method: "PUT",
             headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
             body: JSON.stringify({ action, paymentMethod: action === 'PAY' ? paymentMethod : undefined, credentials: action === 'DELIVER' ? (trade?.trade_category === 'Game Account' ? `Username: ${vaultUser} | Password: ${vaultPass}` : credentialsInput) : undefined })
@@ -301,7 +305,7 @@ export default function TradeHub() {
 
       try {
          setIsLoading(true);
-         const res = await fetch(`http://localhost:5000/api/transactions/${tradeId}/dispute`, {
+         const res = await fetch(`${API_URL}/api/transactions/${tradeId}/dispute`, {
             method: "POST",
             headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
             body: JSON.stringify({ reason })
@@ -326,7 +330,7 @@ export default function TradeHub() {
       if (!confirm("Are you sure you want to completely cancel this trade? No funds have been secured yet.")) return;
       try {
          setIsLoading(true);
-         const res = await fetch(`http://localhost:5000/api/transactions/${tradeId}/cancel`, {
+         const res = await fetch(`${API_URL}/api/transactions/${tradeId}/cancel`, {
             method: "POST",
             headers: { "Authorization": `Bearer ${token}` }
          });
@@ -338,7 +342,7 @@ export default function TradeHub() {
    const handleAcceptInvite = async () => {
       try {
          setIsLoading(true);
-         const res = await fetch(`http://localhost:5000/api/transactions/${tradeId}/accept-invite`, {
+         const res = await fetch(`${API_URL}/api/transactions/${tradeId}/accept-invite`, {
             method: "PUT",
             headers: { "Authorization": `Bearer ${token}` }
          });
@@ -356,7 +360,7 @@ export default function TradeHub() {
       if (!confirm("Your funds are locked in the Vault. Do you want to request the Seller for a Mutual Cancellation?")) return;
       try {
          setIsLoading(true);
-         const res = await fetch(`http://localhost:5000/api/transactions/${tradeId}/request-cancel`, {
+         const res = await fetch(`${API_URL}/api/transactions/${tradeId}/request-cancel`, {
             method: "POST",
             headers: { "Authorization": `Bearer ${token}` }
          });
@@ -366,7 +370,7 @@ export default function TradeHub() {
 
    const handleRateSeller = async (score: number) => {
       try {
-         const res = await fetch(`http://localhost:5000/api/user/rate/${trade.seller_id}`, {
+         const res = await fetch(`${API_URL}/api/user/rate/${trade.seller_id}`, {
             method: "POST",
             headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
             body: JSON.stringify({ score })
@@ -462,7 +466,7 @@ export default function TradeHub() {
       <div className="flex-1 w-full max-w-7xl mx-auto px-4 py-8 grid grid-cols-3 gap-8 h-[calc(100vh-64px)] max-h-[calc(100vh-64px)] overflow-hidden">
 
          {/* Left Column: Flow & Details */}
-         <div className="flex flex-col gap-6 overflow-y-auto pr-2 custom-scrollbar min-h-0 max-h-full">
+         <div className="flex flex-col gap-6 overflow-y-auto pr-2 custom-scrollbar min-h-0 max-h-full" data-lenis-prevent>
 
             {/* COUNTERPARTY IDENTITY */}
             {counterparty && (
@@ -842,7 +846,7 @@ export default function TradeHub() {
                </div>
             </div>
 
-            <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+            <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6 custom-scrollbar" data-lenis-prevent>
                {messages.length === 0 && (
                   <div className="flex items-center justify-center h-full">
                      <p className="text-text-muted text-sm border border-dark-border p-4 rounded-xl bg-dark-bg">No messages yet. Say hello securely!</p>

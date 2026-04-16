@@ -8,6 +8,7 @@ import { ArrowRight, Lock, CheckCircle, ShieldAlert } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
+import { API_URL } from "@/lib/api";
 
 function ResetPasswordForm() {
   const searchParams = useSearchParams();
@@ -49,7 +50,7 @@ function ResetPasswordForm() {
     }
 
     try {
-      const res = await fetch("http://localhost:5000/api/auth/reset-password", {
+      const res = await fetch(`${API_URL}/api/auth/reset-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, new_password: password })

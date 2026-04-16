@@ -8,6 +8,7 @@ import NeonButton from "@/components/ui/NeonButton";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import { useSession, signOut } from "next-auth/react";
+import { API_URL } from "@/lib/api";
 
 export default function Navbar() {
   const { data: session, status } = useSession();
@@ -31,7 +32,7 @@ export default function Navbar() {
 
   const fetchNotifs = () => {
     if (!token) return;
-    fetch("http://localhost:5000/api/notifications", {
+    fetch(`${API_URL}/api/notifications`, {
       headers: { "Authorization": `Bearer ${token}` }
     }).then(res => res.json()).then(data => {
       if (data.notifications) {
@@ -61,7 +62,7 @@ export default function Navbar() {
 
   const handleAcceptInvite = async (tradeId: number) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/transactions/${tradeId}/accept-invite`, {
+      const res = await fetch(`${API_URL}/api/transactions/${tradeId}/accept-invite`, {
         method: "PUT",
         headers: { "Authorization": `Bearer ${token}` }
       });
@@ -100,6 +101,18 @@ export default function Navbar() {
       gsap.to(mobileMenuRef.current, { y: "-100%", duration: 0.5, ease: "power4.inOut" });
     }
   }, [isMobileMenuOpen]);
+
+  // REG-03: Close notification panel on click outside
+  useEffect(() => {
+    if (!showNotifs) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (notifMenuRef.current && !notifMenuRef.current.contains(e.target as Node)) {
+        setShowNotifs(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showNotifs]);
 
   // GSAP for notification menu
   useEffect(() => {
@@ -158,7 +171,10 @@ export default function Navbar() {
                 <div className="relative">
                   <button
                     onClick={() => setShowNotifs(!showNotifs)}
-                    className="relative p-2 text-[#8892b0] hover:text-white transition-colors"
+                    className="relative p-2 text-text-muted hover:text-white transition-colors"
+                    aria-label="Notifications"
+                    aria-haspopup="true"
+                    aria-expanded={showNotifs}
                   >
                     <Bell className="w-5 h-5" />
                     {hasNewNotifs && <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse" />}
@@ -210,6 +226,8 @@ export default function Navbar() {
             <button
               className="md:hidden p-2 text-white"
               onClick={() => setIsMobileMenuOpen(true)}
+              aria-label="Open menu"
+              aria-expanded={isMobileMenuOpen}
             >
               <Menu className="h-6 w-6" />
             </button>
