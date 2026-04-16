@@ -49,8 +49,13 @@ export default function Login() {
       });
 
       if (res?.error) {
-         // NextAuth scrubs error messages to 'CredentialsSignin' for security if null is returned
-         const errorMsg = res.error === "CredentialsSignin" ? "Invalid email or password" : "Login encountered an unexpected error.";
+         if (res.error === "Please verify your email address first.") {
+            toast.error("Unverified Email. Redirecting to Identity Vault...");
+            router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+            return;
+         }
+
+         const errorMsg = res.error === "CredentialsSignin" ? "Invalid email or password" : res.error;
          toast.error(errorMsg);
          throw new Error(errorMsg);
       }

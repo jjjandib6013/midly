@@ -56,22 +56,9 @@ export default function Register() {
        
        if (!res.ok) throw new Error(data.error || "Registration Failed");
        
-       toast.success("Account created! Logging you in securely...");
-
-       // Instead of setting localStorage, immediately sign in to create the NextAuth Cookie Session
-       const signInRes = await signIn("credentials", {
-          email: formData.email,
-          password: formData.password,
-          redirect: false
-       });
-
-       if (signInRes?.error) {
-          throw new Error("Account was created, but automatic login failed. Please try logging in manually.");
-       }
-
-       toast.success("Verifying identity...");
-       // Force absolute browser redirect so Next.js resets session context
-       window.location.href = "/kyc";
+       toast.success("Account securely created! Redirecting to Identity Vault...");
+       
+       router.push(`/verify-email?email=${encodeURIComponent(formData.email)}`);
     } catch (err: any) {
        toast.error(err.message);
        setError(err.message);

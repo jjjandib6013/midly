@@ -29,6 +29,10 @@ const handler = NextAuth({
           const isValid = await bcrypt.compare(credentials.password, user.password_hash);
           if (!isValid) return null;
 
+          if (!user.is_email_verified) {
+             throw new Error("Please verify your email address first.");
+          }
+
           return {
              id: user.user_id.toString(),
              email: user.email,

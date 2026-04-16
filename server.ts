@@ -156,14 +156,75 @@ app.post('/api/auth/register', authLimiter, async (req, res): Promise<any> => {
       if (existingUser) return res.status(400).json({ error: 'Email already exists' });
 
       const password_hash = await bcrypt.hash(password, 10);
+      const verification_token = crypto.randomBytes(32).toString('hex');
+
       const user = await prisma.user.create({
-         data: { first_name, last_name, email, password_hash, phone, birthdate: new Date(birthdate), wallet_balance: 0.00 }
+         data: { 
+            first_name, 
+            last_name, 
+            email, 
+            password_hash, 
+            phone, 
+            birthdate: new Date(birthdate), 
+            wallet_balance: 0.00,
+            is_email_verified: false,
+            email_verification_token: verification_token
+         }
       });
 
-      const token = jwt.sign({ user_id: user.user_id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '24h' });
-      res.json({ message: 'User registered successfully', token, user });
+      // Send Verification Email
+      const clientUrl = process.env.CLIENT_URL || "http://localhost:3000";
+      const verifyUrl = `${clientUrl}/verify-email?token=${verification_token}&email=${encodeURIComponent(email)}`;
+      
+      try {
+         sgMail.setApiKey(process.env.SENDGRID_API_KEY || '');
+         const msg = {
+            to: user.email,
+            from: process.env.EMAIL_USER || 'noreply@midly.com',
+            subject: 'Midly - Verify Your Email Address',
+            html: `
+               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #0a0d14; padding: 40px; border-radius: 12px; color: #fff; border: 1px solid #1f2937;">
+                  <h2 style="color: #fff; font-size: 24px; text-transform: uppercase; margin-bottom: 20px; font-weight: 900;">Welcome to Midly</h2>
+                  <p style="color: #8892b0; font-size: 16px; line-height: 1.5; margin-bottom: 40px; font-weight: 500;">
+                     You have successfully registered your account. To unlock the Midly Escrow Engine, you must first verify your email address.
+                  </p>
+                  <a href="${verifyUrl}" style="background-color: #3fe56c; color: #000; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: 900; font-size: 16px; display: inline-block; text-transform: uppercase; letter-spacing: 1px;">
+                     VERIFY EMAIL ADDRESS
+                  </a>
+               </div>
+            `
+         };
+         await sgMail.send(msg);
+      } catch (emailError: any) {
+         console.error("SendGrid missing or error. Falling back to DEV mode.", emailError.response?.body || emailError);
+         console.log(`[DEV ONLY] Verify Email Link: ${verifyUrl}`);
+      }
+
+      res.json({ message: 'User registered successfully', user_email: user.email });
    } catch (error: any) {
       res.status(500).json({ error: 'Server error', msg: error.message });
+   }
+});
+
+app.post('/api/auth/verify-email', authLimiter, async (req, res): Promise<any> => {
+   try {
+      const { email, token } = req.body;
+      if (!email || !token) return res.status(400).json({ error: 'Email and token required.' });
+
+      const user = await prisma.user.findFirst({
+         where: { email, email_verification_token: token }
+      });
+
+      if (!user) return res.status(400).json({ error: 'Invalid verification token or email.' });
+
+      await prisma.user.update({
+         where: { user_id: user.user_id },
+         data: { is_email_verified: true, email_verification_token: null }
+      });
+
+      res.json({ message: 'Email successfully verified!' });
+   } catch (error) {
+      res.status(500).json({ error: 'Server error' });
    }
 });
 

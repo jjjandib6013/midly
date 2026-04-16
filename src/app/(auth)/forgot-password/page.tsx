@@ -78,12 +78,23 @@ export default function ForgotPassword() {
               </div>
               <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Check Your Inbox</h2>
               <p className="text-[#8892b0]">If an account exists for <span className="text-white font-bold">{email}</span>, a secure password reset link has been dispatched.</p>
+              <p className="text-sm font-medium text-white/50 mt-4">Haven't received any email yet? Check your spam/junk folder.</p>
               
-              <Link href="/login" className="block mt-8">
-                 <NeonButton className="w-full text-sm !py-5 tracking-widest uppercase">
-                    Return to Login
-                 </NeonButton>
-              </Link>
+              <div className="space-y-4 mt-8">
+                 <button 
+                   onClick={handleForgot} 
+                   disabled={isLoading}
+                   className="w-full bg-[#111620] hover:bg-[#1a2130] text-white text-sm py-4 rounded-xl border border-white/10 transition-colors uppercase tracking-widest font-bold disabled:opacity-50"
+                 >
+                   {isLoading ? "Resending..." : "Resend Email"}
+                 </button>
+                 
+                 <Link href="/login" className="block">
+                    <NeonButton className="w-full text-sm !py-5 tracking-widest uppercase">
+                       Return to Login
+                    </NeonButton>
+                 </Link>
+              </div>
             </div>
           ) : (
              <form className="space-y-8" onSubmit={handleForgot}>
