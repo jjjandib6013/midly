@@ -228,6 +228,24 @@ app.post('/api/auth/verify-email', authLimiter, async (req, res): Promise<any> =
    }
 });
 
+app.get('/api/auth/check-verification', async (req, res): Promise<any> => {
+   try {
+      const email = req.query.email as string;
+      if (!email) return res.status(400).json({ error: 'Email required' });
+      
+      const user = await prisma.user.findUnique({
+         where: { email },
+         select: { is_email_verified: true }
+      });
+      
+      if (!user) return res.status(404).json({ error: 'User not found' });
+      
+      res.json({ verified: user.is_email_verified });
+   } catch (error) {
+      res.status(500).json({ error: 'Server error' });
+   }
+});
+
 // app.post('/api/auth/login') HAS BEEN DELETED: NextAuth.js now handles the complete login flow on Next.js side
 
 app.post('/api/auth/forgot-password', authLimiter, async (req, res): Promise<any> => {

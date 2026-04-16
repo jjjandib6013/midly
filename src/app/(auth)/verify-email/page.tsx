@@ -10,14 +10,17 @@ import NeonButton from "@/components/ui/NeonButton";
 import Link from "next/link";
 import { API_URL } from "@/lib/api";
 import toast from "react-hot-toast";
+import { signIn } from "next-auth/react";
 
 function VerifyEmailLogic() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   const emailParam = searchParams.get("email");
 
-  const [status, setStatus] = useState<"waiting" | "verifying" | "success" | "error">(token ? "verifying" : "waiting");
+  const [status, setStatus] = useState<"waiting" | "verifying" | "success" | "error" | "cross_verified">(token ? "verifying" : "waiting");
   const [errorMsg, setErrorMsg] = useState("");
+  const [verifyPassword, setVerifyPassword] = useState("");
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -30,6 +33,38 @@ function VerifyEmailLogic() {
       verifyToken(token, emailParam);
     }
   }, [token, emailParam]);
+
+  useEffect(() => {
+    if (status === "waiting" && emailParam) {
+      const interval = setInterval(async () => {
+        try {
+          const res = await fetch(`${API_URL}/api/auth/check-verification?email=${encodeURIComponent(emailParam)}`);
+          const data = await res.json();
+          if (data.verified) {
+            setStatus("cross_verified");
+          }
+        } catch (e) {}
+      }, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [status, emailParam]);
+
+  const handleCrossDeviceLogin = async (e: React.FormEvent) => {
+     e.preventDefault();
+     setIsLoggingIn(true);
+     try {
+         const res = await signIn("credentials", { email: emailParam, password: verifyPassword, redirect: false });
+         if (res?.error) {
+            toast.error("Invalid password.");
+            setIsLoggingIn(false);
+         } else {
+            window.location.href = "/kyc";
+         }
+     } catch (err) {
+         toast.error("An error occurred");
+         setIsLoggingIn(false);
+     }
+  }
 
   const verifyToken = async (tkn: string, email: string) => {
     try {
@@ -115,6 +150,23 @@ function VerifyEmailLogic() {
                      Return to Login
                   </NeonButton>
                </Link>
+            </div>
+          )}
+
+          {status === "cross_verified" && (
+            <div className="text-center space-y-6">
+               <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-primary/50">
+                  <ShieldCheck className="w-8 h-8 text-primary" />
+               </div>
+               <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Verified on Phone!</h2>
+               <p className="text-[#8892b0]">We detected that you magically verified this account on another device.</p>
+               
+               <p className="text-xs text-white/50 bg-white/5 p-4 rounded-xl border border-white/10 mt-4 text-left">For your security, you must enter your password one time to establish the encrypted session on this device.</p>
+               
+               <form onSubmit={handleCrossDeviceLogin} className="space-y-4 pt-4 border-t border-white/10">
+                  <input type="password" placeholder="Confirm Password" value={verifyPassword} onChange={e=>setVerifyPassword(e.target.value)} className="w-full bg-[#030407] border border-white/10 text-white rounded-xl px-4 py-3 focus:border-primary/50 outline-none" required />
+                  <NeonButton type="submit" className="w-full text-sm py-4 tracking-widest uppercase" isLoading={isLoggingIn}>Securely Log In</NeonButton>
+               </form>
             </div>
           )}
 
