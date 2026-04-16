@@ -26,7 +26,7 @@ export const LoginSchema = z.object({
 });
 
 export const CreateTradeSchema = z.object({
-  role: z.enum(["BUY", "SELL"], { required_error: "Select your position" }),
+  role: z.enum(["BUY", "SELL"], { message: "Select your position" }),
   tradeType: z.string().min(1, "Select an asset type"),
   category: z.string().min(1, "Select a platform"),
   item: z.string().min(3, "Asset description must be at least 3 characters").max(500),
