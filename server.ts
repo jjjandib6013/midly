@@ -31,7 +31,10 @@ const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'secret';
 
 app.use(cors({
-   origin: process.env.CLIENT_URL || "http://localhost:3000",
+   origin: function (origin, callback) {
+       // Allow all origins dynamically (crucial for Vercel preview environments)
+       callback(null, true);
+   },
    credentials: true,
    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
    allowedHeaders: ['Content-Type', 'Authorization']
@@ -1408,8 +1411,8 @@ app.post('/api/transactions/:id/request-cancel', authenticateJWT, async (req, re
    }
 });
 
-httpServer.listen(PORT, () => {
-   console.log(`Server is running beautifully on http://localhost:${PORT} with JWT & Socket.io WebSockets enabled.`);
+httpServer.listen(PORT as number, '0.0.0.0', () => {
+   console.log(`Server is running beautifully on http://0.0.0.0:${PORT} with JWT & Socket.io WebSockets enabled.`);
    console.log(`Sumakses ka!`);
    console.log(`Hawak mo ang beat - `);
    console.log(`Hawak mo ang beat - `);
