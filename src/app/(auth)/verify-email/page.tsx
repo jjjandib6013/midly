@@ -104,12 +104,37 @@ function VerifyEmailLogic() {
                <p className="text-[#8892b0]">We have dispatched a highly secured verification link to your email address {emailParam ? <span className="text-white font-bold">{emailParam}</span> : null}.</p>
                <p className="text-sm font-medium text-white/50 mt-4">You cannot access the Midly platform until you click the link. If you didn't receive it, check your spam/junk folder.</p>
                
-               <Link href="/login" className="block mt-8">
-                  <NeonButton className="w-full text-sm !py-5 tracking-widest uppercase bg-[#111620]">
-                     Return to Login
-                  </NeonButton>
-               </Link>
-            </div>
+               <div className="flex flex-col gap-3 mt-8">
+                  {emailParam && (
+                     <NeonButton 
+                        className="w-full text-xs sm:text-sm !py-4 sm:!py-5 tracking-widest uppercase touch-manipulation"
+                        onClick={async () => {
+                           const loadingToast = toast.loading("Sending new verification email...");
+                           try {
+                              const res = await fetch(`${API_URL}/api/auth/resend-verification`, {
+                                 method: 'POST',
+                                 headers: { 'Content-Type': 'application/json' },
+                                 body: JSON.stringify({ email: emailParam })
+                              });
+                              const data = await res.json();
+                              toast.dismiss(loadingToast);
+                              if (res.ok) toast.success("Verification email dispatched!");
+                              else throw new Error(data.error || "Failed to resend");
+                           } catch(err: any) {
+                              toast.dismiss(loadingToast);
+                              toast.error(err.message);
+                           }
+                        }}
+                     >
+                        Resend Verification Email
+                     </NeonButton>
+                  )}
+                  <Link href="/login" className="block">
+                     <NeonButton variant="ghost" className="w-full text-xs sm:text-sm !py-4 sm:!py-5 tracking-widest uppercase bg-transparent text-[#8892b0] hover:text-white touch-manipulation border border-white/5 hover:border-white/20 hover:bg-white/5 transition-all">
+                        Return to Login
+                     </NeonButton>
+                  </Link>
+               </div>
           )}
 
           {status === "verifying" && (
