@@ -17,7 +17,8 @@ import { createAdapter } from '@socket.io/redis-adapter';
 
 dotenv.config();
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Initialize Resend safely so the server doesn't crash on boot if env vars are missing
+const resend = new Resend(process.env.RESEND_API_KEY || 're_dummykey_to_prevent_crash_12345');
 
 const app = express();
 app.set('trust proxy', 1);
