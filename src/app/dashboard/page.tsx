@@ -93,16 +93,16 @@ export default function Dashboard() {
    if (isLoading) return <div className="flex-1 flex justify-center items-center h-[50vh]"><div className="w-8 h-8 rounded-full border-[3px] border-primary border-t-transparent animate-spin" /></div>;
 
    return (
-      <div ref={containerRef} className="flex-1 w-full max-w-[1600px] mx-auto px-6 py-12 lg:px-16">
+      <div ref={containerRef} className="flex-1 w-full max-w-[1600px] mx-auto px-4 sm:px-6 py-6 sm:py-8 lg:px-16 lg:py-12">
          
          {/* Top Header - Asymmetric Text Alignment */}
-         <div className="dash-header flex flex-col md:flex-row items-start md:items-end justify-between mb-16 gap-8 border-b border-white/[0.04] pb-8">
+         <div className="dash-header flex flex-col md:flex-row items-start md:items-end justify-between mb-8 sm:mb-12 lg:mb-16 gap-6 sm:gap-8 border-b border-white/[0.04] pb-6 sm:pb-8">
             <div>
-               <h1 className="text-6xl md:text-7xl font-black text-white tracking-tighter uppercase leading-none">
+               <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-white tracking-tighter uppercase leading-none">
                  Your<br/> <span className="text-[#8892b0]">Dashboard</span>
                </h1>
             </div>
-             <div className="flex flex-col items-start md:items-end gap-6 border-l md:border-l-0 md:border-r-2 border-primary/50 pl-6 md:pl-0 md:pr-6">
+             <div className="flex flex-col items-start md:items-end gap-4 sm:gap-6 border-l md:border-l-0 md:border-r-2 border-primary/50 pl-4 sm:pl-6 md:pl-0 md:pr-6 w-full md:w-auto">
                  <p className="text-sm font-bold text-[#8892b0] tracking-widest uppercase">
                     {user?.first_name ? `Welcome back, ${user.first_name}` : 'Welcome back'}
                  </p>
@@ -114,41 +114,41 @@ export default function Dashboard() {
             </div>
          </div>
 
-         <div className="grid grid-cols-1 xl:grid-cols-12 gap-12">
+         <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 sm:gap-10 lg:gap-12">
             
             {/* Left Column (Main Architecture) */}
-            <div className="xl:col-span-8 flex flex-col gap-12">
+            <div className="xl:col-span-8 flex flex-col gap-8 sm:gap-10 lg:gap-12">
                
                {/* Metrics Grid */}
-               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <DynamicCard hoverEffect className="dash-metric p-8 flex flex-col justify-between">
+               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
+                  <DynamicCard hoverEffect className="dash-metric p-5 sm:p-6 md:p-8 flex flex-col justify-between">
                      <div className="flex items-center justify-between mb-8">
                         <span className="text-xs font-black text-[#8892b0] uppercase tracking-widest">Available Balance</span>
                         <Wallet className="w-5 h-5 text-primary" />
                      </div>
-                     <p className="text-4xl lg:text-5xl font-black text-white tracking-tighter">
+                     <p className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tighter">
                         <span className="text-[#8892b0] text-xl lg:text-3xl pr-1">₱</span>
                         {Number(user?.wallet_balance || 0).toLocaleString()}
                      </p>
                   </DynamicCard>
                   
-                  <DynamicCard hoverEffect className="dash-metric p-8 flex flex-col justify-between">
+                  <DynamicCard hoverEffect className="dash-metric p-5 sm:p-6 md:p-8 flex flex-col justify-between">
                      <div className="flex items-center justify-between mb-8">
                         <span className="text-xs font-black text-[#8892b0] uppercase tracking-widest">In Escrow</span>
                         <ShieldCheck className="w-5 h-5 text-purple-400" />
                      </div>
-                     <p className="text-4xl lg:text-5xl font-black text-white tracking-tighter">
+                     <p className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tighter">
                         <span className="text-[#8892b0] text-xl lg:text-3xl pr-1">₱</span>
                         {trades.filter(t => ['active', 'verifying'].includes(t.status)).reduce((s, t) => s + Number(t.total_amount || 0), 0).toLocaleString()}
                      </p>
                   </DynamicCard>
 
-                  <DynamicCard hoverEffect className="dash-metric p-8 flex flex-col justify-between border-primary/20 bg-primary/[0.02]">
+                  <DynamicCard hoverEffect className="dash-metric p-5 sm:p-6 md:p-8 flex flex-col justify-between border-primary/20 bg-primary/[0.02]">
                      <div className="flex items-center justify-between mb-8">
                         <span className="text-xs font-black text-primary uppercase tracking-widest">Active Trades</span>
                         <Activity className="w-5 h-5 text-primary" />
                      </div>
-                     <p className="text-5xl lg:text-7xl font-black text-white tracking-tighter leading-none">
+                     <p className="text-4xl sm:text-5xl lg:text-7xl font-black text-white tracking-tighter leading-none">
                         {live.length}
                      </p>
                   </DynamicCard>
@@ -182,7 +182,7 @@ export default function Dashboard() {
                                           <Icon className={`w-5 h-5 ${s.color}`} />
                                        </div>
                                        <div className="min-w-0">
-                                          <h3 className="text-2xl font-black text-white tracking-tight truncate group-hover:text-primary transition-colors">{t.item_name || t.game_type}</h3>
+                                          <h3 className="text-lg sm:text-xl md:text-2xl font-black text-white tracking-tight truncate group-hover:text-primary transition-colors">{t.item_name || t.game_type}</h3>
                                           <div className="flex flex-wrap items-center gap-3 mt-1 text-xs font-bold uppercase tracking-widest text-[#8892b0]">
                                              <span className={`${s.color}`}>{s.label}</span>
                                              <span className="w-1 h-1 rounded-full bg-white/20" />
@@ -193,7 +193,7 @@ export default function Dashboard() {
                                        </div>
                                     </div>
                                     <div className="flex items-center justify-between md:justify-end gap-6 shrink-0 md:min-w-[200px]">
-                                       <span className="text-3xl font-black text-white tracking-tighter">₱{Number(t.agreed_price).toLocaleString()}</span>
+                                       <span className="text-xl sm:text-2xl md:text-3xl font-black text-white tracking-tighter">₱{Number(t.agreed_price).toLocaleString()}</span>
                                        <div className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center group-hover:bg-primary group-hover:border-primary group-hover:text-dark-bg transition-all">
                                           <ArrowRight className="w-4 h-4" />
                                        </div>

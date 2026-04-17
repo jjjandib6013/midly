@@ -143,16 +143,16 @@ export default function Wallet() {
   };
 
   return (
-    <div ref={containerRef} className="min-h-screen pt-8 pb-16 px-4 sm:px-8 w-full max-w-[1600px] mx-auto">
+    <div ref={containerRef} className="min-h-screen pt-4 sm:pt-8 pb-12 sm:pb-16 px-4 sm:px-6 lg:px-8 w-full max-w-[1600px] mx-auto">
       
-      <div className="wallet-header flex flex-col md:flex-row md:items-end justify-between mb-16 gap-8 border-b border-dark-border pb-8">
+      <div className="wallet-header flex flex-col md:flex-row md:items-end justify-between mb-8 sm:mb-12 lg:mb-16 gap-6 sm:gap-8 border-b border-dark-border pb-6 sm:pb-8">
          <div className="flex items-center gap-6">
             <div className="p-5 bg-primary/10 rounded-3xl border border-primary/20 text-primary shrink-0 relative overflow-hidden group">
                <div className="absolute inset-0 bg-primary/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
                <WalletIcon className="w-10 h-10 relative z-10" />
             </div>
             <div>
-               <h1 className="text-6xl md:text-8xl font-black tracking-tighter text-white uppercase leading-none">
+               <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-8xl font-black tracking-tighter text-white uppercase leading-none">
                   Digital <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-emerald-900">Wallet</span>
                </h1>
             </div>
@@ -162,7 +162,7 @@ export default function Wallet() {
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-12">
         <div className="xl:col-span-8 flex flex-col gap-12">
           
-          <DynamicCard hoverEffect={true} delay={0.1} className="wallet-card p-12 md:p-16 min-h-[400px] flex flex-col justify-between overflow-hidden shadow-xl">
+          <DynamicCard hoverEffect={true} delay={0.1} className="wallet-card p-6 sm:p-10 md:p-12 lg:p-16 min-h-[280px] sm:min-h-[350px] md:min-h-[400px] flex flex-col justify-between overflow-hidden shadow-xl">
             <div className="absolute top-0 right-0 w-[400px] h-[400px] opacity-[0.02] pointer-events-none md:translate-x-1/4 -translate-y-1/4">
                <WalletIcon className="w-full h-full -rotate-12" />
             </div>
@@ -172,8 +172,8 @@ export default function Wallet() {
                  <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
                  Available Balance
               </h2>
-              <div className="wallet-balance text-6xl sm:text-8xl md:text-[8rem] font-black text-white tracking-tighter mb-16 leading-none flex items-start">
-                <span className="text-text-muted font-light mr-4 text-4xl sm:text-6xl mt-2 block">₱</span>
+              <div className="wallet-balance text-fluid-balance font-black text-white tracking-tighter mb-8 sm:mb-12 md:mb-16 leading-none flex items-start">
+                <span className="text-text-muted font-light mr-2 sm:mr-4 text-2xl sm:text-4xl md:text-6xl mt-1 sm:mt-2 block">₱</span>
                 {Number(balance).toLocaleString().split('').map((char, index) => (
                     <span key={index} className="inline-block">{char}</span>
                 ))}

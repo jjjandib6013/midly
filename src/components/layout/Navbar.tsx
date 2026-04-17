@@ -138,7 +138,7 @@ export default function Navbar() {
         ref={navRef}
         className="fixed top-0 left-0 w-full z-50 bg-[#030407]/80 backdrop-blur-2xl border-b border-white/[0.04]"
       >
-        <div className="w-full px-6 lg:px-12 h-24 flex items-center justify-between">
+        <div className="w-full px-4 sm:px-6 lg:px-12 h-16 sm:h-20 lg:h-24 flex items-center justify-between">
           <div className="flex items-center gap-12">
             <Link href="/" className="flex items-center gap-3 group relative">
               <div className="absolute -inset-4 bg-primary/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
@@ -171,7 +171,7 @@ export default function Navbar() {
                 <div className="relative">
                   <button
                     onClick={() => setShowNotifs(!showNotifs)}
-                    className="relative p-2 text-text-muted hover:text-white transition-colors"
+                    className="relative p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center text-text-muted hover:text-white transition-colors"
                     aria-label="Notifications"
                     aria-haspopup="true"
                     aria-expanded={showNotifs}
@@ -182,7 +182,7 @@ export default function Navbar() {
 
                   <div
                     ref={notifMenuRef}
-                    className="hidden absolute right-0 mt-6 w-96 bg-[#090b10] border border-white/5 shadow-[0_30px_60px_rgba(0,0,0,0.8)] rounded-3xl overflow-hidden z-50"
+                    className="hidden absolute right-0 mt-6 w-[calc(100vw-2rem)] sm:w-96 max-w-[400px] bg-[#090b10] border border-white/5 shadow-[0_30px_60px_rgba(0,0,0,0.8)] rounded-2xl sm:rounded-3xl overflow-hidden z-50"
                   >
                     <div className="p-6 border-b border-white/5 flex justify-between items-center bg-[#050608]">
                       <h4 className="text-xs font-black text-[#8892b0] tracking-widest uppercase">NOTIFICATIONS</h4>
@@ -224,7 +224,7 @@ export default function Navbar() {
             )}
 
             <button
-              className="md:hidden p-2 text-white"
+              className="md:hidden p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center text-white touch-manipulation"
               onClick={() => setIsMobileMenuOpen(true)}
               aria-label="Open menu"
               aria-expanded={isMobileMenuOpen}
@@ -238,7 +238,7 @@ export default function Navbar() {
       {/* GSAP Full Screen Mobile Menu */}
       <div
         ref={mobileMenuRef}
-        className="fixed inset-0 z-[100] bg-[#030407] flex flex-col p-8 transform -translate-y-full will-change-transform"
+        className="fixed inset-0 z-[100] bg-[#030407] flex flex-col p-6 sm:p-8 transform -translate-y-full will-change-transform"
       >
         <div className="flex justify-between items-center mb-16 mt-4">
           <Link href="/" className="flex items-center gap-3" onClick={() => setIsMobileMenuOpen(false)}>

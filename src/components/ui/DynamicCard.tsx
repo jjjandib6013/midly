@@ -84,7 +84,7 @@ export default function DynamicCard({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       className={cn(
-        "group relative rounded-3xl p-8 overflow-hidden transition-colors duration-500",
+        "group relative rounded-2xl sm:rounded-3xl p-5 sm:p-6 md:p-8 overflow-hidden transition-colors duration-500",
         "bg-dark-panel border border-white/5 shadow-xl",
         className
       )}

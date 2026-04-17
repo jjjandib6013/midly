@@ -99,7 +99,7 @@ export default function Profile() {
   }
 
   return (
-    <div className="flex-1 w-full max-w-[1200px] mx-auto px-4 sm:px-8 py-12 flex flex-col md:flex-row gap-8 lg:gap-16 font-sans">
+    <div className="flex-1 w-full max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-12 flex flex-col md:flex-row gap-6 sm:gap-8 lg:gap-16 font-sans">
       
       {/* Sidebar Navigation */}
       <div className="w-full md:w-64 shrink-0 space-y-8">
@@ -108,17 +108,17 @@ export default function Profile() {
            <p className="text-sm font-medium text-text-muted">Manage your identity and billing.</p>
         </div>
         
-        <nav className="flex flex-col space-y-1">
-           <button onClick={() => setActiveTab('account')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg font-medium text-sm transition-all ${activeTab === 'account' ? 'bg-white/10 text-white' : 'text-text-muted hover:bg-white/5 hover:text-white'}`}>
+        <nav className="flex md:flex-col space-x-1 md:space-x-0 md:space-y-1 overflow-x-auto pb-2 md:pb-0 -mx-1 md:mx-0">
+           <button onClick={() => setActiveTab('account')} className={`whitespace-nowrap flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all min-h-[40px] touch-manipulation ${activeTab === 'account' ? 'bg-white/10 text-white' : 'text-text-muted hover:bg-white/5 hover:text-white'}`}>
               <User className="w-4 h-4" /> Account Overview
            </button>
-           <button onClick={() => setActiveTab('payment')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg font-medium text-sm transition-all ${activeTab === 'payment' ? 'bg-white/10 text-white' : 'text-text-muted hover:bg-white/5 hover:text-white'}`}>
+           <button onClick={() => setActiveTab('payment')} className={`whitespace-nowrap flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all min-h-[40px] touch-manipulation ${activeTab === 'payment' ? 'bg-white/10 text-white' : 'text-text-muted hover:bg-white/5 hover:text-white'}`}>
               <CreditCard className="w-4 h-4" /> Payment Methods
            </button>
-           <button onClick={() => setActiveTab('security')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg font-medium text-sm transition-all ${activeTab === 'security' ? 'bg-white/10 text-white' : 'text-text-muted hover:bg-white/5 hover:text-white'}`}>
+           <button onClick={() => setActiveTab('security')} className={`whitespace-nowrap flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all min-h-[40px] touch-manipulation ${activeTab === 'security' ? 'bg-white/10 text-white' : 'text-text-muted hover:bg-white/5 hover:text-white'}`}>
               <ShieldCheck className="w-4 h-4" /> Security & Sessions
            </button>
-           <button onClick={() => setActiveTab('settings')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg font-medium text-sm transition-all ${activeTab === 'settings' ? 'bg-white/10 text-white' : 'text-text-muted hover:bg-white/5 hover:text-white'}`}>
+           <button onClick={() => setActiveTab('settings')} className={`whitespace-nowrap flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all min-h-[40px] touch-manipulation ${activeTab === 'settings' ? 'bg-white/10 text-white' : 'text-text-muted hover:bg-white/5 hover:text-white'}`}>
               <Settings className="w-4 h-4" /> Preferences
            </button>
         </nav>

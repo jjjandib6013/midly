@@ -127,7 +127,7 @@ export default function CreateTrade() {
   if (!isVerified) {
       return (
          <div className="flex-1 flex items-center justify-center min-h-[calc(100vh-64px)] px-4">
-            <div ref={lockRef} className="max-w-md w-full bg-dark-panel border border-dark-border rounded-3xl p-8 shadow-2xl text-center" role="alert">
+             <div ref={lockRef} className="max-w-md w-full bg-dark-panel border border-dark-border rounded-2xl sm:rounded-3xl p-6 sm:p-8 shadow-2xl text-center" role="alert">
                 <div className="w-20 h-20 bg-dark-border rounded-full flex items-center justify-center mx-auto mb-6 text-text-muted">
                     <LockKeyhole className="w-10 h-10" />
                 </div>
@@ -147,9 +147,9 @@ export default function CreateTrade() {
   }
 
   return (
-    <div ref={containerRef} className="flex-1 w-full max-w-[1200px] mx-auto px-4 sm:px-8 py-12 font-sans">
+    <div ref={containerRef} className="flex-1 w-full max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-12 font-sans">
       <div className="mb-10">
-        <h1 className="text-4xl font-bold text-white mb-2">
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-2">
           Initialize Transfer
         </h1>
         <p className="text-text-muted text-base max-w-xl">Create a secure escrow contract bridging two parties. Funds will be mathematically secured until trade terms are physically verified.</p>
@@ -157,7 +157,7 @@ export default function CreateTrade() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-dark-panel border border-dark-border rounded-3xl p-8">
+          <div className="bg-dark-panel border border-dark-border rounded-2xl sm:rounded-3xl p-5 sm:p-6 md:p-8">
             <h2 className="text-xl font-semibold text-white mb-6">Contract Specifications</h2>
 
             {error && (

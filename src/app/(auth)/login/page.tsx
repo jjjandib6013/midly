@@ -71,7 +71,7 @@ export default function Login() {
   };
 
   return (
-    <div className="flex-1 flex items-center justify-center min-h-[calc(100vh-64px)] px-4 py-12 relative overflow-hidden">
+    <div className="flex-1 flex items-center justify-center min-h-[calc(100vh-64px)] px-4 sm:px-6 py-8 sm:py-12 relative overflow-hidden">
       {/* Background glow */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/5 blur-[120px] rounded-full pointer-events-none z-0" />
 
@@ -80,11 +80,11 @@ export default function Login() {
         className="w-full max-w-xl z-10 opacity-0"
       >
         <div className="text-center mb-12">
-          <h1 className="text-5xl font-black text-white mb-4 tracking-tighter uppercase">Log In</h1>
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-white mb-3 sm:mb-4 tracking-tighter uppercase">Log In</h1>
           <p className="text-[#8892b0] font-medium tracking-wide">Welcome back to Midly.</p>
         </div>
 
-        <DynamicCard className="border border-white/5 bg-[#0a0d14]/80 p-8 md:p-12 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)]" hoverEffect={false}>
+        <DynamicCard className="border border-white/5 bg-[#0a0d14]/80 p-6 sm:p-8 md:p-12 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)]" hoverEffect={false}>
           {error && (
             <div className="mb-8 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-500 text-sm flex items-center gap-3 font-semibold">
               <ShieldAlert className="w-5 h-5" /> {error}

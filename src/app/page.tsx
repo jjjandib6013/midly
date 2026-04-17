@@ -69,7 +69,7 @@ export default function Home() {
     <div ref={containerRef} className="flex-1 flex flex-col items-center justify-start overflow-hidden bg-[#030407]">
 
       {/* Asymmetric Hero Section */}
-      <section className="relative w-full min-h-[calc(100vh-104px)] flex items-center pt-10 pb-20 px-6 lg:px-16 max-w-[1600px] mx-auto">
+      <section className="relative w-full min-h-[calc(100vh-64px)] sm:min-h-[calc(100vh-104px)] flex items-center pt-6 sm:pt-10 pb-12 sm:pb-20 px-4 sm:px-6 lg:px-16 max-w-[1600px] mx-auto">
         <div data-speed="-0.15" className="absolute top-0 right-0 w-[50vw] h-[100vh] bg-primary/5 blur-[180px] rounded-full pointer-events-none -z-10 translate-x-1/3 -translate-y-1/4" />
         <div data-speed="-0.25" className="absolute bottom-0 left-0 w-[40vw] h-[40vw] bg-white/[0.02] blur-[120px] rounded-full pointer-events-none -z-10 -translate-x-1/2 translate-y-1/2" />
 
@@ -80,7 +80,7 @@ export default function Home() {
               Hardware Identity Verification
             </div>
 
-            <h1 className="hero-title text-5xl md:text-7xl lg:text-[7rem] font-black tracking-tighter text-white mb-10 leading-[0.85] uppercase">
+            <h1 className="hero-title text-fluid-hero font-black tracking-tighter text-white mb-6 sm:mb-10 leading-[0.85] uppercase">
               <div className="line block" style={{ perspective: 1000 }}>Absolute</div>
               <div className="line block text-transparent bg-clip-text bg-gradient-to-r from-primary via-green-400 to-emerald-900 drop-shadow-[0_0_30px_rgba(63,229,108,0.2)]" style={{ perspective: 1000 }}>
                 Trust Protocol
@@ -91,7 +91,7 @@ export default function Home() {
               Eliminate digital asset fraud permanently. Midly leverages strict hardware-enforced KYC and algorithmic vault locking to secure peer-to-peer exchanges.
             </p>
 
-            <div className="flex flex-col sm:flex-row items-center gap-6 w-full sm:w-auto border-l-4 border-primary/50 pl-6">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 sm:gap-6 w-full sm:w-auto border-l-4 border-primary/50 pl-4 sm:pl-6">
               <Link href="/register" className="hero-btn w-full sm:w-auto">
                 <NeonButton className="w-full sm:w-auto gap-3 text-sm !py-6 !px-12 tracking-widest uppercase shadow-[0_0_40px_-5px_rgba(63,229,108,0.3)]">
                   Create Account <ArrowRight className="w-5 h-5" />
@@ -104,7 +104,7 @@ export default function Home() {
               </Link>
             </div>
 
-            <div className="hero-footer mt-16 text-xs font-black tracking-widest uppercase text-[#8892b0] flex flex-wrap items-center gap-8 pl-6">
+            <div className="hero-footer mt-10 sm:mt-16 text-xs font-black tracking-widest uppercase text-[#8892b0] flex flex-wrap items-center gap-4 sm:gap-8 pl-4 sm:pl-6">
               <span className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-primary" /> Supported Networks:</span>
               <span className="text-white">Dota 2</span>
               <span className="text-white">Valorant</span>
@@ -133,11 +133,11 @@ export default function Home() {
       </section>
 
       {/* Structured Grid Section */}
-      <section className="w-full px-6 lg:px-16 py-32 max-w-[1600px] mx-auto border-t border-white/[0.02] relative">
-        <div className="section-header flex flex-col md:flex-row md:items-end justify-between mb-24 gap-8">
+      <section className="w-full px-4 sm:px-6 lg:px-16 py-16 sm:py-24 lg:py-32 max-w-[1600px] mx-auto border-t border-white/[0.02] relative">
+        <div className="section-header flex flex-col md:flex-row md:items-end justify-between mb-12 sm:mb-16 lg:mb-24 gap-6 sm:gap-8">
           <div>
             <h2 className="text-sm font-black text-primary tracking-widest uppercase mb-4">Architecture</h2>
-            <h3 className="text-5xl md:text-6xl font-black text-white tracking-tighter uppercase leading-[0.9]">
+            <h3 className="text-fluid-section font-black text-white tracking-tighter uppercase leading-[0.9]">
               Zero-Trust <br /> Guarantee.
             </h3>
           </div>
@@ -147,7 +147,7 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          <DynamicCard hoverEffect={true} delay={0.1} className="flex flex-col justify-between h-[400px]">
+          <DynamicCard hoverEffect={true} delay={0.1} className="flex flex-col justify-between min-h-[280px] sm:min-h-[350px] lg:h-[400px]">
             <div>
               <div className="w-16 h-16 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center mb-8">
                 <Lock className="w-6 h-6 text-primary" />
@@ -158,7 +158,7 @@ export default function Home() {
             <div className="text-8xl font-black text-white/5 absolute bottom-4 right-8 tracking-tighter">01</div>
           </DynamicCard>
 
-          <DynamicCard hoverEffect={true} delay={0.3} className="flex flex-col justify-between h-[400px] lg:translate-y-12">
+          <DynamicCard hoverEffect={true} delay={0.3} className="flex flex-col justify-between min-h-[280px] sm:min-h-[350px] lg:h-[400px] lg:translate-y-12">
             <div>
               <div className="w-16 h-16 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center mb-8">
                 <PackageSearch className="w-6 h-6 text-primary" />
@@ -169,7 +169,7 @@ export default function Home() {
             <div className="text-8xl font-black text-white/5 absolute bottom-4 right-8 tracking-tighter">02</div>
           </DynamicCard>
 
-          <DynamicCard hoverEffect={true} delay={0.5} className="flex flex-col justify-between h-[400px] lg:translate-y-24">
+          <DynamicCard hoverEffect={true} delay={0.5} className="flex flex-col justify-between min-h-[280px] sm:min-h-[350px] lg:h-[400px] lg:translate-y-24">
             <div>
               <div className="w-16 h-16 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center mb-8">
                 <MessageSquareWarning className="w-6 h-6 text-primary" />

@@ -36,7 +36,7 @@ export default function RootLayout({
           <SmoothScroll>
             <Toaster position="top-right" toastOptions={{ style: { background: '#1c1c1f', color: '#fff', border: '1px solid #333' } }} />
             <Navbar />
-            <main className="flex-1 flex flex-col pt-[104px]">
+            <main className="flex-1 flex flex-col pt-16 sm:pt-20 lg:pt-24">
               {children}
             </main>
           </SmoothScroll>

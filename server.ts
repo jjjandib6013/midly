@@ -11,7 +11,9 @@ import path from 'path';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { rateLimit } from 'express-rate-limit';
-import sgMail from '@sendgrid/mail';
+import { Resend } from 'resend';
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 import { createClient } from 'redis';
 import { createAdapter } from '@socket.io/redis-adapter';
 
@@ -191,10 +193,9 @@ app.post('/api/auth/register', authLimiter, async (req, res): Promise<any> => {
       const verifyUrl = `${clientUrl}/verify-email?token=${verification_token}&email=${encodeURIComponent(email)}`;
       
       try {
-         sgMail.setApiKey(process.env.SENDGRID_API_KEY || '');
-         const msg = {
+         await resend.emails.send({
             to: user.email,
-            from: process.env.EMAIL_USER || 'noreply@midly.com',
+            from: 'onboarding@resend.dev',
             subject: 'Midly - Verify Your Email Address',
             html: `
                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #0a0d14; padding: 40px; border-radius: 12px; color: #fff; border: 1px solid #1f2937;">
@@ -207,10 +208,9 @@ app.post('/api/auth/register', authLimiter, async (req, res): Promise<any> => {
                   </a>
                </div>
             `
-         };
-         await sgMail.send(msg);
+         });
       } catch (emailError: any) {
-         console.error("SendGrid missing or error. Falling back to DEV mode.", emailError.response?.body || emailError);
+         console.error("Resend missing or error. Falling back to DEV mode.", emailError);
          console.log(`[DEV ONLY] Verify Email Link: ${verifyUrl}`);
       }
 
@@ -283,11 +283,9 @@ app.post('/api/auth/forgot-password', authLimiter, async (req, res): Promise<any
       const resetUrl = `${clientUrl}/reset-password?token=${token}`;
 
       try {
-         sgMail.setApiKey(process.env.SENDGRID_API_KEY || '');
-
-         const msg = {
+         await resend.emails.send({
             to: user.email,
-            from: process.env.EMAIL_USER || 'noreply@midly.com',
+            from: 'onboarding@resend.dev',
             subject: 'Midly - Password Reset Request',
             html: `
                   <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #0a0d14; padding: 40px; border-radius: 12px; color: #fff; border: 1px solid #1f2937;">
@@ -303,12 +301,10 @@ app.post('/api/auth/forgot-password', authLimiter, async (req, res): Promise<any
                      </p>
                   </div>
                `
-         };
-
-         await sgMail.send(msg);
+         });
          res.json({ message: 'If that email is registered, a password reset link has been sent.' });
       } catch (emailError: any) {
-         console.error("SendGrid missing or environment variables not configured. Falling back to DEV mode.", emailError.response?.body || emailError);
+         console.error("Resend missing or environment variables not configured. Falling back to DEV mode.", emailError);
          console.log(`[DEV ONLY] Reset Password Link: ${resetUrl}`);
          res.json({ message: 'If that email is registered, a password reset link has been sent.', _devToken: token });
       }

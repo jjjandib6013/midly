@@ -57,10 +57,10 @@ export default function Transactions() {
   }, [token]);
 
   return (
-    <div ref={containerRef} className="flex-1 w-full max-w-[1400px] mx-auto px-4 sm:px-8 py-12">
+    <div ref={containerRef} className="flex-1 w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-12">
       <div className="page-header mb-12 flex flex-col xl:flex-row justify-between items-start xl:items-end gap-8 pb-8 border-b border-white/[0.04]">
          <div>
-           <h1 className="text-5xl md:text-7xl font-black text-white tracking-tighter uppercase mb-4 leading-none">Trade <span className="text-primary opacity-80">Ledger</span></h1>
+           <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-7xl font-black text-white tracking-tighter uppercase mb-3 sm:mb-4 leading-none">Trade <span className="text-primary opacity-80">Ledger</span></h1>
            <p className="text-[#8892b0] text-lg font-medium max-w-2xl">Monitor your active escrows, review completed transactions, and audit canceled contracts across the protocol.</p>
          </div>
         
@@ -69,7 +69,7 @@ export default function Transactions() {
               <button
                  key={f}
                  onClick={() => setFilter(f)}
-                 className={`px-6 py-3 rounded-xl text-xs uppercase tracking-widest font-bold transition-all ${filter === f ? "bg-primary text-black shadow-[0_0_15px_rgba(63,229,108,0.3)]" : "text-[#8892b0] hover:text-white hover:bg-white/5"}`}
+                 className={`px-3 sm:px-6 py-2 sm:py-3 rounded-xl text-[10px] sm:text-xs uppercase tracking-widest font-bold transition-all min-h-[36px] touch-manipulation ${filter === f ? "bg-primary text-black shadow-[0_0_15px_rgba(63,229,108,0.3)]" : "text-[#8892b0] hover:text-white hover:bg-white/5"}`}
               >
                  {f}
               </button>

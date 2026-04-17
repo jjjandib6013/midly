@@ -390,7 +390,7 @@ export default function TradeHub() {
    // =============================================
    if (currentStep === 0) {
       return (
-         <div className="flex-1 w-full max-w-2xl mx-auto px-4 py-12 flex flex-col items-center justify-center">
+         <div className="flex-1 w-full max-w-2xl mx-auto px-4 sm:px-6 py-8 sm:py-12 flex flex-col items-center justify-center">
             <div className="text-center mb-8">
                <div className="w-20 h-20 rounded-full bg-primary/10 border-2 border-primary/30 flex items-center justify-center mx-auto mb-6">
                   <ShieldCheck className="w-10 h-10 text-primary" />
@@ -463,10 +463,10 @@ export default function TradeHub() {
    }
 
    return (
-      <div className="flex-1 w-full max-w-7xl mx-auto px-4 py-8 grid grid-cols-3 gap-8 h-[calc(100vh-64px)] max-h-[calc(100vh-64px)] overflow-hidden">
+      <div className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 lg:py-8 flex flex-col lg:grid lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 lg:h-[calc(100vh-64px)] lg:max-h-[calc(100vh-64px)] lg:overflow-hidden">
 
          {/* Left Column: Flow & Details */}
-         <div className="flex flex-col gap-6 overflow-y-auto pr-2 custom-scrollbar min-h-0 max-h-full" data-lenis-prevent>
+         <div className="flex flex-col gap-4 sm:gap-6 lg:overflow-y-auto lg:pr-2 custom-scrollbar lg:min-h-0 lg:max-h-full" data-lenis-prevent>
 
             {/* COUNTERPARTY IDENTITY */}
             {counterparty && (
@@ -827,20 +827,20 @@ export default function TradeHub() {
          </div>
 
          {/* Right Column: Intelligent Chat */}
-         <div className="col-span-2 flex flex-col h-full max-h-full min-h-0 bg-dark-panel border border-dark-border rounded-2xl overflow-hidden shadow-2xl relative">
+         <div className="lg:col-span-2 flex flex-col h-[60vh] sm:h-[65vh] lg:h-full lg:max-h-full min-h-0 bg-dark-panel border border-dark-border rounded-2xl overflow-hidden shadow-2xl relative">
             <div className="p-5 border-b border-dark-border bg-dark-bg flex items-center justify-between shrink-0">
                <div className="flex items-center gap-3">
                   <MessageSquare className="w-5 h-5 text-primary glow-icon" />
                   <h2 className="font-bold text-white">Intelligent Negotiation Hub</h2>
                </div>
-               <div className="flex items-center gap-3">
+               <div className="flex items-center gap-2 sm:gap-3">
                   <button onClick={() => {
                      navigator.clipboard.writeText(window.location.href);
                      toast.success("Room Invite Link Copied!");
-                  }} className="px-3 py-1 bg-dark-panel hover:bg-dark-border cursor-pointer transition-colors rounded-full border border-dark-border text-xs text-white flex items-center gap-2">
-                     <Copy className="w-3 h-3 text-text-muted" /> Copy Invite Link
+                  }} className="px-2 sm:px-3 py-1 bg-dark-panel hover:bg-dark-border cursor-pointer transition-colors rounded-full border border-dark-border text-xs text-white flex items-center gap-1.5 sm:gap-2 touch-manipulation min-h-[36px]">
+                     <Copy className="w-3 h-3 text-text-muted" /> <span className="hidden sm:inline">Copy Invite Link</span><span className="sm:hidden">Copy</span>
                   </button>
-                  <div className="px-3 py-1 bg-dark-panel rounded-full border border-dark-border text-xs text-text-muted flex items-center gap-2">
+                  <div className="hidden sm:flex px-3 py-1 bg-dark-panel rounded-full border border-dark-border text-xs text-text-muted items-center gap-2">
                      End-to-End Encrypted <ShieldCheck className="w-3 h-3 text-primary" />
                   </div>
                </div>

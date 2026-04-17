@@ -65,7 +65,7 @@ export default function NeonButton({
   const isPrimary = variant === "primary";
   
   const baseStyles =
-    "group relative inline-flex items-center justify-center transition-colors duration-500 overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed rounded-full font-semibold";
+    "group relative inline-flex items-center justify-center transition-colors duration-500 overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed rounded-full font-semibold min-h-[44px] active:scale-[0.97] touch-manipulation";
 
   const variants = {
     primary:

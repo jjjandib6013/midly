@@ -100,10 +100,10 @@ export default function Marketplace() {
    };
 
    return (
-      <div className="flex-1 w-full max-w-7xl mx-auto px-4 py-12">
-         <div className="flex justify-between items-center mb-10">
+      <div className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-12">
+         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-6 mb-6 sm:mb-10">
             <div>
-               <h1 className="text-4xl font-bold text-white tracking-tight flex items-center gap-3">
+               <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white tracking-tight flex items-center gap-3">
                   <Store className="w-10 h-10 text-primary glow-icon" /> P2P Marketplace
                </h1>
                <p className="text-text-muted mt-2 text-lg">Browse public listings. When you buy, Midly locks the Escrow automatically.</p>
