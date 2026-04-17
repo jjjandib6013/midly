@@ -50,6 +50,7 @@
     "react-hot-toast": "^2.6.0",
     "react-webcam": "^7.2.0",
     "redis": "^5.12.1",
+    "resend": "^6.12.0",
     "sharp": "^0.34.5",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",

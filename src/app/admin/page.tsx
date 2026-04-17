@@ -37,7 +37,6 @@ export default function AdminDashboard() {
   };
   
   useEffect(() => {
-     
      if (token) {
         try {
            const payload = JSON.parse(atob(token.split('.')[1]));
@@ -139,7 +138,7 @@ export default function AdminDashboard() {
             ) : (
                <div className="space-y-4">
                   {disputes.map(d => (
-                     <div key={d.dispute_id} className="border border-red-500/30 rounded-xl p-5 bg-dark-bg flex flex-col lg:flex-row gap-4 justify-between lg:items-center">
+                     <div key={d.dispute_id} className="border border-red-500/30 rounded-xl p-5 bg-dark-bg flex flex-col gap-4">
                         <div>
                            <div className="flex items-center gap-3 mb-2">
                               <span className="bg-red-500 text-white font-bold px-2 py-1 rounded text-xs">CRITICAL FLAG</span>
@@ -148,17 +147,36 @@ export default function AdminDashboard() {
                            </div>
                            <p className="text-text-muted text-sm mb-1"><span className="text-white">Reason:</span> "{d.description}"</p>
                            <div className="text-xs text-text-muted flex gap-4 mt-2">
-                              <span>Buyer: {d.transaction.buyer.first_name}</span>
-                              <span>Seller: {d.transaction.seller.first_name}</span>
-                              <span>Locked Value: ₱{Number(d.transaction.total_amount).toLocaleString()}</span>
+                              <span>Buyer: {d.transaction?.buyer?.first_name || 'Unknown'}</span>
+                              <span>Seller: {d.transaction?.seller?.first_name || 'Unknown'}</span>
+                              <span>Locked Value: ₱{Number(d.transaction?.total_amount || 0).toLocaleString()}</span>
+                           </div>
+                           
+                           {/* Evidence Board */}
+                           <div className="mt-4 p-4 bg-[#030407] rounded-xl border border-white/5 w-full">
+                              <h4 className="text-white text-xs font-bold uppercase tracking-wider mb-2 flex items-center gap-2"><ShieldAlert className="w-3 h-3 text-red-500"/> Immutable Chat Evidence Logs</h4>
+                              <div className="space-y-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
+                                 {d.transaction?.messages && d.transaction.messages.length > 0 ? (
+                                    d.transaction.messages.map((msg: any) => (
+                                       <div key={msg.message_id} className={`text-xs p-2 mb-1 rounded-lg ${msg.is_system_generated ? 'bg-primary/10 text-primary border border-primary/20' : (msg.sender_id === d.transaction.buyer_id ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20')}`}>
+                                          <span className="font-bold opacity-75 mr-2">[{new Date(msg.sent_at).toLocaleTimeString()}]</span>
+                                          <span className="font-bold mr-1">{msg.is_system_generated ? 'SYSTEM' : (msg.sender_id === d.transaction.buyer_id ? 'BUYER' : 'SELLER')}:</span>
+                                          <span>{msg.message_text}</span>
+                                       </div>
+                                    ))
+                                 ) : (
+                                    <p className="text-xs text-white/30 italic">No chat messages recorded in this transaction.</p>
+                                 )}
+                              </div>
                            </div>
                         </div>
-                        <div className="flex gap-2 shrink-0">
-                           <NeonButton onClick={() => handleResolve(d.transaction_id, 'FORWARD_TO_SELLER')} className="bg-primary/10 border-primary text-primary hover:bg-primary hover:text-black !py-2 !px-4 !text-sm whitespace-nowrap">
-                              Force Escrow Release
+
+                        <div className="flex gap-2 flex-col sm:flex-row shrink-0 pt-4 border-t border-red-500/10 mt-2">
+                           <NeonButton onClick={() => handleResolve(d.transaction_id, 'FORWARD_TO_SELLER')} className="bg-primary/10 border-primary text-primary hover:bg-primary hover:text-black !py-2 !px-4 !text-sm whitespace-nowrap flex-1">
+                              Force Escrow Release (Win to Seller)
                            </NeonButton>
-                           <NeonButton onClick={() => handleResolve(d.transaction_id, 'REFUND_BUYER')} variant="ghost" className="border-red-500 text-red-500 hover:bg-red-500/10 !py-2 !px-4 !text-sm whitespace-nowrap">
-                              Force Vault Refund
+                           <NeonButton onClick={() => handleResolve(d.transaction_id, 'REFUND_BUYER')} variant="ghost" className="border-red-500 text-red-500 hover:bg-red-500/10 !py-2 !px-4 !text-sm whitespace-nowrap flex-1">
+                              Force Vault Refund (Win to Buyer)
                            </NeonButton>
                         </div>
                      </div>

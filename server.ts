@@ -11,19 +11,13 @@ import path from 'path';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { rateLimit } from 'express-rate-limit';
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import { createClient } from 'redis';
 import { createAdapter } from '@socket.io/redis-adapter';
 
 dotenv.config();
 
-const transporter = nodemailer.createTransport({
-   service: 'gmail',
-   auth: {
-      user: process.env.GMAIL_USER?.replace(/['"]/g, ''),
-      pass: process.env.GMAIL_APP_PASSWORD?.replace(/['"]/g, '')
-   }
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const app = express();
 app.set('trust proxy', 1);
@@ -198,9 +192,9 @@ app.post('/api/auth/register', authLimiter, async (req, res): Promise<any> => {
       const clientUrl = process.env.CLIENT_URL || "http://localhost:3000";
       const verifyUrl = `${clientUrl}/verify-email?token=${verification_token}&email=${encodeURIComponent(email)}`;
       // Fire email asynchronously to prevent UI hanging
-      transporter.sendMail({
+      resend.emails.send({
          to: user.email,
-         from: process.env.GMAIL_USER || '"Midly Accounts" <noreply@midly.com>',
+         from: process.env.RESEND_FROM_EMAIL || 'support@midly.com',
          subject: 'Midly - Verify Your Email Address',
          html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #0a0d14; padding: 40px; border-radius: 12px; color: #fff; border: 1px solid #1f2937;">
@@ -248,22 +242,13 @@ app.post('/api/auth/verify-email', authLimiter, async (req, res): Promise<any> =
 
 app.get('/api/auth/debug-email', async (req, res): Promise<any> => {
    try {
-      const user = process.env.GMAIL_USER;
-      const rawPass = process.env.GMAIL_APP_PASSWORD;
-      const strippedPass = rawPass?.replace(/['"]/g, '');
-      
+      const apiKey = process.env.RESEND_API_KEY;
       const configInfo = {
-         user_provided: user ? user : "MISSING",
-         pass_provided: rawPass ? "YES (Length: " + rawPass.length + ")" : "MISSING",
-         stripped_pass_length: strippedPass ? strippedPass.length : 0,
+         key_provided: apiKey ? "YES (Length: " + apiKey.length + ")" : "MISSING",
+         domain_from: process.env.RESEND_FROM_EMAIL || "MISSING"
       };
 
-      try {
-         await transporter.verify();
-         res.json({ status: "SUCCESS - Nodemailer is fully connected to Google on this cloud server!", config: configInfo });
-      } catch (err: any) {
-         res.json({ status: "ERROR - Nodemailer failed to authenticate with Google on this cloud server.", error: err.message, config: configInfo });
-      }
+      res.json({ status: "SUCCESS - Resend SDK Initialized over port 443. Check Resend Dashboard for delivery metrics.", config: configInfo });
    } catch (error: any) {
       res.json({ error: error.message });
    }
@@ -290,9 +275,9 @@ app.post('/api/auth/resend-verification', authLimiter, async (req, res): Promise
       const clientUrl = process.env.CLIENT_URL || "http://localhost:3000";
       const verifyUrl = `${clientUrl}/verify-email?token=${token}&email=${encodeURIComponent(email)}`;
       
-      transporter.sendMail({
+      resend.emails.send({
          to: user.email,
-         from: process.env.GMAIL_USER || '"Midly Accounts" <noreply@midly.com>',
+         from: process.env.RESEND_FROM_EMAIL || 'support@midly.com',
          subject: 'Midly - Verify Your Email Address (Resend)',
          html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #0a0d14; padding: 40px; border-radius: 12px; color: #fff; border: 1px solid #1f2937;">
@@ -356,9 +341,9 @@ app.post('/api/auth/forgot-password', authLimiter, async (req, res): Promise<any
       const clientUrl = process.env.CLIENT_URL || "http://localhost:3000";
       const resetUrl = `${clientUrl}/reset-password?token=${token}`;
 
-      transporter.sendMail({
+      resend.emails.send({
          to: user.email,
-         from: process.env.GMAIL_USER || '"Midly Security" <noreply@midly.com>',
+         from: process.env.RESEND_FROM_EMAIL || 'support@midly.com',
          subject: 'Midly - Password Reset Request',
          html: `
                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #0a0d14; padding: 40px; border-radius: 12px; color: #fff; border: 1px solid #1f2937;">
@@ -1063,6 +1048,15 @@ app.post('/api/transactions/:id/dispute', authenticateJWT, async (req, res): Pro
             data: { status: 'disputed' }
          });
 
+         // Mathematically freeze the escrow so auto-timers are completely killed
+         const paymentCheck = await tx.payment.findUnique({ where: { transaction_id: tradeId } });
+         if (paymentCheck) {
+            await tx.payment.update({
+               where: { transaction_id: tradeId },
+               data: { vault_status: 'frozen' }
+            });
+         }
+
          // Create Dispute ticket
          await tx.dispute.create({
             data: {
@@ -1212,7 +1206,16 @@ app.get('/api/admin/disputes', authenticateJWT, async (req, res): Promise<any> =
    try {
       const disputes = await prisma.dispute.findMany({
          where: { resolution: null },
-         include: { transaction: { include: { buyer: true, seller: true } } }
+         include: { 
+            transaction: { 
+               include: { 
+                  buyer: true, 
+                  seller: true,
+                  audit_logs: true,
+                  messages: { orderBy: { sent_at: 'asc' } }
+               } 
+            } 
+         }
       });
       res.json({ disputes });
    } catch (e) { res.status(500).json({ error: 'Server error' }); }
