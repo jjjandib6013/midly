@@ -246,6 +246,29 @@ app.post('/api/auth/verify-email', authLimiter, async (req, res): Promise<any> =
    }
 });
 
+app.get('/api/auth/debug-email', async (req, res): Promise<any> => {
+   try {
+      const user = process.env.GMAIL_USER;
+      const rawPass = process.env.GMAIL_APP_PASSWORD;
+      const strippedPass = rawPass?.replace(/['"]/g, '');
+      
+      const configInfo = {
+         user_provided: user ? user : "MISSING",
+         pass_provided: rawPass ? "YES (Length: " + rawPass.length + ")" : "MISSING",
+         stripped_pass_length: strippedPass ? strippedPass.length : 0,
+      };
+
+      try {
+         await transporter.verify();
+         res.json({ status: "SUCCESS - Nodemailer is fully connected to Google on this cloud server!", config: configInfo });
+      } catch (err: any) {
+         res.json({ status: "ERROR - Nodemailer failed to authenticate with Google on this cloud server.", error: err.message, config: configInfo });
+      }
+   } catch (error: any) {
+      res.json({ error: error.message });
+   }
+});
+
 app.post('/api/auth/resend-verification', authLimiter, async (req, res): Promise<any> => {
    try {
       const { email } = req.body;
