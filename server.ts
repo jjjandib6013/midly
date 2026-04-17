@@ -11,13 +11,19 @@ import path from 'path';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { rateLimit } from 'express-rate-limit';
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 import { createClient } from 'redis';
 import { createAdapter } from '@socket.io/redis-adapter';
 
 dotenv.config();
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const transporter = nodemailer.createTransport({
+   service: 'gmail',
+   auth: {
+      user: process.env.GMAIL_USER,
+      pass: process.env.GMAIL_APP_PASSWORD
+   }
+});
 
 const app = express();
 app.set('trust proxy', 1);
@@ -193,9 +199,9 @@ app.post('/api/auth/register', authLimiter, async (req, res): Promise<any> => {
       const verifyUrl = `${clientUrl}/verify-email?token=${verification_token}&email=${encodeURIComponent(email)}`;
       
       try {
-         const { data, error } = await resend.emails.send({
+         await transporter.sendMail({
             to: user.email,
-            from: 'onboarding@resend.dev',
+            from: process.env.GMAIL_USER || '"Midly Accounts" <noreply@midly.com>',
             subject: 'Midly - Verify Your Email Address',
             html: `
                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #0a0d14; padding: 40px; border-radius: 12px; color: #fff; border: 1px solid #1f2937;">
@@ -209,7 +215,6 @@ app.post('/api/auth/register', authLimiter, async (req, res): Promise<any> => {
                </div>
             `
          });
-         if (error) throw new Error(error.message);
       } catch (emailError: any) {
          console.error("Resend missing or error. Falling back to DEV mode.", emailError);
          console.log(`[DEV ONLY] Verify Email Link: ${verifyUrl}`);
@@ -284,9 +289,9 @@ app.post('/api/auth/forgot-password', authLimiter, async (req, res): Promise<any
       const resetUrl = `${clientUrl}/reset-password?token=${token}`;
 
       try {
-         const { data, error } = await resend.emails.send({
+         await transporter.sendMail({
             to: user.email,
-            from: 'onboarding@resend.dev',
+            from: process.env.GMAIL_USER || '"Midly Security" <noreply@midly.com>',
             subject: 'Midly - Password Reset Request',
             html: `
                   <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #0a0d14; padding: 40px; border-radius: 12px; color: #fff; border: 1px solid #1f2937;">
@@ -303,7 +308,6 @@ app.post('/api/auth/forgot-password', authLimiter, async (req, res): Promise<any
                   </div>
                `
          });
-         if (error) throw new Error(error.message);
          res.json({ message: 'If that email is registered, a password reset link has been sent.' });
       } catch (emailError: any) {
          console.error("Resend missing or environment variables not configured. Falling back to DEV mode.", emailError);
