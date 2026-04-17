@@ -135,6 +135,7 @@ function VerifyEmailLogic() {
                      </NeonButton>
                   </Link>
                </div>
+            </div>
           )}
 
           {status === "verifying" && (
