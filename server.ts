@@ -12,12 +12,12 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { rateLimit } from 'express-rate-limit';
 import { Resend } from 'resend';
-
-const resend = new Resend(process.env.RESEND_API_KEY);
 import { createClient } from 'redis';
 import { createAdapter } from '@socket.io/redis-adapter';
 
 dotenv.config();
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const app = express();
 app.set('trust proxy', 1);
@@ -193,7 +193,7 @@ app.post('/api/auth/register', authLimiter, async (req, res): Promise<any> => {
       const verifyUrl = `${clientUrl}/verify-email?token=${verification_token}&email=${encodeURIComponent(email)}`;
       
       try {
-         await resend.emails.send({
+         const { data, error } = await resend.emails.send({
             to: user.email,
             from: 'onboarding@resend.dev',
             subject: 'Midly - Verify Your Email Address',
@@ -209,6 +209,7 @@ app.post('/api/auth/register', authLimiter, async (req, res): Promise<any> => {
                </div>
             `
          });
+         if (error) throw new Error(error.message);
       } catch (emailError: any) {
          console.error("Resend missing or error. Falling back to DEV mode.", emailError);
          console.log(`[DEV ONLY] Verify Email Link: ${verifyUrl}`);
@@ -283,7 +284,7 @@ app.post('/api/auth/forgot-password', authLimiter, async (req, res): Promise<any
       const resetUrl = `${clientUrl}/reset-password?token=${token}`;
 
       try {
-         await resend.emails.send({
+         const { data, error } = await resend.emails.send({
             to: user.email,
             from: 'onboarding@resend.dev',
             subject: 'Midly - Password Reset Request',
@@ -302,6 +303,7 @@ app.post('/api/auth/forgot-password', authLimiter, async (req, res): Promise<any
                   </div>
                `
          });
+         if (error) throw new Error(error.message);
          res.json({ message: 'If that email is registered, a password reset link has been sent.' });
       } catch (emailError: any) {
          console.error("Resend missing or environment variables not configured. Falling back to DEV mode.", emailError);
