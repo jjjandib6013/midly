@@ -42,10 +42,6 @@ export default function TradeHub() {
    const [messages, setMessages] = useState<Message[]>([]);
    const [inputText, setInputText] = useState("");
    const [currentStep, setCurrentStep] = useState(1);
-   const [paymentMethod, setPaymentMethod] = useState("midly_wallet");
-   const [myWalletBalance, setMyWalletBalance] = useState<number>(0);
-   const [isPaymentSimulating, setIsPaymentSimulating] = useState(false);
-   const [isAiProcessing, setIsAiProcessing] = useState(false);
    const [isLoading, setIsLoading] = useState(true);
    const [hasRated, setHasRated] = useState(false);
    const [credentialsInput, setCredentialsInput] = useState("");
