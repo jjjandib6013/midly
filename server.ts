@@ -1429,6 +1429,86 @@ app.post('/api/admin/kyc/:id/resolve', authenticateJWT, async (req, res): Promis
    } catch (e) { res.status(500).json({ error: 'Server error' }); }
 });
 
+// ==========================================
+// EXPANDED ADMIN COMMAND CENTER ROUTES
+// ==========================================
+
+app.get('/api/admin/users', authenticateJWT, async (req, res): Promise<any> => {
+   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+   try {
+      const users = await prisma.user.findMany({
+         select: { user_id: true, first_name: true, last_name: true, email: true, role: true, is_banned: true, created_at: true },
+         orderBy: { created_at: 'desc' }
+      });
+      res.json({ users });
+   } catch (e) {
+      res.status(500).json({ error: 'Failed to fetch users' });
+   }
+});
+
+app.post('/api/admin/users/:id/ban', authenticateJWT, async (req, res): Promise<any> => {
+   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+   try {
+      const targetId = parseInt(req.params.id as string);
+      const { is_banned } = req.body;
+      await prisma.user.update({ where: { user_id: targetId }, data: { is_banned } });
+      res.json({ success: true, is_banned });
+   } catch (e) {
+      res.status(500).json({ error: 'Failed to toggle user ban state' });
+   }
+});
+
+app.get('/api/admin/settings', authenticateJWT, async (req, res): Promise<any> => {
+   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+   try {
+      let settings = await prisma.platformSettings.findUnique({ where: { id: 1 } });
+      if (!settings) {
+         settings = await prisma.platformSettings.create({ data: { id: 1, base_fee: 0.05 } });
+      }
+      res.json({ settings });
+   } catch (e) {
+      res.status(500).json({ error: 'Failed to fetch settings' });
+   }
+});
+
+app.post('/api/admin/settings', authenticateJWT, async (req, res): Promise<any> => {
+   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+   try {
+      const { base_fee } = req.body;
+      const parsedFee = parseFloat(base_fee);
+      if (isNaN(parsedFee) || parsedFee < 0 || parsedFee > 1) {
+         return res.status(400).json({ error: 'Fee must be between 0.00 and 1.00' });
+      }
+      const settings = await prisma.platformSettings.upsert({
+         where: { id: 1 },
+         update: { base_fee: parsedFee },
+         create: { id: 1, base_fee: parsedFee }
+      });
+      res.json({ settings });
+   } catch (e) {
+      res.status(500).json({ error: 'Failed to save settings' });
+   }
+});
+
+app.get('/api/admin/metrics', authenticateJWT, async (req, res): Promise<any> => {
+   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+   try {
+      // Metric 1: Total Locked Vault Capital (Sum of all completed vault transactions that are "held" or pending)
+      const agg = await prisma.payment.aggregate({ _sum: { amount: true }, where: { vault_status: 'held' } });
+      const lockedCapital = agg._sum.amount || 0;
+      
+      // Metric 2: Total Completed Trades
+      const tradesCount = await prisma.transaction.count({ where: { status: 'completed' } });
+
+      // Metric 3: Active Platform Users
+      const activeUsers = await prisma.user.count({ where: { is_banned: false } });
+
+      res.json({ lockedCapital, tradesCount, activeUsers });
+   } catch (e) {
+      res.status(500).json({ error: 'Failed to fetch system metrics' });
+   }
+});
+
 // GET Payment Methods
 app.get('/api/user/payment-methods', authenticateJWT, async (req, res) => {
    try {
