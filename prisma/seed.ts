@@ -27,8 +27,9 @@ async function main() {
       email: 'juan@midly.com', // Demo Log-in
       password_hash: passwordHash,
       phone: '+63 912 345 6789',
-      reputation_score: 4.8,
+      reputation_score: 5.0,
       wallet_balance: 18450.00,
+      is_email_verified: true,
     },
   });
 
@@ -39,8 +40,9 @@ async function main() {
       email: 'maria@seller.com',
       password_hash: passwordHash,
       phone: '+63 999 888 7777',
-      reputation_score: 4.9,
+      reputation_score: 5.0,
       wallet_balance: 5000.00,
+      is_email_verified: true,
     },
   });
 
@@ -54,6 +56,7 @@ async function main() {
       role: 'admin',
       reputation_score: 5.0,
       wallet_balance: 1000000.00,
+      is_email_verified: true,
     },
   });
 
@@ -65,6 +68,28 @@ async function main() {
       id_number: 'P1234567A',
       id_name: 'JUAN DELA CRUZ',
       birthdate: new Date('1995-10-15'),
+      status: 'verified', // Bypasses KYC
+    },
+  });
+
+  await prisma.kycVerification.create({
+    data: {
+      user_id: userSeller.user_id,
+      id_type: 'Driver License',
+      id_number: 'D9876543B',
+      id_name: 'MARIA CLARA',
+      birthdate: new Date('1996-12-01'),
+      status: 'verified',
+    },
+  });
+
+  await prisma.kycVerification.create({
+    data: {
+      user_id: adminAccount.user_id,
+      id_type: 'National ID',
+      id_number: 'ADM-001',
+      id_name: 'MIDLY ADMIN',
+      birthdate: new Date('1990-01-01'),
       status: 'verified',
     },
   });

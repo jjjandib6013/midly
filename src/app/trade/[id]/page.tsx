@@ -31,6 +31,21 @@ export default function TradeHub() {
    const [myWalletBalance, setMyWalletBalance] = useState<number>(0);
    const [isPaymentSimulating, setIsPaymentSimulating] = useState(false);
    const [isAiProcessing, setIsAiProcessing] = useState(false);
+
+   const params = useParams();
+   const tradeId = params.id as string;
+
+   const [trade, setTrade] = useState<any>(null);
+   const [myRole, setMyRole] = useState<"BUY" | "SELL" | null>(null);
+   const [isInitiator, setIsInitiator] = useState(false);
+   const [counterparty, setCounterparty] = useState<any>(null);
+   const [messages, setMessages] = useState<Message[]>([]);
+   const [inputText, setInputText] = useState("");
+   const [currentStep, setCurrentStep] = useState(1);
+   const [paymentMethod, setPaymentMethod] = useState("midly_wallet");
+   const [myWalletBalance, setMyWalletBalance] = useState<number>(0);
+   const [isPaymentSimulating, setIsPaymentSimulating] = useState(false);
+   const [isAiProcessing, setIsAiProcessing] = useState(false);
    const [isLoading, setIsLoading] = useState(true);
    const [hasRated, setHasRated] = useState(false);
    const [credentialsInput, setCredentialsInput] = useState("");
@@ -39,6 +54,10 @@ export default function TradeHub() {
    const [vaultPass, setVaultPass] = useState("");
    const fileInputRef = useRef<HTMLInputElement>(null);
    const messagesEndRef = useRef<HTMLDivElement>(null);
+
+   // Unified Modal State
+   const [isDisputingModalOpen, setIsDisputingModalOpen] = useState(false);
+   const [disputeReason, setDisputeReason] = useState("");
 
    const [timeRemaining, setTimeRemaining] = useState({ hours: 24, minutes: 0, seconds: 0, isExpired: false });
 
@@ -134,8 +153,12 @@ export default function TradeHub() {
       fetchMessages();
       fetchWallet();
 
-      // WebSockets Real-Time Engine
-      const socket = io(API_URL);
+      // WebSockets Real-Time Engine (Forced WebSocket transport prevents falling back to CORS-blocked standard polling)
+      const socket = io(API_URL, {
+         transports: ['websocket', 'polling'], // Prioritize pure websocket
+         reconnectionAttempts: 5,
+         withCredentials: true
+      });
       socket.emit("join_trade", tradeId);
 
       // Listen for incoming messages
@@ -299,25 +322,33 @@ export default function TradeHub() {
       }
    };
 
-   const handleDispute = async () => {
-      const reason = prompt("Enter a specific reason for Disputing this Escrow transaction:");
-      if (!reason) return;
+   const handleDispute = () => {
+      setIsDisputingModalOpen(true);
+   };
+
+   const submitDispute = async () => {
+      if (!disputeReason.trim()) {
+         toast.error("Please provide a reason to file this dispute.");
+         return;
+      }
 
       try {
          setIsLoading(true);
          const res = await fetch(`${API_URL}/api/transactions/${tradeId}/dispute`, {
             method: "POST",
             headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ reason })
+            body: JSON.stringify({ reason: disputeReason })
          });
          if (res.ok) {
-            toast.error("Dispute active. Funds locked immediately.");
+            toast.error("Dispute active. Funds locked completely.");
+            setIsDisputingModalOpen(false);
             fetchTrade();
          } else {
-            toast.error("Failed to initiate dispute.");
+            const data = await res.json();
+            toast.error(data.error || "Failed to initiate dispute.");
          }
       } catch (e) {
-         toast.error("Server error.");
+         toast.error("Server error. Please reach out to support.");
       } finally {
          setIsLoading(false);
       }
@@ -915,6 +946,50 @@ export default function TradeHub() {
                {isAiProcessing && <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-xs text-primary animate-pulse bg-dark-bg px-3 py-1 rounded-full border border-primary/20">AI is screening message...</div>}
             </div>
          </div>
+
+         {/* DISPUTE MODAL */}
+         {isDisputingModalOpen && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+               <DynamicCard className="w-full max-w-lg bg-[#0a0d14] border border-red-500/30 p-6 md:p-8 flex flex-col gap-6" hoverEffect={false}>
+                  <div className="flex items-center gap-3 border-b border-red-500/20 pb-4">
+                     <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center shrink-0">
+                        <ShieldAlert className="w-6 h-6 text-red-500 glow-icon" />
+                     </div>
+                     <div>
+                        <h2 className="text-xl font-bold text-white tracking-tight">Initiate Dispute</h2>
+                        <p className="text-xs text-red-400 mt-1">This will permanently lock the Smart Vault.</p>
+                     </div>
+                  </div>
+
+                  <div className="space-y-4 text-sm font-medium">
+                     <p className="text-text-muted">
+                        Midly administrators will be pulled into the chat to review evidence and determine a refund or funds release mathematically. 
+                     </p>
+
+                     <div className="space-y-2">
+                        <label className="text-xs uppercase tracking-widest text-text-muted font-bold">Primary Reason for Dispute</label>
+                        <textarea
+                           rows={4}
+                           value={disputeReason}
+                           onChange={(e) => setDisputeReason(e.target.value)}
+                           placeholder="Explain specifically why you are disputing this transaction. Include any missing items, fraudulent actions, or failed delivery specs..."
+                           className="w-full bg-dark-bg border border-dark-border text-white rounded-xl focus:border-red-500 p-4 transition-colors resize-none placeholder:text-white/20 custom-scrollbar"
+                        />
+                     </div>
+                     <p className="text-xs text-white/40 italic">Note: Your entire chat history will be automatically provided to the Admin as evidence.</p>
+                  </div>
+
+                  <div className="flex gap-3 mt-4 pt-4 border-t border-dark-border">
+                     <NeonButton variant="ghost" className="flex-1 border-white/10 hover:bg-white/5 text-text-muted" onClick={() => setIsDisputingModalOpen(false)}>
+                        Cancel
+                     </NeonButton>
+                     <NeonButton className="flex-1 bg-red-500/10 text-red-500 border-red-500 hover:bg-red-500 hover:text-white" onClick={submitDispute} isLoading={isLoading}>
+                        Freeze Vault & Dispute
+                     </NeonButton>
+                  </div>
+               </DynamicCard>
+            </div>
+         )}
       </div>
    );
 }
