@@ -61,7 +61,20 @@ export default function Login() {
       }
 
       toast.success("Welcome back to Midly");
-      // Force hard refresh to Next.js dashboard so session cookie is definitively swept up
+      
+      // Determine user role and route to the correct dashboard securely
+      try {
+         const sessionRes = await fetch("/api/auth/session");
+         const sessionData = await sessionRes.json();
+         if (sessionData?.user?.role === 'admin') {
+            window.location.href = "/admin";
+            return;
+         }
+      } catch (e) {
+         console.error("Session check failed, falling back to default.", e);
+      }
+
+      // Force hard refresh to Next.js user dashboard so session cookie is definitively swept up
       window.location.href = "/dashboard";
     } catch (err: any) {
       setError(err.message);

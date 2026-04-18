@@ -36,6 +36,7 @@ const handler = NextAuth({
             id: user.user_id.toString(),
             email: user.email,
             name: `${user.first_name} ${user.last_name}`,
+            role: user.role, // Inject role for routing
         };
       }
     })
@@ -51,12 +52,13 @@ const handler = NextAuth({
       if (user) {
         // Sign the token with the exact key and payload Express expects
         const expressToken = jwt.sign(
-          { user_id: parseInt(user.id) },
+          { user_id: parseInt(user.id), role: (user as any).role },
           process.env.JWT_SECRET || 'secret',
           { expiresIn: '7d' }
         );
         token.expressJwt = expressToken;
         token.id = user.id;
+        token.role = (user as any).role;
       }
       return token;
     },
@@ -65,6 +67,7 @@ const handler = NextAuth({
       (session as any).accessToken = token.expressJwt;
       if (session.user) {
          (session.user as any).id = token.id;
+         (session.user as any).role = token.role;
       }
       return session;
     }
