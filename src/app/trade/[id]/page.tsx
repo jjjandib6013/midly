@@ -32,16 +32,7 @@ export default function TradeHub() {
    const [isPaymentSimulating, setIsPaymentSimulating] = useState(false);
    const [isAiProcessing, setIsAiProcessing] = useState(false);
 
-   const params = useParams();
-   const tradeId = params.id as string;
 
-   const [trade, setTrade] = useState<any>(null);
-   const [myRole, setMyRole] = useState<"BUY" | "SELL" | null>(null);
-   const [isInitiator, setIsInitiator] = useState(false);
-   const [counterparty, setCounterparty] = useState<any>(null);
-   const [messages, setMessages] = useState<Message[]>([]);
-   const [inputText, setInputText] = useState("");
-   const [currentStep, setCurrentStep] = useState(1);
    const [isLoading, setIsLoading] = useState(true);
    const [hasRated, setHasRated] = useState(false);
    const [credentialsInput, setCredentialsInput] = useState("");
