@@ -508,7 +508,7 @@ app.post('/api/wallet/deposit', authenticateJWT, async (req, res): Promise<any> 
                user_id: user.user_id,
                type: 'deposit',
                amount: amount,
-               balance: user.wallet_balance,
+               balance: user.wallet_balance || 0,
                description: 'Fiat Deposit'
             }
          });
@@ -538,7 +538,7 @@ app.post('/api/wallet/withdraw', authenticateJWT, requireKYC, async (req, res): 
                user_id: usr.user_id,
                type: 'withdrawal',
                amount: -amount,
-               balance: updatedUser.wallet_balance,
+               balance: updatedUser.wallet_balance || 0,
                description: 'Fiat Withdrawal'
             }
          });
@@ -986,7 +986,7 @@ app.put('/api/transactions/:id/progress', authenticateJWT, async (req, res): Pro
                   data: { wallet_balance: { decrement: Number(trade.total_amount) } }
                });
                await tx.walletTransaction.create({
-                  data: { user_id: trade.buyer_id, type: 'escrow_lock', amount: -Number(trade.total_amount), balance: updatedBuyer.wallet_balance, description: `Escrow Lock - Trade #${tradeId}` }
+                  data: { user_id: trade.buyer_id, type: 'escrow_lock', amount: -Number(trade.total_amount), balance: updatedBuyer.wallet_balance || 0, description: `Escrow Lock - Trade #${tradeId}` }
                });
 
                await tx.payment.create({
@@ -1102,7 +1102,7 @@ app.put('/api/transactions/:id/progress', authenticateJWT, async (req, res): Pro
                data: { wallet_balance: { increment: amountToReceive } }
             });
             await tx.walletTransaction.create({
-               data: { user_id: trade.seller_id, type: 'escrow_release', amount: amountToReceive, balance: updatedSeller.wallet_balance, description: `Escrow Release - Trade #${tradeId}` }
+               data: { user_id: trade.seller_id, type: 'escrow_release', amount: amountToReceive, balance: updatedSeller.wallet_balance || 0, description: `Escrow Release - Trade #${tradeId}` }
             });
          });
 
@@ -1219,7 +1219,7 @@ app.post('/api/transactions/:id/auto-release', authenticateJWT, async (req, res)
             data: { wallet_balance: { increment: amountToReceive } }
          });
          await tx.walletTransaction.create({
-            data: { user_id: trade.seller_id, type: 'escrow_release', amount: amountToReceive, balance: updatedSeller.wallet_balance, description: `Escrow Auto-Release - Trade #${tradeId}` }
+            data: { user_id: trade.seller_id, type: 'escrow_release', amount: amountToReceive, balance: updatedSeller.wallet_balance || 0, description: `Escrow Auto-Release - Trade #${tradeId}` }
          });
 
          // System Log
@@ -1335,12 +1335,12 @@ app.post('/api/admin/disputes/:txId/resolve', authenticateJWT, async (req, res):
             await tx.transaction.update({ where: { transaction_id: txId }, data: { status: 'refunded' } });
             await tx.payment.update({ where: { payment_id: trade.payment!.payment_id }, data: { vault_status: 'refunded', refund_date: new Date() } });
             const updatedBuyer = await tx.user.update({ where: { user_id: trade.buyer_id }, data: { wallet_balance: { increment: amount } } });
-            await tx.walletTransaction.create({ data: { user_id: trade.buyer_id, type: 'escrow_refund', amount: amount, balance: updatedBuyer.wallet_balance, description: `Admin Escrow Refund - Trade #${txId}` }});
+            await tx.walletTransaction.create({ data: { user_id: trade.buyer_id, type: 'escrow_refund', amount: amount, balance: updatedBuyer.wallet_balance || 0, description: `Admin Escrow Refund - Trade #${txId}` }});
          } else if (action === 'FORWARD_TO_SELLER') {
             await tx.transaction.update({ where: { transaction_id: txId }, data: { status: 'completed' } });
             await tx.payment.update({ where: { payment_id: trade.payment!.payment_id }, data: { vault_status: 'released', release_date: new Date() } });
             const updatedSeller = await tx.user.update({ where: { user_id: trade.seller_id }, data: { wallet_balance: { increment: baseAmount } } });
-            await tx.walletTransaction.create({ data: { user_id: trade.seller_id, type: 'escrow_release', amount: baseAmount, balance: updatedSeller.wallet_balance, description: `Admin Escrow Release - Trade #${txId}` }});
+            await tx.walletTransaction.create({ data: { user_id: trade.seller_id, type: 'escrow_release', amount: baseAmount, balance: updatedSeller.wallet_balance || 0, description: `Admin Escrow Release - Trade #${txId}` }});
          }
 
          await tx.message.create({
@@ -1787,7 +1787,7 @@ app.post('/api/transactions/:id/accept-cancel', authenticateJWT, async (req, res
             data: { wallet_balance: { increment: amount } }
          });
          await tx.walletTransaction.create({
-            data: { user_id: trade.buyer_id, type: 'escrow_refund', amount: amount, balance: updatedBuyer.wallet_balance, description: `Mutual Cancellation Refund - Trade #${tradeId}` }
+            data: { user_id: trade.buyer_id, type: 'escrow_refund', amount: amount, balance: updatedBuyer.wallet_balance || 0, description: `Mutual Cancellation Refund - Trade #${tradeId}` }
          });
          await tx.message.create({
             data: {
