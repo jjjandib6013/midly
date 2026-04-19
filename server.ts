@@ -117,7 +117,7 @@ export const requireKYC = async (req: Request, res: Response, next: NextFunction
 // Secure endpoint to access KYC files
 app.get('/api/kyc/files/:filename', authenticateJWT, (req, res) => {
    // Enhanced authorization can be added here
-   const filePath = path.join(__dirname, 'uploads/kyc', req.params.filename);
+   const filePath = path.join(__dirname, 'uploads/kyc', req.params.filename as string);
    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Not found' });
    res.sendFile(filePath);
 });
