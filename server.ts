@@ -1362,7 +1362,6 @@ app.post('/api/admin/disputes/:txId/resolve', authenticateJWT, async (req, res):
 import { z } from 'zod';
 import { encrypt } from './src/ai/cryptoUtils';
 import { kycQueue } from './src/ai/queue';
-import fs from 'fs';
 
 const kycPhase1Schema = z.object({
    idType: z.string().min(2, "ID Type is required"),
