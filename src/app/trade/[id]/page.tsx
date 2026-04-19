@@ -45,6 +45,8 @@ export default function TradeHub() {
    // Unified Modal State
    const [isDisputingModalOpen, setIsDisputingModalOpen] = useState(false);
    const [disputeReason, setDisputeReason] = useState("");
+   const [isCancelRequestModalOpen, setIsCancelRequestModalOpen] = useState(false);
+   const [pendingUpload, setPendingUpload] = useState<File | null>(null);
 
    const [timeRemaining, setTimeRemaining] = useState({ hours: 24, minutes: 0, seconds: 0, isExpired: false });
 
@@ -166,6 +168,8 @@ export default function TradeHub() {
          if (newStatus === 'verifying') toast.success("Items Delivered. Retrieval Lock & Verification started.");
          if (newStatus === 'completed') toast.success("Funds successfully Released!");
          if (newStatus === 'disputed') toast.error("Trade has been officially Disputed. Funds are frozen.");
+         if (newStatus === 'cancel_requested') toast.error("A participant requested to mutually cancel the trade.");
+         if (newStatus === 'cancelled') toast.success("Trade Cancelled!");
          fetchTrade();
       });
 
@@ -189,18 +193,37 @@ export default function TradeHub() {
    const handleSendMessage = async (text: string) => {
       try {
          setIsAiProcessing(true);
-         const textLower = text.toLowerCase();
+         let messageContent = text;
+         
+         if (pendingUpload) {
+            const formData = new FormData();
+            formData.append("file", pendingUpload);
+            // Upload to trade room specifically
+            const uploadRes = await fetch(`${API_URL}/api/upload?type=traderoom`, {
+               method: "POST",
+               body: formData
+            });
+            const uploadData = await uploadRes.json();
+            if (uploadData.url) {
+               messageContent = `${uploadData.url} ${text}`.trim();
+               setPendingUpload(null);
+            } else {
+               toast.error("Upload failed.");
+               return;
+            }
+         }
+
+         if (!messageContent.trim()) return;
+
+         const textLower = messageContent.toLowerCase();
          const isHighRisk = textLower.includes("gcash") || textLower.includes("pay me direct")
-            || textLower.includes("facebook")
-            || textLower.includes("blue app")
-            || textLower.includes("tiktok")
-            || textLower.includes("black app")
-            || textLower.includes("orange app");
+            || textLower.includes("facebook") || textLower.includes("blue app")
+            || textLower.includes("tiktok") || textLower.includes("black app") || textLower.includes("orange app");
 
          await fetch(`${API_URL}/api/messages/${tradeId}`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-            body: JSON.stringify({ text, riskLevel: isHighRisk ? "High" : "Safe" })
+            body: JSON.stringify({ text: messageContent, riskLevel: isHighRisk ? "High" : "Safe" })
          });
 
          if (isHighRisk) {
@@ -221,31 +244,11 @@ export default function TradeHub() {
       }
    };
 
-   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-
-      const formData = new FormData();
-      formData.append("file", file);
-
-      try {
-         setIsAiProcessing(true); // Re-use spinner for UI feedback
-         toast.success("Uploading image proof...");
-         const uploadRes = await fetch(`${API_URL}/api/upload`, {
-            method: "POST",
-            body: formData
-         });
-         const data = await uploadRes.json();
-         if (data.url) {
-            handleSendMessage(data.url); // Send the image URL physically as a message
-         } else {
-            toast.error("Upload failed.");
-         }
-      } catch (err) {
-         toast.error("Server error during upload.");
-      } finally {
-         setIsAiProcessing(false);
-      }
+      setPendingUpload(file);
+      e.target.value = ""; // Reset input
    };
 
    const handleAutoRelease = async () => {
@@ -374,15 +377,30 @@ export default function TradeHub() {
       } catch (e) { toast.error("Server error."); } finally { setIsLoading(false); }
    };
 
-   const handleRequestCancellation = async () => {
-      if (!confirm("Your funds are locked in the Vault. Do you want to request the Seller for a Mutual Cancellation?")) return;
+   const confirmRequestCancellation = async () => {
       try {
          setIsLoading(true);
          const res = await fetch(`${API_URL}/api/transactions/${tradeId}/request-cancel`, {
             method: "POST",
             headers: { "Authorization": `Bearer ${token}` }
          });
-         if (res.ok) { toast.success("Mutual Cancellation Request Sent to Seller."); }
+         if (res.ok) { 
+            toast.success("Mutual Cancellation Request Sent to Seller."); 
+            setIsCancelRequestModalOpen(false);
+            fetchTrade();
+         }
+      } catch (e) { } finally { setIsLoading(false); }
+   };
+
+   const handleAcceptCancel = async () => {
+      try {
+         setIsLoading(true);
+         const res = await fetch(`${API_URL}/api/transactions/${tradeId}/accept-cancel`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${token}` }
+         });
+         if (res.ok) { toast.success("Refunded and Cancelled."); fetchTrade(); }
+         else toast.error("Failed to accept cancellation.");
       } catch (e) { } finally { setIsLoading(false); }
    };
 
@@ -742,7 +760,7 @@ export default function TradeHub() {
                         ) : (
                            <div className="flex flex-col gap-3">
                               <p className="text-sm text-text-muted">Funds securely locked in Vault. Waiting for Seller to deliver the {trade?.trade_category === 'Game Account' ? 'credentials' : 'item'}.</p>
-                              <NeonButton variant="ghost" className="w-full mt-2 text-yellow-500 hover:bg-yellow-500/10 border border-yellow-500/50 group" onClick={handleRequestCancellation}>
+                              <NeonButton variant="ghost" className="w-full mt-2 text-yellow-500 hover:bg-yellow-500/10 border border-yellow-500/50 group" onClick={() => setIsCancelRequestModalOpen(true)}>
                                  <XCircle className="w-4 h-4 mr-2" /> Request Mutual Cancellation
                               </NeonButton>
                            </div>
@@ -779,13 +797,22 @@ export default function TradeHub() {
                                     <p className="text-sm text-text-muted">You have 24 hours to inspect the item. If you don't respond, funds release automatically.</p>
 
                                     {trade.account_credentials && (
-                                       <div className="p-4 bg-dark-bg border border-primary/30 rounded-xl w-full">
-                                          <div className="flex items-center gap-2 mb-2">
-                                             <Unlock className="w-4 h-4 text-primary" />
-                                             <p className="text-xs text-primary font-bold uppercase tracking-wider">Revealed Vault Credentials</p>
-                                          </div>
-                                          <div className="bg-dark-panel p-3 rounded border border-dark-border">
-                                             <p className="text-white font-mono text-sm break-all select-all">{trade.account_credentials}</p>
+                                       <div className="p-4 bg-dark-bg border border-primary/30 rounded-xl w-full relative overflow-hidden group">
+                                          <div className="absolute inset-0 bg-primary/5 backdrop-blur-[2px]" />
+                                          <div className="relative z-10">
+                                             <div className="flex items-center gap-2 mb-3">
+                                                <Unlock className="w-5 h-5 text-primary" />
+                                                <p className="text-sm text-primary font-black uppercase tracking-widest leading-none">Vault Unlocked</p>
+                                             </div>
+                                             <div className="bg-[#050608] border border-primary/20 p-4 rounded-lg relative overflow-hidden">
+                                                <div className="absolute top-0 right-0 h-full w-24 bg-gradient-to-l from-[#050608] to-transparent pointer-events-none" />
+                                                <p className="text-primary/90 font-mono text-sm break-all font-bold tracking-tight">
+                                                   {trade.account_credentials}
+                                                </p>
+                                             </div>
+                                             <NeonButton onClick={() => { navigator.clipboard.writeText(trade.account_credentials); toast.success("Credentials Copied to Clipboard"); }} className="w-full mt-3 !py-2.5 text-xs">
+                                                Copy Credentials <Copy className="w-3 h-3 ml-2" />
+                                             </NeonButton>
                                           </div>
                                        </div>
                                     )}
@@ -897,6 +924,46 @@ export default function TradeHub() {
                <div ref={messagesEndRef} />
             </div>
 
+            {/* Cancel Request Banner */}
+            {trade?.cancel_requested_by && currentStep === 3 && (
+               <div className="bg-yellow-500/10 border-t border-yellow-500/30 p-4 shrink-0 flex items-center justify-between">
+                  <div className="flex items-start gap-3">
+                     <ShieldAlert className="w-5 h-5 text-yellow-500 shrink-0 mt-0.5" />
+                     {trade.cancel_requested_by === parseInt(JSON.parse(atob(token?.split('.')[1])).user_id) ? (
+                        <div>
+                           <p className="text-yellow-500 font-bold text-sm">Mutual Cancellation Requested</p>
+                           <p className="text-xs text-yellow-500/70">Waiting for {counterparty?.email.split('@')[0]} to accept.</p>
+                        </div>
+                     ) : (
+                        <div>
+                           <p className="text-yellow-500 font-bold text-sm">Cancel Request Received</p>
+                           <p className="text-xs text-yellow-500/70">Counterparty wishes to dissolve the escrow.</p>
+                        </div>
+                     )}
+                  </div>
+                  {trade.cancel_requested_by !== parseInt(JSON.parse(atob(token?.split('.')[1])).user_id) && (
+                     <NeonButton className="!py-2 !px-4 text-xs bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500 hover:text-black border-yellow-500/50" onClick={handleAcceptCancel}>
+                        Accept Cancellation
+                     </NeonButton>
+                  )}
+               </div>
+            )}
+
+            {/* Pending Upload Banner */}
+            {pendingUpload && (
+               <div className="px-6 py-3 bg-[#0a0d14] border-t border-dark-border flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                     <div className="w-10 h-10 rounded overflow-hidden relative border border-primary/30">
+                        <img src={URL.createObjectURL(pendingUpload)} alt="Preview" className="object-cover w-full h-full" />
+                     </div>
+                     <p className="text-sm font-medium text-white truncate max-w-[150px]">{pendingUpload.name}</p>
+                  </div>
+                  <button onClick={() => setPendingUpload(null)} className="text-text-muted hover:text-white p-1">
+                     <XCircle className="w-4 h-4" />
+                  </button>
+               </div>
+            )}
+
             <div className="p-4 bg-dark-bg border-t border-dark-border shrink-0">
                <div className="relative flex items-center">
                   <input
@@ -904,7 +971,7 @@ export default function TradeHub() {
                      value={inputText}
                      onChange={(e) => setInputText(e.target.value)}
                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && inputText.trim()) {
+                        if (e.key === "Enter" && (inputText.trim() || pendingUpload)) {
                            handleSendMessage(inputText);
                            setInputText("");
                         }
@@ -920,7 +987,7 @@ export default function TradeHub() {
                      </button>
                      <NeonButton
                         className="!py-2 !px-4 !rounded-full"
-                        disabled={!inputText.trim() || currentStep >= 5 || isAiProcessing}
+                        disabled={(!inputText.trim() && !pendingUpload) || currentStep >= 5 || isAiProcessing}
                         onClick={() => {
                            handleSendMessage(inputText);
                            setInputText("");
@@ -972,6 +1039,38 @@ export default function TradeHub() {
                      </NeonButton>
                      <NeonButton className="flex-1 bg-red-500/10 text-red-500 border-red-500 hover:bg-red-500 hover:text-white" onClick={submitDispute} isLoading={isLoading}>
                         Freeze Vault & Dispute
+                     </NeonButton>
+                  </div>
+               </DynamicCard>
+            </div>
+         )}
+
+         {/* CANCEL REQUEST MODAL */}
+         {isCancelRequestModalOpen && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+               <DynamicCard className="w-full max-w-lg bg-[#0a0d14] border border-yellow-500/30 p-6 md:p-8 flex flex-col gap-6" hoverEffect={false}>
+                  <div className="flex items-center gap-3 border-b border-yellow-500/20 pb-4">
+                     <div className="w-12 h-12 rounded-full bg-yellow-500/10 flex items-center justify-center shrink-0">
+                        <ShieldAlert className="w-6 h-6 text-yellow-500 glow-icon" />
+                     </div>
+                     <div>
+                        <h2 className="text-xl font-bold text-white tracking-tight">Request Escrow Dissolution</h2>
+                        <p className="text-xs text-yellow-400 mt-1">This requires mutual agreement.</p>
+                     </div>
+                  </div>
+
+                  <div className="space-y-4 text-sm font-medium">
+                     <p className="text-text-muted">
+                        Your funds are securely locked in the Midly Vault. By submitting this request, the counterparty will be asked to accept the cancellation. If accepted, the Smart Escrow will dissolve and your funds will instantly route back to your wallet.
+                     </p>
+                  </div>
+
+                  <div className="flex gap-3 mt-4 pt-4 border-t border-dark-border">
+                     <NeonButton variant="ghost" className="flex-1 border-white/10 hover:bg-white/5 text-text-muted" onClick={() => setIsCancelRequestModalOpen(false)}>
+                        Go Back
+                     </NeonButton>
+                     <NeonButton className="flex-[1.5] bg-yellow-500/10 text-yellow-500 border-yellow-500 hover:bg-yellow-500 hover:text-black" onClick={confirmRequestCancellation} isLoading={isLoading}>
+                        Submit Cancellation Request
                      </NeonButton>
                   </div>
                </DynamicCard>

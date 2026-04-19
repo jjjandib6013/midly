@@ -8,6 +8,7 @@ import bcrypt from 'bcrypt';
 import { RegisterSchema } from './src/lib/validations';
 import multer from 'multer';
 import path from 'path';
+import fs from 'fs';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { rateLimit } from 'express-rate-limit';
@@ -44,6 +45,10 @@ io.on("connection", (socket) => {
       socket.join(`trade_${tradeId}`);
       console.log(`User connected to trade room: ${tradeId}`);
    });
+   socket.on("join_user", (userId) => {
+      socket.join(`user_${userId}`);
+      console.log(`User connected to notifications channel: ${userId}`);
+   });
 });
 
 const prisma = new PrismaClient();
@@ -60,49 +65,30 @@ app.use(cors({
    allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-// Multer Storage Configuration
-const storage = multer.diskStorage({
-   destination: (req, file, cb) => cb(null, path.join(__dirname, 'uploads/')),
-   filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
-});
-const upload = multer({ storage });
-
-// POST Upload Image Proof
-app.post('/api/upload', upload.single('file'), (req, res): void => {
-   if (!req.file) { res.status(400).json({ error: 'No file uploaded' }); return; }
-   const baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || `http://localhost:${PORT}`;
-   const url = `${baseUrl}/uploads/${req.file.filename}`;
-   res.json({ url });
-});
-
-// Extend Express Request
-declare global {
-   namespace Express {
-      interface Request {
-         user?: any;
-      }
+app.use('/uploads', (req, res, next) => {
+   if (req.path.startsWith('/kyc/') || req.path.startsWith('/private/')) {
+       return res.status(403).json({ error: 'Direct access to protected folders is strictly prohibited due to AML compliance.' });
    }
-}
+   next();
+}, express.static(path.join(__dirname, 'uploads')));
 
 // ==========================================
 // MIDDLEWARE & SECURE RATE LIMITING
 // ==========================================
 
-const authLimiter = rateLimit({
+export const authLimiter = rateLimit({
    windowMs: 15 * 60 * 1000, // 15 minutes
    limit: 10,
    message: { error: 'Too many requests from this IP, please try again after 15 minutes.' }
 });
 
-const aiKycLimiter = rateLimit({
+export const aiKycLimiter = rateLimit({
    windowMs: 15 * 60 * 1000,
    limit: 10,
    message: { error: 'LLM Analysis Limit exceeded. Please try again after 15 minutes.' }
 });
 
-const authenticateJWT = (req: Request, res: Response, next: NextFunction): void => {
+export const authenticateJWT = (req: Request, res: Response, next: NextFunction): void => {
    const authHeader = req.headers.authorization;
    if (authHeader) {
       const token = authHeader.split(' ')[1];
@@ -116,7 +102,7 @@ const authenticateJWT = (req: Request, res: Response, next: NextFunction): void 
    }
 };
 
-const requireKYC = async (req: Request, res: Response, next: NextFunction): Promise<any> => {
+export const requireKYC = async (req: Request, res: Response, next: NextFunction): Promise<any> => {
    try {
       const kyc = await prisma.kycVerification.findUnique({ where: { user_id: req.user.user_id } });
       if (!kyc || kyc.status !== 'verified') {
@@ -127,6 +113,56 @@ const requireKYC = async (req: Request, res: Response, next: NextFunction): Prom
       res.status(500).json({ error: 'Server error checking KYC' });
    }
 };
+
+// Secure endpoint to access KYC files
+app.get('/api/kyc/files/:filename', authenticateJWT, (req, res) => {
+   // Enhanced authorization can be added here
+   const filePath = path.join(__dirname, 'uploads/kyc', req.params.filename);
+   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Not found' });
+   res.sendFile(filePath);
+});
+
+// Multer Storage Configuration
+const storage = multer.diskStorage({
+   destination: (req, file, cb) => {
+       const type = req.query.type as string;
+       let destFolder = 'uploads/';
+       if (type === 'kyc') destFolder = 'uploads/kyc/';
+       else if (type === 'traderoom') destFolder = 'uploads/public/trade_rooms/';
+       else destFolder = 'uploads/general/';
+
+       const fullPath = path.join(__dirname, destFolder);
+       if (!fs.existsSync(fullPath)) fs.mkdirSync(fullPath, { recursive: true });
+       cb(null, fullPath);
+   },
+   filename: (req, file, cb) => {
+       const uniqueId = crypto.randomUUID();
+       const ext = path.extname(file.originalname);
+       cb(null, `${uniqueId}${ext}`);
+   }
+});
+const upload = multer({ storage });
+
+// POST Upload Image Proof
+app.post('/api/upload', upload.single('file'), (req, res): void => {
+   if (!req.file) { res.status(400).json({ error: 'No file uploaded' }); return; }
+   const type = req.query.type as string;
+   const destFolder = type === 'kyc' ? 'kyc' : (type === 'traderoom' ? 'public/trade_rooms' : 'general');
+   const baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || `http://localhost:${PORT}`;
+   const url = `${baseUrl}/uploads/${destFolder}/${req.file.filename}`;
+   res.json({ url });
+});
+
+// Extend Express Request
+declare global {
+   namespace Express {
+      interface Request {
+         user?: any;
+      }
+   }
+}
+
+// (Middlewares moved up for initialization)
 
 // ==========================================
 // AUDIT LOGGING UTILITY
@@ -443,17 +479,42 @@ app.get('/api/user/wallet', authenticateJWT, async (req, res): Promise<any> => {
    }
 });
 
+// GET Wallet History
+app.get('/api/wallet/history', authenticateJWT, async (req, res): Promise<any> => {
+   try {
+      const transactions = await prisma.walletTransaction.findMany({
+         where: { user_id: req.user.user_id },
+         orderBy: { created_at: 'desc' }
+      });
+      res.json({ transactions });
+   } catch (error: any) {
+      res.status(500).json({ error: 'Server error', msg: error.message });
+   }
+});
+
 // POST Deposit Wallet
 app.post('/api/wallet/deposit', authenticateJWT, async (req, res): Promise<any> => {
    try {
       const amount = Number(req.body.amount);
       if (amount <= 0 || isNaN(amount)) return res.status(400).json({ error: 'Invalid amount' });
 
-      const user = await prisma.user.update({
-         where: { user_id: req.user.user_id },
-         data: { wallet_balance: { increment: amount } }
+      const userRes = await prisma.$transaction(async (tx) => {
+         const user = await tx.user.update({
+            where: { user_id: req.user.user_id },
+            data: { wallet_balance: { increment: amount } }
+         });
+         await tx.walletTransaction.create({
+            data: {
+               user_id: user.user_id,
+               type: 'deposit',
+               amount: amount,
+               balance: user.wallet_balance,
+               description: 'Fiat Deposit'
+            }
+         });
+         return user;
       });
-      res.json({ wallet_balance: user.wallet_balance });
+      res.json({ wallet_balance: userRes.wallet_balance });
    } catch (e) {
       res.status(500).json({ error: 'Server error' });
    }
@@ -468,10 +529,20 @@ app.post('/api/wallet/withdraw', authenticateJWT, requireKYC, async (req, res): 
       const userRes = await prisma.$transaction(async (tx) => {
          const usr = await tx.user.findUnique({ where: { user_id: req.user.user_id } });
          if (!usr || Number(usr.wallet_balance) < amount) throw new Error("Insufficient PHP balance");
-         return await tx.user.update({
+         const updatedUser = await tx.user.update({
             where: { user_id: req.user.user_id },
             data: { wallet_balance: { decrement: amount } }
          });
+         await tx.walletTransaction.create({
+            data: {
+               user_id: usr.user_id,
+               type: 'withdrawal',
+               amount: -amount,
+               balance: updatedUser.wallet_balance,
+               description: 'Fiat Withdrawal'
+            }
+         });
+         return updatedUser;
       });
 
       res.json({ wallet_balance: userRes.wallet_balance });
@@ -775,6 +846,17 @@ app.get('/api/notifications', authenticateJWT, async (req, res): Promise<any> =>
    } catch (e) { res.status(500).json({ error: 'Server err' }); }
 });
 
+// PUT Mark Notifications Read
+app.put('/api/notifications/mark-read', authenticateJWT, async (req, res): Promise<any> => {
+   try {
+      await prisma.notification.updateMany({
+         where: { user_id: req.user.user_id, is_read: false },
+         data: { is_read: true }
+      });
+      res.json({ success: true });
+   } catch (e) { res.status(500).json({ error: 'Server err' }); }
+});
+
 // PUT Accept Escrow Invite (Hardened: counterparty-only, idempotent, audit-logged)
 app.put('/api/transactions/:id/accept-invite', authenticateJWT, async (req, res): Promise<any> => {
    try {
@@ -899,9 +981,12 @@ app.put('/api/transactions/:id/progress', authenticateJWT, async (req, res): Pro
             }
 
             await prisma.$transaction(async (tx) => {
-               await tx.user.update({
+               const updatedBuyer = await tx.user.update({
                   where: { user_id: trade.buyer_id },
                   data: { wallet_balance: { decrement: Number(trade.total_amount) } }
+               });
+               await tx.walletTransaction.create({
+                  data: { user_id: trade.buyer_id, type: 'escrow_lock', amount: -Number(trade.total_amount), balance: updatedBuyer.wallet_balance, description: `Escrow Lock - Trade #${tradeId}` }
                });
 
                await tx.payment.create({
@@ -1012,9 +1097,12 @@ app.put('/api/transactions/:id/progress', authenticateJWT, async (req, res): Pro
 
             // 3. Increment seller wallet by Base Price (the Total Amount - Service Fee)
             const amountToReceive = Number(trade.agreed_price);
-            await tx.user.update({
+            const updatedSeller = await tx.user.update({
                where: { user_id: trade.seller_id },
                data: { wallet_balance: { increment: amountToReceive } }
+            });
+            await tx.walletTransaction.create({
+               data: { user_id: trade.seller_id, type: 'escrow_release', amount: amountToReceive, balance: updatedSeller.wallet_balance, description: `Escrow Release - Trade #${tradeId}` }
             });
          });
 
@@ -1126,9 +1214,12 @@ app.post('/api/transactions/:id/auto-release', authenticateJWT, async (req, res)
 
          // Increment seller wallet
          const amountToReceive = Number(trade.agreed_price);
-         await tx.user.update({
+         const updatedSeller = await tx.user.update({
             where: { user_id: trade.seller_id },
             data: { wallet_balance: { increment: amountToReceive } }
+         });
+         await tx.walletTransaction.create({
+            data: { user_id: trade.seller_id, type: 'escrow_release', amount: amountToReceive, balance: updatedSeller.wallet_balance, description: `Escrow Auto-Release - Trade #${tradeId}` }
          });
 
          // System Log
@@ -1243,11 +1334,13 @@ app.post('/api/admin/disputes/:txId/resolve', authenticateJWT, async (req, res):
          if (action === 'REFUND_BUYER') {
             await tx.transaction.update({ where: { transaction_id: txId }, data: { status: 'refunded' } });
             await tx.payment.update({ where: { payment_id: trade.payment!.payment_id }, data: { vault_status: 'refunded', refund_date: new Date() } });
-            await tx.user.update({ where: { user_id: trade.buyer_id }, data: { wallet_balance: { increment: amount } } });
+            const updatedBuyer = await tx.user.update({ where: { user_id: trade.buyer_id }, data: { wallet_balance: { increment: amount } } });
+            await tx.walletTransaction.create({ data: { user_id: trade.buyer_id, type: 'escrow_refund', amount: amount, balance: updatedBuyer.wallet_balance, description: `Admin Escrow Refund - Trade #${txId}` }});
          } else if (action === 'FORWARD_TO_SELLER') {
             await tx.transaction.update({ where: { transaction_id: txId }, data: { status: 'completed' } });
             await tx.payment.update({ where: { payment_id: trade.payment!.payment_id }, data: { vault_status: 'released', release_date: new Date() } });
-            await tx.user.update({ where: { user_id: trade.seller_id }, data: { wallet_balance: { increment: baseAmount } } });
+            const updatedSeller = await tx.user.update({ where: { user_id: trade.seller_id }, data: { wallet_balance: { increment: baseAmount } } });
+            await tx.walletTransaction.create({ data: { user_id: trade.seller_id, type: 'escrow_release', amount: baseAmount, balance: updatedSeller.wallet_balance, description: `Admin Escrow Release - Trade #${txId}` }});
          }
 
          await tx.message.create({
@@ -1646,18 +1739,70 @@ app.post('/api/transactions/:id/request-cancel', authenticateJWT, async (req, re
       if (trade.buyer_id !== req.user.user_id && trade.seller_id !== req.user.user_id) return res.status(403).json({ error: 'Forbidden.' });
       if (trade.status !== 'active') return res.status(400).json({ error: 'Mutual Cancellation applies to the Active Vault phase.' });
 
-      await prisma.message.create({
-         data: {
-            transaction_id: tradeId,
-            sender_id: req.user.user_id,
-            message_text: `[SYSTEM WARNING: CANCELLATION REQUESTED]\nThe Buyer wants to back out and withdraw their locked funds from the Smart Vault. Seller, you must 'Accept' to instantly refund the buyer, or 'Deny & Deliver' if you are actively preparing the item.`,
-            is_system_generated: true,
-            risk_level: 'Medium'
-         }
+      await prisma.$transaction(async (tx) => {
+         await tx.transaction.update({
+            where: { transaction_id: tradeId },
+            data: { cancel_requested_by: req.user.user_id }
+         });
+
+         await tx.message.create({
+            data: {
+               transaction_id: tradeId,
+               sender_id: req.user.user_id,
+               message_text: `[SYSTEM WARNING: CANCELLATION REQUESTED]\nA participant wants to back out and withdraw locked funds from the Smart Vault. The counterparty must Accept to instantly refund the buyer.`,
+               is_system_generated: true,
+               risk_level: 'Medium'
+            }
+         });
       });
 
-      io.to(`trade_${tradeId}`).emit('cancel_requested');
+      io.to(`trade_${tradeId}`).emit('trade_updated', 'cancel_requested');
       res.json({ status: 'REQUEST_LOGGED' });
+   } catch (error) {
+      res.status(500).json({ error: 'Server error' });
+   }
+});
+
+// POST Accept Mutual Cancellation (Post-Vault)
+app.post('/api/transactions/:id/accept-cancel', authenticateJWT, async (req, res): Promise<any> => {
+   try {
+      const tradeId = parseInt(req.params.id as string);
+      const trade = await prisma.transaction.findUnique({ where: { transaction_id: tradeId }, include: { payment: true } });
+
+      if (!trade || !trade.payment) return res.status(404).json({ error: 'Trade not found.' });
+      if (trade.buyer_id !== req.user.user_id && trade.seller_id !== req.user.user_id) return res.status(403).json({ error: 'Forbidden.' });
+      if (!trade.cancel_requested_by || trade.cancel_requested_by === req.user.user_id) return res.status(400).json({ error: 'You cannot accept your own request or no request exists.' });
+
+      await prisma.$transaction(async (tx) => {
+         await tx.transaction.update({
+            where: { transaction_id: tradeId },
+            data: { status: 'cancelled', cancel_requested_by: null } // Refunded/Cancelled
+         });
+         await tx.payment.update({
+            where: { payment_id: trade.payment!.payment_id },
+            data: { vault_status: 'refunded', refund_date: new Date() }
+         });
+         const amount = Number(trade.total_amount);
+         const updatedBuyer = await tx.user.update({
+            where: { user_id: trade.buyer_id },
+            data: { wallet_balance: { increment: amount } }
+         });
+         await tx.walletTransaction.create({
+            data: { user_id: trade.buyer_id, type: 'escrow_refund', amount: amount, balance: updatedBuyer.wallet_balance, description: `Mutual Cancellation Refund - Trade #${tradeId}` }
+         });
+         await tx.message.create({
+            data: {
+               transaction_id: tradeId,
+               sender_id: req.user.user_id,
+               message_text: `[SYSTEM ALERT] Mutual Cancellation Accepted. Escrow dissolved dynamically and ₱${amount.toLocaleString()} was immediately routed back to the Buyer's wallet in full.`,
+               is_system_generated: true,
+               risk_level: 'Safe'
+            }
+         });
+      });
+
+      io.to(`trade_${tradeId}`).emit('trade_updated', 'cancelled');
+      res.json({ status: 'CANCELLED' });
    } catch (error) {
       res.status(500).json({ error: 'Server error' });
    }

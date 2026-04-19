@@ -44,11 +44,19 @@ export default function Navbar() {
 
   useEffect(() => {
     setIsAuthenticated(status === "authenticated");
+    let socket: any;
 
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
         if (payload.role === 'admin') setIsAdmin(true);
+        const userId = payload.user_id;
+
+        socket = io(API_URL, { transports: ['websocket', 'polling'], withCredentials: true });
+        socket.emit("join_user", userId);
+        socket.on("new_notification", () => {
+           fetchNotifs();
+        });
       } catch (e) { }
       fetchNotifs();
     }
@@ -58,6 +66,10 @@ export default function Navbar() {
       { y: -100, opacity: 0 },
       { y: 0, opacity: 1, duration: 1, ease: "power4.out", delay: 0.2 }
     );
+    
+    return () => {
+       if (socket) socket.disconnect();
+    }
   }, [pathname, status, token]);
 
   const handleAcceptInvite = async (tradeId: number) => {
@@ -105,6 +117,15 @@ export default function Navbar() {
   // REG-03: Close notification panel on click outside
   useEffect(() => {
     if (!showNotifs) return;
+
+    if (hasNewNotifs) {
+       fetch(`${API_URL}/api/notifications/mark-read`, {
+          method: 'PUT',
+          headers: { "Authorization": `Bearer ${token}` }
+       });
+       setHasNewNotifs(false);
+    }
+
     const handleClickOutside = (e: MouseEvent) => {
       if (notifMenuRef.current && !notifMenuRef.current.contains(e.target as Node)) {
         setShowNotifs(false);

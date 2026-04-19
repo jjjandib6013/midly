@@ -1,10 +1,7 @@
 "use client";
 import { useSession } from 'next-auth/react';
-
 import { useEffect, useState } from "react";
-import { ShieldAlert, Activity, CheckCircle, Search, FileText, Users, Settings, Database, Server, Clock, Lock, Globe, Power, Key } from "lucide-react";
-import NeonButton from "@/components/ui/NeonButton";
-import DynamicCard from "@/components/ui/DynamicCard";
+import { ShieldAlert, Activity, CheckCircle, Search, FileText, Users, Settings, Server, Clock, Lock, Globe, Power, Key, ChevronRight, Ban, Check, ExternalLink, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "@/lib/api";
 
@@ -25,40 +22,43 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [feeInput, setFeeInput] = useState("5.0");
+  const [isLoading, setIsLoading] = useState(true);
   
   const loadData = async () => {
     if (!token) return;
+    setIsLoading(true);
     try {
-        const metRes = await fetch(`${API_URL}/api/admin/metrics`, { headers: { "Authorization": `Bearer ${token}` } });
-        if(metRes.ok) setMetrics(await metRes.json());
+        const [metRes, setRes, disRes, kycRes, usrRes] = await Promise.all([
+           fetch(`${API_URL}/api/admin/metrics`, { headers: { "Authorization": `Bearer ${token}` } }),
+           fetch(`${API_URL}/api/admin/settings`, { headers: { "Authorization": `Bearer ${token}` } }),
+           fetch(`${API_URL}/api/admin/disputes`, { headers: { "Authorization": `Bearer ${token}` } }),
+           fetch(`${API_URL}/api/admin/kyc`, { headers: { "Authorization": `Bearer ${token}` } }),
+           fetch(`${API_URL}/api/admin/users`, { headers: { "Authorization": `Bearer ${token}` } })
+        ]);
 
-        const setRes = await fetch(`${API_URL}/api/admin/settings`, { headers: { "Authorization": `Bearer ${token}` } });
+        if(metRes.ok) setMetrics(await metRes.json());
         if(setRes.ok) {
            const d = await setRes.json();
            setPlatformSettings(d.settings);
            setFeeInput((Number(d.settings.base_fee) * 100).toFixed(1));
         }
-
-        const disRes = await fetch(`${API_URL}/api/admin/disputes`, { headers: { "Authorization": `Bearer ${token}` } });
         if(disRes.ok) {
            const d = await disRes.json();
            if(d.disputes) setDisputes(d.disputes);
         }
-
-        const kycRes = await fetch(`${API_URL}/api/admin/kyc`, { headers: { "Authorization": `Bearer ${token}` } });
         if(kycRes.ok) {
             const d = await kycRes.json();
             if(d.kycs) setKycs(d.kycs);
         }
-
-        const usrRes = await fetch(`${API_URL}/api/admin/users`, { headers: { "Authorization": `Bearer ${token}` } });
         if(usrRes.ok) {
            const d = await usrRes.json();
            if(d.users) setUsers(d.users);
         }
-
     } catch (e) {
         console.error("Error loading admin data", e);
+        toast.error("Failed to sync dashboard data.");
+    } finally {
+        setIsLoading(false);
     }
   };
   
@@ -79,7 +79,7 @@ export default function AdminDashboard() {
   }, [token, session]);
 
   const handleResolve = async (txId: number, action: 'REFUND_BUYER' | 'FORWARD_TO_SELLER') => {
-      if (!confirm(`Are you absolutely sure you want to FORCE ${action}? This manipulates the global vault database instantly.`)) return;
+      if (!confirm(`Are you sure you want to resolve this dispute? This action will immediately transfer the vault funds and cannot be undone.`)) return;
       try {
          const res = await fetch(`${API_URL}/api/admin/disputes/${txId}/resolve`, {
             method: "POST",
@@ -87,10 +87,10 @@ export default function AdminDashboard() {
             body: JSON.stringify({ action })
          });
          if (res.ok) {
-            toast.success("Mediation successful! Vault distribution executed.");
+            toast.success("Dispute resolved successfully.");
             loadData();
          } else {
-            toast.error("Failed to execute admin logic.");
+            toast.error("Failed to resolve dispute.");
          }
       } catch(e) { toast.error("Server API Error"); }
   };
@@ -103,7 +103,7 @@ export default function AdminDashboard() {
             body: JSON.stringify({ status })
          });
          if (res.ok) {
-            toast.success(`KYC ${status} successfully.`);
+            toast.success(`KYC application ${status}.`);
             loadData();
          } else {
             toast.error("Failed to update KYC status.");
@@ -112,7 +112,7 @@ export default function AdminDashboard() {
   };
 
   const handleToggleBan = async (userId: number, currentBanState: boolean) => {
-      if (!confirm(`Are you sure you want to ${currentBanState ? 'UNBAN' : 'BAN'} this user globally?`)) return;
+      if (!confirm(`Are you sure you want to ${currentBanState ? 'unban' : 'suspend'} this user account?`)) return;
       try {
          const res = await fetch(`${API_URL}/api/admin/users/${userId}/ban`, {
             method: "POST",
@@ -120,10 +120,10 @@ export default function AdminDashboard() {
             body: JSON.stringify({ is_banned: !currentBanState })
          });
          if (res.ok) {
-            toast.success(`User successfully ${currentBanState ? 'unbanned' : 'banned'}.`);
+            toast.success(`User account successfully ${currentBanState ? 'unbanned' : 'suspended'}.`);
             loadData();
          } else {
-            toast.error("Failed to modify ban state.");
+            toast.error("Failed to modify account state.");
          }
       } catch(e) { toast.error("Server API Error"); }
   };
@@ -131,7 +131,7 @@ export default function AdminDashboard() {
   const handleUpdateFee = async () => {
      try {
          const rawInput = parseFloat(feeInput);
-         if (isNaN(rawInput)) return toast.error("Invalid number.");
+         if (isNaN(rawInput)) return toast.error("Invalid number provided for fee.");
          const decimalFee = rawInput / 100;
          const res = await fetch(`${API_URL}/api/admin/settings`, {
             method: "POST",
@@ -139,19 +139,19 @@ export default function AdminDashboard() {
             body: JSON.stringify({ base_fee: decimalFee })
          });
          if (res.ok) {
-            toast.success("Platform Settings Global Override Enacted.");
+            toast.success("Platform settings updated successfully.");
             loadData();
          } else {
             const err = await res.json();
-            toast.error(err.error || "Failed to update settings");
+            toast.error(err.error || "Failed to update settings.");
          }
      } catch (e) { toast.error("Server API Error"); }
   }
 
 
   if (!isAdmin) return (
-     <div className="flex-1 flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+     <div className="flex-1 flex items-center justify-center min-h-[60vh] bg-zinc-950">
+        <RefreshCw className="w-6 h-6 text-zinc-500 animate-spin" />
      </div>
   );
 
@@ -161,82 +161,104 @@ export default function AdminDashboard() {
   );
 
   return (
-    <div className="flex min-h-screen bg-black">
-      {/* Sidebar Command Center */}
-      <div className="w-64 bg-[#0a0a0c] border-r border-dark-border flex flex-col pt-8 shrink-0 relative overflow-hidden">
-        {/* Glow backdrop */}
-        <div className="absolute top-0 left-0 w-full h-64 bg-primary/5 blur-[100px] pointer-events-none"></div>
-
-        <div className="px-6 mb-10 flex items-center gap-3 relative z-10">
-           <Database className="w-8 h-8 text-primary glow-icon" />
+    <div className="flex min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-zinc-800">
+      {/* Sidebar Navigation */}
+      <div className="w-64 bg-zinc-950 border-r border-zinc-800 flex flex-col pt-6 shrink-0 z-10">
+        <div className="px-6 mb-8 flex items-center gap-3">
+           <div className="w-8 h-8 rounded-md bg-zinc-100 text-zinc-950 flex items-center justify-center font-bold">
+              M
+           </div>
            <div className="flex flex-col">
-              <span className="text-white font-black tracking-widest text-lg">MIDLY OS</span>
-              <span className="text-primary text-[10px] uppercase font-bold tracking-widest">Admin Terminal</span>
+              <span className="text-zinc-100 font-semibold text-sm">Midly</span>
+              <span className="text-zinc-500 text-xs">Administration</span>
            </div>
         </div>
 
-        <nav className="flex-1 px-4 space-y-2 relative z-10">
+        <nav className="flex-1 px-3 space-y-1">
            {[
-              { id: "OVERVIEW", icon: Activity, label: "System Overview" },
-              { id: "DISPUTES", icon: ShieldAlert, label: "Disputes Queue", badge: disputes.length > 0 ? disputes.length : null, badgeColor: "bg-red-500" },
-              { id: "KYC", icon: FileText, label: "KYC Fallback", badge: kycs.length > 0 ? kycs.length : null, badgeColor: "bg-yellow-500" },
-              { id: "USERS", icon: Users, label: "Global Users" },
-              { id: "SETTINGS", icon: Settings, label: "Platform Parameters" },
+              { id: "OVERVIEW", icon: Activity, label: "Overview" },
+              { id: "DISPUTES", icon: ShieldAlert, label: "Disputes", badge: disputes.length > 0 ? disputes.length : null },
+              { id: "KYC", icon: FileText, label: "Identity Verification", badge: kycs.length > 0 ? kycs.length : null },
+              { id: "USERS", icon: Users, label: "Users" },
+              { id: "SETTINGS", icon: Settings, label: "Settings" },
            ].map(tab => (
               <button 
                  key={tab.id}
                  onClick={() => setActiveTab(tab.id as TabState)}
-                 className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all ${activeTab === tab.id ? 'bg-primary/10 border border-primary/30 text-white shadow-[0_0_15px_rgba(255,215,0,0.1)]' : 'text-text-muted hover:bg-dark-panel hover:text-white border border-transparent'}`}
+                 className={`w-full flex items-center justify-between px-3 py-2 text-sm rounded-md transition-colors ${activeTab === tab.id ? 'bg-zinc-800 text-zinc-100 font-medium' : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200'}`}
               >
                  <div className="flex items-center gap-3">
-                    <tab.icon className={`w-5 h-5 ${activeTab === tab.id ? 'text-primary' : 'text-white/40'}`} />
-                    <span className="font-semibold text-sm">{tab.label}</span>
+                    <tab.icon className={`w-4 h-4 ${activeTab === tab.id ? 'text-zinc-100' : 'text-zinc-400'}`} />
+                    <span>{tab.label}</span>
                  </div>
                  {tab.badge && (
-                    <span className={`${tab.badgeColor} text-black font-black text-[10px] w-5 h-5 flex items-center justify-center rounded-full shadow-[0_0_10px_rgba(0,0,0,0.5)]`}>
+                    <span className="bg-zinc-100 text-zinc-900 text-[10px] font-bold px-2 py-0.5 rounded-full">
                        {tab.badge}
                     </span>
                  )}
               </button>
            ))}
         </nav>
+        
+        <div className="p-4 border-t border-zinc-800">
+           <div className="flex items-center gap-2 text-xs text-zinc-500">
+              <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+              Systems Operational
+           </div>
+        </div>
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 bg-[#030407] overflow-y-auto px-10 py-10">
-         <div className="max-w-6xl mx-auto space-y-8">
+      <div className="flex-1 overflow-y-auto px-8 py-8 lg:px-12">
+         <div className="max-w-5xl mx-auto space-y-8">
 
             {/* TAB: OVERVIEW */}
             {activeTab === "OVERVIEW" && (
-               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  <header className="mb-10">
-                     <h1 className="text-3xl font-bold text-white mb-2 font-display">System Overview</h1>
-                     <p className="text-text-muted">High-altitude telemetry of the Midly Escrow Infrastructure.</p>
+               <div className="animate-in fade-in duration-300">
+                  <header className="mb-8">
+                     <h1 className="text-2xl font-semibold text-zinc-100 mb-1">Dashboard Overview</h1>
+                     <p className="text-sm text-zinc-400">System metrics, active operations, and overall platform volume.</p>
                   </header>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-                     <div className="p-6 rounded-2xl bg-gradient-to-br from-[#0a0a0c] to-[#0d0d12] border border-white/5 relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><Lock className="w-16 h-16 text-primary"/></div>
-                        <h3 className="text-text-muted text-sm font-bold uppercase tracking-wider mb-2">Locked Vault Capital</h3>
-                        <p className="text-4xl text-white font-light font-display">₱{Number(metrics.lockedCapital).toLocaleString()}</p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                     <div className="p-5 rounded-xl bg-zinc-900/50 border border-zinc-800 flex flex-col">
+                        <div className="flex justify-between items-start mb-4">
+                           <h3 className="text-zinc-400 text-sm font-medium">Escrow Capital</h3>
+                           <Lock className="w-4 h-4 text-zinc-500"/>
+                        </div>
+                        <p className="text-3xl text-zinc-100 font-semibold tracking-tight">₱{Number(metrics.lockedCapital).toLocaleString()}</p>
                      </div>
-                     <div className="p-6 rounded-2xl bg-gradient-to-br from-[#0a0a0c] to-[#0d0d12] border border-white/5 relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><Activity className="w-16 h-16 text-blue-500"/></div>
-                        <h3 className="text-text-muted text-sm font-bold uppercase tracking-wider mb-2">Total Executed Trades</h3>
-                        <p className="text-4xl text-white font-light font-display">{metrics.tradesCount}</p>
+                     <div className="p-5 rounded-xl bg-zinc-900/50 border border-zinc-800 flex flex-col">
+                        <div className="flex justify-between items-start mb-4">
+                           <h3 className="text-zinc-400 text-sm font-medium">Total Trades</h3>
+                           <Activity className="w-4 h-4 text-zinc-500"/>
+                        </div>
+                        <p className="text-3xl text-zinc-100 font-semibold tracking-tight">{metrics.tradesCount}</p>
                      </div>
-                     <div className="p-6 rounded-2xl bg-gradient-to-br from-[#0a0a0c] to-[#0d0d12] border border-white/5 relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><Globe className="w-16 h-16 text-emerald-500"/></div>
-                        <h3 className="text-text-muted text-sm font-bold uppercase tracking-wider mb-2">Active Orbiting Users</h3>
-                        <p className="text-4xl text-white font-light font-display">{metrics.activeUsers}</p>
+                     <div className="p-5 rounded-xl bg-zinc-900/50 border border-zinc-800 flex flex-col">
+                        <div className="flex justify-between items-start mb-4">
+                           <h3 className="text-zinc-400 text-sm font-medium">Active Users</h3>
+                           <Users className="w-4 h-4 text-zinc-500"/>
+                        </div>
+                        <p className="text-3xl text-zinc-100 font-semibold tracking-tight">{metrics.activeUsers}</p>
                      </div>
                   </div>
                   
-                  <div className="flex items-center justify-center p-20 border border-white/5 rounded-2xl bg-dark-bg/50">
-                     <div className="text-center flex flex-col items-center">
-                        <Server className="w-12 h-12 text-primary/30 mb-4" />
-                        <h2 className="text-xl font-bold text-white mb-2">All Systems Operational</h2>
-                        <p className="text-text-muted">Node.js and WebSockets are connected via standard P2P relay.</p>
+                  <div className="p-6 border border-zinc-800 rounded-xl bg-zinc-900/30">
+                     <h3 className="text-zinc-100 text-sm font-medium mb-4">System Status</h3>
+                     <div className="flex items-center gap-4 text-sm text-zinc-400">
+                        <div className="flex items-center gap-2">
+                           <CheckCircle className="w-4 h-4 text-emerald-500" />
+                           <span>Database Connected</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                           <CheckCircle className="w-4 h-4 text-emerald-500" />
+                           <span>WebSocket Operational</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                           <CheckCircle className="w-4 h-4 text-emerald-500" />
+                           <span>API Responding properly</span>
+                        </div>
                      </div>
                   </div>
                </div>
@@ -244,74 +266,79 @@ export default function AdminDashboard() {
 
             {/* TAB: DISPUTES */}
             {activeTab === "DISPUTES" && (
-               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  <header className="mb-10 flex justify-between items-center">
-                     <div>
-                        <h1 className="text-3xl font-bold text-white mb-2 font-display flex items-center gap-3">
-                           <ShieldAlert className="w-8 h-8 text-red-500" /> Dispute Resolution Queue
-                        </h1>
-                        <p className="text-text-muted">Review immutable chat logs and mediate stalemated escrows.</p>
-                     </div>
+               <div className="animate-in fade-in duration-300">
+                  <header className="mb-8">
+                     <h1 className="text-2xl font-semibold text-zinc-100 mb-1">Disputes</h1>
+                     <p className="text-sm text-zinc-400">Review mediation requests and distribute funds based on transaction evidence.</p>
                   </header>
 
                   {disputes.length === 0 ? (
-                     <div className="text-center py-20 border border-dark-border/50 border-dashed rounded-2xl flex flex-col items-center bg-[#0a0a0c]/50">
-                        <CheckCircle className="w-12 h-12 text-emerald-500/50 mb-4" />
-                        <h3 className="text-xl text-white font-bold mb-2">Zero Active Disputes</h3>
-                        <p className="text-text-muted">The platform is running smoothly. Nothing to mediate.</p>
+                     <div className="text-center py-16 border border-zinc-800 rounded-xl flex flex-col items-center bg-zinc-900/10">
+                        <ShieldAlert className="w-8 h-8 text-zinc-600 mb-3" />
+                        <h3 className="text-zinc-200 font-medium text-sm">No Active Disputes</h3>
+                        <p className="text-xs text-zinc-500 mt-1">All escrow transactions are resolving smoothly.</p>
                      </div>
                   ) : (
                      <div className="space-y-6">
                         {disputes.map(d => (
-                           <div key={d.dispute_id} className="border border-red-500/30 rounded-2xl bg-[#0a0a0c] flex flex-col overflow-hidden shadow-lg shadow-red-500/5">
-                              {/* Header */}
-                              <div className="p-6 border-b border-white/5 flex justify-between items-start bg-red-500/5">
+                           <div key={d.dispute_id} className="border border-zinc-800 rounded-xl bg-zinc-900/30 overflow-hidden">
+                              <div className="p-5 border-b border-zinc-800 flex justify-between items-start bg-zinc-900/50">
                                  <div>
-                                    <div className="flex items-center gap-3 mb-2">
-                                       <span className="bg-red-500 text-white font-black px-3 py-1 rounded-sm text-[10px] uppercase tracking-widest">CRITICAL FLAG</span>
-                                       <span className="text-white font-bold text-lg font-display">Trade #{d.transaction_id}</span>
-                                       <a href={`/trade/${d.transaction_id}`} target="_blank" rel="noreferrer" className="text-primary hover:underline text-sm ml-2 flex items-center gap-1">View Live Hub ↗</a>
+                                    <div className="flex items-center gap-3 mb-1">
+                                       <span className="text-zinc-100 font-medium text-base">Transaction #{d.transaction_id}</span>
+                                       <a href={`/trade/${d.transaction_id}`} target="_blank" rel="noreferrer" className="text-zinc-400 hover:text-zinc-200 flex items-center gap-1 text-xs">View Hub <ExternalLink className="w-3 h-3"/></a>
                                     </div>
-                                    <p className="text-white bg-black/50 p-4 rounded-xl border border-white/10 italic text-sm mt-4">"{d.description}"</p>
+                                    <p className="text-sm text-zinc-400 mt-2">Reason: <span className="text-zinc-300 italic">"{d.description}"</span></p>
                                  </div>
                                  <div className="text-right">
-                                    <p className="text-[10px] text-text-muted uppercase font-bold tracking-wider mb-1">Locked Value</p>
-                                    <p className="text-2xl text-primary font-bold font-display">₱{Number(d.transaction?.total_amount || 0).toLocaleString()}</p>
+                                    <p className="text-xs text-zinc-500 font-medium mb-1">Escrow Value</p>
+                                    <p className="text-lg text-zinc-100 font-semibold tracking-tight">₱{Number(d.transaction?.total_amount || 0).toLocaleString()}</p>
                                  </div>
                               </div>
                               
-                              {/* Evidence Board */}
-                              <div className="p-6 bg-black flex gap-6 flex-col lg:flex-row">
-                                 <div className="lg:w-2/3 border border-dark-border rounded-xl bg-[#050508] p-5 flex flex-col h-80">
-                                    <h4 className="text-white text-xs font-bold uppercase tracking-wider mb-4 flex items-center gap-2"><Clock className="w-4 h-4 text-text-muted"/> Immutable Chat Evidence Logs</h4>
-                                    <div className="space-y-3 overflow-y-auto pr-4 custom-scrollbar flex-1">
+                              <div className="p-5 flex gap-6 flex-col lg:flex-row">
+                                 <div className="lg:w-2/3 border border-zinc-800 rounded-lg bg-zinc-950 p-4 flex flex-col h-72">
+                                    <h4 className="text-zinc-400 text-xs font-semibold uppercase tracking-wider mb-3 flex items-center gap-2"><Clock className="w-3 h-3"/> Activity Logs</h4>
+                                    <div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar flex-1">
                                        {d.transaction?.messages && d.transaction.messages.length > 0 ? (
                                           d.transaction.messages.map((msg: any) => (
-                                             <div key={msg.message_id} className={`text-sm p-3 rounded-xl border ${msg.is_system_generated ? 'bg-primary/5 text-primary border-primary/20 text-center text-xs ml-auto mr-auto max-w-[80%]' : (msg.sender_id === d.transaction.buyer_id ? 'bg-blue-500/5 text-blue-100 border-blue-500/20 mr-12' : 'bg-red-500/5 text-red-100 border-red-500/20 ml-12')}`}>
-                                                <div className="font-black text-[10px] uppercase opacity-50 mb-1 flex justify-between">
-                                                   <span>{msg.is_system_generated ? 'SYSTEM LOG' : (msg.sender_id === d.transaction.buyer_id ? 'BUYER ALIAS' : 'SELLER ALIAS')}</span>
+                                             <div key={msg.message_id} className={`text-sm p-3 rounded-lg border ${msg.is_system_generated ? 'bg-zinc-900 text-zinc-400 border-zinc-800 text-center text-xs mx-auto max-w-[80%]' : (msg.sender_id === d.transaction.buyer_id ? 'bg-zinc-800/40 text-zinc-200 border-zinc-700/50 mr-8' : 'bg-zinc-800/80 text-zinc-100 border-zinc-700 ml-8')}`}>
+                                                <div className="text-[10px] uppercase text-zinc-500 font-medium mb-1 flex justify-between">
+                                                   <span>{msg.is_system_generated ? 'System' : (msg.sender_id === d.transaction.buyer_id ? 'Buyer' : 'Seller')}</span>
                                                    <span>{new Date(msg.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                                 </div>
-                                                <span className={`${msg.is_system_generated ? 'italic' : ''}`}>{msg.message_text}</span>
+                                                <span>{msg.message_text}</span>
                                              </div>
                                           ))
                                        ) : (
-                                          <div className="flex-1 flex items-center justify-center text-xs text-white/30 italic">No chat messages recorded.</div>
+                                          <div className="flex-1 flex items-center justify-center text-xs text-zinc-600">No chat history recorded.</div>
                                        )}
                                     </div>
                                  </div>
                                  
-                                 {/* Execution Controls */}
-                                 <div className="lg:w-1/3 flex flex-col justify-center gap-4 bg-dark-panel p-6 rounded-xl border border-white/5">
-                                    <h4 className="text-white text-xs font-bold uppercase tracking-wider mb-2 text-center text-text-muted">Mediation Execution</h4>
-                                    <p className="text-xs text-center text-white/40 mb-4 px-2">Analyze the chat logs thoroughly. Overriding the vault relies solely on your ultimate human discretion.</p>
-                                    <NeonButton onClick={() => handleResolve(d.transaction_id, 'FORWARD_TO_SELLER')} className="bg-emerald-500/10 border-emerald-500 text-emerald-500 hover:bg-emerald-500 hover:text-black w-full !py-4 shadow-lg shadow-emerald-500/10">
-                                       Release Escrow to Seller
-                                    </NeonButton>
-                                    <p className="text-center font-black text-white/10 text-xs">OR</p>
-                                    <NeonButton onClick={() => handleResolve(d.transaction_id, 'REFUND_BUYER')} variant="ghost" className="border-red-500 text-red-500 hover:bg-red-500 hover:text-black w-full !py-4 shadow-lg shadow-red-500/10 bg-red-500/5">
-                                       Force Refund to Buyer
-                                    </NeonButton>
+                                 <div className="lg:w-1/3 flex flex-col justify-center gap-3">
+                                    <h4 className="text-zinc-100 text-sm font-medium mb-1">Resolution Action</h4>
+                                    <p className="text-xs text-zinc-400 mb-4">Review the activity logs. Overriding the vault relies on human discretion and cannot be reversed.</p>
+                                    
+                                    <button 
+                                       onClick={() => handleResolve(d.transaction_id, 'FORWARD_TO_SELLER')} 
+                                       className="w-full bg-zinc-100 text-zinc-950 hover:bg-zinc-200 font-medium text-sm px-4 py-2.5 rounded-md transition-colors"
+                                    >
+                                       Release to Seller
+                                    </button>
+                                    
+                                    <div className="relative flex items-center py-2">
+                                       <div className="flex-grow border-t border-zinc-800"></div>
+                                       <span className="flex-shrink-0 mx-3 text-zinc-600 text-[10px] uppercase font-bold">or</span>
+                                       <div className="flex-grow border-t border-zinc-800"></div>
+                                    </div>
+                                    
+                                    <button 
+                                       onClick={() => handleResolve(d.transaction_id, 'REFUND_BUYER')} 
+                                       className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 hover:bg-zinc-800 font-medium text-sm px-4 py-2.5 rounded-md transition-colors"
+                                    >
+                                       Refund to Buyer
+                                    </button>
                                  </div>
                               </div>
                            </div>
@@ -323,60 +350,61 @@ export default function AdminDashboard() {
 
             {/* TAB: KYC */}
             {activeTab === "KYC" && (
-               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  <header className="mb-10">
-                     <h1 className="text-3xl font-bold text-white mb-2 font-display flex items-center gap-3">
-                        <FileText className="w-8 h-8 text-yellow-500" /> AI Fallback Override Queue
-                     </h1>
-                     <p className="text-text-muted">Review identities that failed the strict 70% AI biometric confidence threshold.</p>
+               <div className="animate-in fade-in duration-300">
+                  <header className="mb-8">
+                     <h1 className="text-2xl font-semibold text-zinc-100 mb-1">Identity Verification</h1>
+                     <p className="text-sm text-zinc-400">Manual review pipeline for users requiring human confirmation.</p>
                   </header>
 
                   {kycs.length === 0 ? (
-                     <div className="text-center py-20 border border-dark-border/50 border-dashed rounded-2xl flex flex-col items-center bg-[#0a0a0c]/50">
-                        <CheckCircle className="w-12 h-12 text-emerald-500/50 mb-4" />
-                        <h3 className="text-xl text-white font-bold mb-2">No Fallback Reviews</h3>
-                        <p className="text-text-muted">The AI Pipeline is handling 100% of registrations automatically.</p>
+                     <div className="text-center py-16 border border-zinc-800 rounded-xl flex flex-col items-center bg-zinc-900/10">
+                        <CheckCircle className="w-8 h-8 text-zinc-600 mb-3" />
+                        <h3 className="text-zinc-200 font-medium text-sm">Review Queue Empty</h3>
+                        <p className="text-xs text-zinc-500 mt-1">All identities are verified by the automated system.</p>
                      </div>
                   ) : (
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {kycs.map(k => (
-                           <div key={k.kyc_id} className="border border-yellow-500/30 rounded-2xl p-6 bg-[#0a0a0c] flex flex-col relative overflow-hidden group">
-                              <div className="flex items-start justify-between mb-6">
+                           <div key={k.kyc_id} className="border border-zinc-800 rounded-xl p-5 bg-zinc-900/30 flex flex-col">
+                              <div className="flex items-start justify-between mb-4">
                                  <div>
-                                    <span className="bg-yellow-500 text-black font-black px-2 py-1 rounded text-[10px] tracking-widest uppercase mb-3 inline-block">LOW CONFIDENCE</span>
-                                    <h3 className="text-lg font-bold text-white font-display truncate max-w-[200px]">{k.user.email}</h3>
-                                    <p className="text-sm text-text-muted">{k.id_name}</p>
+                                    <span className="bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider mb-2 inline-block">Flagged for Review</span>
+                                    <h3 className="text-base font-medium text-zinc-100 truncate max-w-[200px]">{k.user.email}</h3>
+                                    <p className="text-sm text-zinc-400 mt-1">{k.id_name}</p>
                                  </div>
-                                 <div className="text-right">
-                                    <span className="text-xs bg-dark-bg border border-white/10 px-2 py-1 rounded text-white">{k.id_type}</span>
-                                    <p className="text-xs font-mono text-white/50 mt-2">{k.id_number}</p>
-                                    <p className="text-xs text-white/30 mt-1">DOB: {new Date(k.birthdate).toLocaleDateString()}</p>
+                                 <div className="text-right flex flex-col items-end">
+                                    <span className="text-xs bg-zinc-800 border border-zinc-700 px-2 py-1 rounded text-zinc-300">{k.id_type}</span>
+                                    <p className="text-xs font-mono text-zinc-400 mt-1">{k.id_number}</p>
+                                    <p className="text-[10px] text-zinc-500 mt-1">DOB: {new Date(k.birthdate).toLocaleDateString()}</p>
                                  </div>
                               </div>
 
-                              <div className="bg-black border border-white/5 rounded-xl p-4 mb-6 relative group-hover:border-white/10 transition-colors">
-                                 <h4 className="text-[10px] uppercase font-black tracking-widest text-text-muted mb-3 flex items-center gap-2"><Key className="w-3 h-3"/> Document Evidence</h4>
+                              <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-3 mb-5 group">
+                                 <h4 className="text-[10px] uppercase font-semibold text-zinc-500 mb-2 flex items-center gap-2"><Key className="w-3 h-3"/> Document</h4>
                                  {k.images?.[0] ? (
-                                    <a href={k.images[0].file_path} target="_blank" rel="noreferrer" className="block relative aspect-video bg-dark-bg rounded-lg overflow-hidden border border-white/10 hover:border-primary transition-colors group/img">
-                                       <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover/img:opacity-100 transition-opacity z-10 backdrop-blur-sm">
-                                          <span className="text-white font-bold text-sm flex items-center gap-2"><Search className="w-4 h-4"/> Expand Original Scrape</span>
-                                       </div>
-                                       <img src={k.images[0].file_path} className="w-full h-full object-cover opacity-80 group-hover/img:scale-105 transition-transform duration-700" alt="ID Document"/>
+                                    <a href={k.images[0].file_path} target="_blank" rel="noreferrer" className="block relative aspect-video bg-zinc-900 rounded border border-zinc-800 hover:border-zinc-700 transition-colors overflow-hidden">
+                                       <img src={k.images[0].file_path} className="w-full h-full object-cover opacity-90 transition-transform group-hover:scale-[1.02]" alt="ID Document"/>
                                     </a>
                                  ) : (
-                                    <div className="aspect-video bg-dark-bg rounded-lg border border-white/10 flex items-center justify-center">
-                                       <span className="text-xs text-white/30">Missing File Extract</span>
+                                    <div className="aspect-video bg-zinc-900 rounded border border-zinc-800 flex items-center justify-center">
+                                       <span className="text-xs text-zinc-500">Image missing</span>
                                     </div>
                                  )}
                               </div>
 
-                              <div className="grid grid-cols-2 gap-3 mt-auto">
-                                 <NeonButton onClick={() => handleResolveKyc(k.kyc_id, 'approved')} className="bg-primary/10 border-primary text-primary hover:bg-primary hover:text-black !py-3 text-sm font-bold">
-                                    Override: Approve
-                                 </NeonButton>
-                                 <NeonButton onClick={() => handleResolveKyc(k.kyc_id, 'rejected')} variant="ghost" className="border-red-500/50 text-red-500 hover:bg-red-500 hover:text-black !py-3 text-sm font-bold bg-red-500/5">
-                                    Reject & Lock
-                                 </NeonButton>
+                              <div className="flex gap-3 mt-auto">
+                                 <button 
+                                    onClick={() => handleResolveKyc(k.kyc_id, 'approved')} 
+                                    className="flex-1 bg-white text-black hover:bg-zinc-200 text-sm font-medium py-2 rounded-md transition-colors"
+                                 >
+                                    Approve
+                                 </button>
+                                 <button 
+                                    onClick={() => handleResolveKyc(k.kyc_id, 'rejected')} 
+                                    className="flex-1 bg-zinc-900 border border-zinc-800 text-zinc-100 hover:bg-zinc-800 text-sm font-medium py-2 rounded-md transition-colors"
+                                 >
+                                    Reject
+                                 </button>
                               </div>
                            </div>
                         ))}
@@ -387,74 +415,78 @@ export default function AdminDashboard() {
 
             {/* TAB: USERS */}
             {activeTab === "USERS" && (
-               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  <header className="mb-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+               <div className="animate-in fade-in duration-300">
+                  <header className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                      <div>
-                        <h1 className="text-3xl font-bold text-white mb-2 font-display flex items-center gap-3">
-                           <Users className="w-8 h-8 text-blue-500" /> Global User Database
-                        </h1>
-                        <p className="text-text-muted">Total root control over all registered platform participants.</p>
+                        <h1 className="text-2xl font-semibold text-zinc-100 mb-1">Users</h1>
+                        <p className="text-sm text-zinc-400">Manage all accounts registered on the platform.</p>
                      </div>
-                     <div className="relative w-full md:w-auto">
-                        <Search className="w-5 h-5 text-white/40 absolute left-4 top-1/2 -translate-y-1/2" />
+                     <div className="relative w-full sm:w-auto">
+                        <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                         <input 
                            type="text" 
-                           placeholder="Search alias or email. . . " 
+                           placeholder="Search users..." 
                            value={searchQuery}
                            onChange={(e) => setSearchQuery(e.target.value)}
-                           className="w-full md:w-80 bg-black border border-dark-border rounded-xl pl-12 pr-4 py-3 text-white focus:outline-none focus:border-primary transition-colors focus:ring-1 focus:ring-primary shadow-inner"
+                           className="w-full sm:w-64 bg-zinc-900/50 border border-zinc-800 rounded-md pl-9 pr-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors placeholder:text-zinc-600"
                         />
                      </div>
                   </header>
 
-                  <div className="bg-[#0a0a0c] border border-white/5 rounded-2xl overflow-hidden shadow-2xl">
+                  <div className="border border-zinc-800 rounded-xl overflow-hidden bg-zinc-900/30">
                      <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm text-text-muted">
-                           <thead className="bg-black/80 text-xs uppercase font-black tracking-widest text-white/60 border-b border-white/10">
+                        <table className="w-full text-left text-sm">
+                           <thead className="bg-zinc-900/80 text-xs font-medium text-zinc-400 border-b border-zinc-800">
                               <tr>
-                                 <th className="px-6 py-5">Ident</th>
-                                 <th className="px-6 py-5">Role</th>
-                                 <th className="px-6 py-5">Created</th>
-                                 <th className="px-6 py-5">Status</th>
-                                 <th className="px-6 py-5 text-right">Moderation</th>
+                                 <th className="px-5 py-3 font-medium">User</th>
+                                 <th className="px-5 py-3 font-medium">Role</th>
+                                 <th className="px-5 py-3 font-medium">Joined</th>
+                                 <th className="px-5 py-3 font-medium">Status</th>
+                                 <th className="px-5 py-3 font-medium text-right">Action</th>
                               </tr>
                            </thead>
-                           <tbody className="divide-y divide-white/5">
+                           <tbody className="divide-y divide-zinc-800/50">
                               {filteredUsers.map(u => (
-                                 <tr key={u.user_id} className="hover:bg-white/[0.02] transition-colors">
-                                    <td className="px-6 py-4">
+                                 <tr key={u.user_id} className="hover:bg-zinc-800/20 transition-colors">
+                                    <td className="px-5 py-3.5">
                                        <div className="flex flex-col">
-                                          <span className="text-white font-bold">{u.first_name || 'Incognito'} {u.last_name || ''}</span>
-                                          <span className="text-xs">{u.email}</span>
+                                          <span className="text-zinc-100 font-medium">{u.first_name || 'No Name'} {u.last_name || ''}</span>
+                                          <span className="text-xs text-zinc-500 mt-0.5">{u.email}</span>
                                        </div>
                                     </td>
-                                    <td className="px-6 py-4">
-                                       <span className={`px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest ${u.role === 'admin' ? 'bg-primary/20 text-primary border border-primary/30' : 'bg-white/5 text-white/60'}`}>
+                                    <td className="px-5 py-3.5">
+                                       <span className={`px-2 py-0.5 rounded text-[10px] font-medium tracking-wide uppercase ${u.role === 'admin' ? 'bg-zinc-800 text-zinc-300' : 'bg-zinc-900 text-zinc-500 border border-zinc-800/50'}`}>
                                           {u.role}
                                        </span>
                                     </td>
-                                    <td className="px-6 py-4 font-mono text-xs text-white/40">
+                                    <td className="px-5 py-3.5 text-xs text-zinc-400">
                                        {new Date(u.created_at).toLocaleDateString()}
                                     </td>
-                                    <td className="px-6 py-4">
+                                    <td className="px-5 py-3.5">
                                        {u.is_banned ? (
-                                          <span className="flex items-center gap-1 text-red-500 font-bold text-xs bg-red-500/10 px-2 py-1 rounded-full w-fit border border-red-500/20"><Power className="w-3 h-3"/> BANNED</span>
+                                          <span className="flex items-center gap-1.5 text-zinc-400 text-xs"><Ban className="w-3.5 h-3.5 text-zinc-500"/> Suspended</span>
                                        ) : (
-                                          <span className="flex items-center gap-1 text-emerald-500 font-bold text-xs bg-emerald-500/10 px-2 py-1 rounded-full w-fit border border-emerald-500/20"><CheckCircle className="w-3 h-3"/> ACTIVE</span>
+                                          <span className="flex items-center gap-1.5 text-zinc-300 text-xs"><CheckCircle className="w-3.5 h-3.5 text-zinc-500"/> Active</span>
                                        )}
                                     </td>
-                                    <td className="px-6 py-4 text-right">
+                                    <td className="px-5 py-3.5 text-right">
                                        {u.role !== 'admin' && (
-                                          <button onClick={() => handleToggleBan(u.user_id, u.is_banned)} className={`text-xs font-bold uppercase tracking-wider px-4 py-2 rounded-lg border transition-all ${u.is_banned ? 'bg-black text-white hover:border-white/50 border-dark-border' : 'bg-red-500/10 text-red-500 border-red-500/30 hover:bg-red-500 hover:text-white'}`}>
-                                             {u.is_banned ? 'Restore Access' : 'Suspend Engine'}
+                                          <button 
+                                             onClick={() => handleToggleBan(u.user_id, u.is_banned)} 
+                                             className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${u.is_banned ? 'bg-zinc-100 text-zinc-900 hover:bg-zinc-200' : 'bg-zinc-900 border border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100'}`}
+                                          >
+                                             {u.is_banned ? 'Unsuspend' : 'Suspend'}
                                           </button>
+                                       )}
+                                       {u.role === 'admin' && (
+                                          <span className="text-xs text-zinc-600 block px-3 py-1.5">—</span>
                                        )}
                                     </td>
                                  </tr>
                               ))}
                               {filteredUsers.length === 0 && (
                                  <tr>
-                                    <td colSpan={5} className="px-6 py-12 text-center text-white/30 italic">No corresponding identities found in sectors.</td>
+                                    <td colSpan={5} className="px-5 py-10 text-center text-sm text-zinc-500">No users found matching query.</td>
                                  </tr>
                               )}
                            </tbody>
@@ -466,36 +498,36 @@ export default function AdminDashboard() {
 
             {/* TAB: SETTINGS */}
             {activeTab === "SETTINGS" && (
-               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-2xl">
-                  <header className="mb-10">
-                     <h1 className="text-3xl font-bold text-white mb-2 font-display flex items-center gap-3">
-                        <Settings className="w-8 h-8 text-primary" /> Core Parameters
-                     </h1>
-                     <p className="text-text-muted">Dynamically inject global modifiers across the entire Midly network latency-free.</p>
+               <div className="animate-in fade-in duration-300 max-w-lg">
+                  <header className="mb-8">
+                     <h1 className="text-2xl font-semibold text-zinc-100 mb-1">Platform Settings</h1>
+                     <p className="text-sm text-zinc-400">Manage global platform parameters and billing rules.</p>
                   </header>
 
-                  <div className="bg-[#0a0a0c] border border-white/5 rounded-2xl p-8 relative overflow-hidden shadow-2xl">
-                     <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none"><Database className="w-40 h-40 text-primary" /></div>
-                     
-                     <div className="relative z-10 flex flex-col gap-6">
+                  <div className="bg-zinc-900/30 border border-zinc-800 rounded-xl p-6">
+                     <div className="flex flex-col gap-5">
                         <div>
-                           <label className="block text-xs uppercase font-black tracking-widest text-primary mb-2 flex items-center gap-2">Global Base Service Fee (%)</label>
-                           <p className="text-sm text-text-muted mb-4">Dictates the profit margin collected from Seller payouts upon Escrow completions. Modifying this immediately affects all new transactions instantiated.</p>
-                           <div className="flex bg-black border border-white/10 rounded-xl overflow-hidden focus-within:border-primary transition-colors max-w-xs shadow-inner">
+                           <label className="block text-sm font-medium text-zinc-200 mb-1">Base Platform Fee</label>
+                           <p className="text-xs text-zinc-500 mb-3">Defines the percentage deducted from completed escrow payouts.</p>
+                           
+                           <div className="flex relative max-w-[200px]">
                               <input 
                                  type="text" 
                                  value={feeInput}
                                  onChange={(e) => setFeeInput(e.target.value)}
-                                 className="bg-transparent text-white font-display text-xl w-full px-4 py-3 focus:outline-none"
+                                 className="w-full bg-zinc-950 border border-zinc-800 rounded-md py-2 pl-3 pr-8 text-zinc-100 text-sm focus:outline-none focus:border-zinc-600 transition-colors"
                               />
-                              <div className="bg-white/5 flex items-center justify-center px-4 font-bold text-white/50 border-l border-white/10">%</div>
+                              <div className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-zinc-500 pointer-events-none">%</div>
                            </div>
                         </div>
 
-                        <div className="pt-6 mt-2 border-t border-white/5">
-                           <NeonButton onClick={handleUpdateFee} className="w-full md:w-auto shadow-lg shadow-primary/20">
-                              Inject Changes to Root
-                           </NeonButton>
+                        <div className="pt-5 border-t border-zinc-800">
+                           <button 
+                              onClick={handleUpdateFee} 
+                              className="bg-white text-black hover:bg-zinc-200 font-medium text-sm px-4 py-2 rounded-md transition-colors"
+                           >
+                              Save Changes
+                           </button>
                         </div>
                      </div>
                   </div>

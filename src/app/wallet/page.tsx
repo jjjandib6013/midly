@@ -23,6 +23,7 @@ export default function Wallet() {
   // BUG-03: Separate state for each modal
   const [depositAmount, setDepositAmount] = useState("");
   const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [history, setHistory] = useState<any[]>([]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const modalDepositRef = useRef<HTMLDivElement>(null);
@@ -51,9 +52,23 @@ export default function Wallet() {
     } catch (e) { console.error("Profile fetch error:", e); }
   };
 
+  const fetchHistory = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/api/wallet/history`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setHistory(data.transactions || []);
+      }
+    } catch(e) { console.error(e); }
+  };
+
   useEffect(() => {
     if (!token) return;
     fetchWallet();
+    fetchHistory();
   }, [token]);
 
   useGSAP(() => {
@@ -107,6 +122,7 @@ export default function Wallet() {
         setDepositAmount("");
         setIsDepositModalOpen(false);
         fetchWallet();
+        fetchHistory();
       } else { toast.error("Deposit failed"); }
     } catch (e) { toast.error("Server error"); }
   };
@@ -138,6 +154,7 @@ export default function Wallet() {
         setWithdrawAmount("");
         setIsWithdrawModalOpen(false);
         fetchWallet();
+        fetchHistory();
       } else { toast.error(data.error || "Withdrawal failed"); }
     } catch (e) { toast.error("Server error"); }
   };
@@ -224,12 +241,39 @@ export default function Wallet() {
               <History className="w-4 h-4 text-text-muted" />
             </div>
             
-            <div className="flex-1 flex flex-col items-center justify-center py-20 grayscale opacity-40">
-               <div className="w-20 h-20 rounded-full border border-dashed border-text-muted flex items-center justify-center mb-6">
-                  <History className="w-8 h-8 text-text-muted" />
-               </div>
-               <p className="text-text-muted font-bold uppercase tracking-widest text-sm mb-2">No Transactions Yet</p>
-               <p className="text-xs text-text-muted/60 text-center uppercase tracking-wider font-semibold max-w-[200px]">Your transaction history will be displayed here.</p>
+            <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 mt-4 space-y-3" data-lenis-prevent>
+              {history.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 grayscale opacity-40 h-full">
+                   <div className="w-20 h-20 rounded-full border border-dashed border-text-muted flex items-center justify-center mb-6">
+                      <History className="w-8 h-8 text-text-muted" />
+                   </div>
+                   <p className="text-text-muted font-bold uppercase tracking-widest text-sm mb-2">No Transactions Yet</p>
+                   <p className="text-xs text-text-muted/60 text-center uppercase tracking-wider font-semibold max-w-[200px]">Your transaction history will be displayed here.</p>
+                </div>
+              ) : (
+                history.map((tx: any) => {
+                   const isPositive = Number(tx.amount) > 0;
+                   return (
+                      <div key={tx.id} className="p-4 bg-dark-bg border border-dark-border rounded-xl flex items-center justify-between group hover:border-primary/30 transition-colors">
+                         <div className="flex items-center gap-4">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center border ${isPositive ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-white/5 border-white/10 text-white'}`}>
+                               {isPositive ? <ArrowDownLeft className="w-5 h-5" /> : <ArrowUpRight className="w-5 h-5" />}
+                            </div>
+                            <div>
+                               <p className="text-white font-bold text-sm tracking-tight">{tx.description}</p>
+                               <p className="text-xs text-text-muted mt-1">{new Date(tx.created_at).toLocaleDateString()} • {new Date(tx.created_at).toLocaleTimeString()}</p>
+                            </div>
+                         </div>
+                         <div className="text-right">
+                            <p className={`font-black tracking-tight ${isPositive ? 'text-primary' : 'text-white'}`}>
+                               {isPositive ? '+' : ''}₱{Math.abs(tx.amount).toLocaleString()}
+                            </p>
+                            <p className="text-[10px] text-text-muted font-medium mt-1 uppercase tracking-widest">Bal: ₱{Number(tx.balance).toLocaleString()}</p>
+                         </div>
+                      </div>
+                   );
+                })
+              )}
             </div>
           </DynamicCard>
         </div>
