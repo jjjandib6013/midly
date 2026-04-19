@@ -9,6 +9,7 @@ import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import { useSession, signOut } from "next-auth/react";
 import { API_URL } from "@/lib/api";
+import { io } from "socket.io-client";
 
 export default function Navbar() {
   const { data: session, status } = useSession();
