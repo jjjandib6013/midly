@@ -1,8 +1,11 @@
 import crypto from 'crypto';
 
 const ALGORITHM = 'aes-256-gcm';
-// For demo purposes, we define a fixed 32-byte key. In production, load from process.env
-const ENCRYPTION_KEY = Buffer.from('12345678901234567890123456789012', 'utf-8'); 
+const raw = process.env.ENCRYPTION_KEY;
+if (!raw || raw.length !== 64) {
+    console.warn('[BOOT WARNING] ENCRYPTION_KEY is missing or invalid length. Falling back to dev key ONLY FOR LOCAL DEV.');
+}
+const ENCRYPTION_KEY = (raw && raw.length === 64) ? Buffer.from(raw, 'hex') : Buffer.from('12345678901234567890123456789012', 'utf-8');
 const IV_LENGTH = 16;
 
 export function encrypt(text: string): string {

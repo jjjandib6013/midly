@@ -6,7 +6,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
 const handler = NextAuth({
-  secret: process.env.NEXTAUTH_SECRET || "default_secret",
+  secret: process.env.NEXTAUTH_SECRET!,
   adapter: PrismaAdapter(prisma),
   providers: [
     CredentialsProvider({
@@ -53,7 +53,7 @@ const handler = NextAuth({
         // Sign the token with the exact key and payload Express expects
         const expressToken = jwt.sign(
           { user_id: parseInt(user.id), role: (user as any).role },
-          process.env.JWT_SECRET || 'secret',
+          process.env.JWT_SECRET!,
           { expiresIn: '7d' }
         );
         token.expressJwt = expressToken;

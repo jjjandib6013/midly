@@ -3,8 +3,10 @@ import type { NextRequest } from 'next/server';
 import { getToken } from "next-auth/jwt";
 
 export async function middleware(request: NextRequest) {
+  const secret = process.env.NEXTAUTH_SECRET;
+  if (!secret) throw new Error('[BOOT] NEXTAUTH_SECRET is absolutely required for Middleware security.');
   // Use NextAuth to decrypt the session token
-  const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET || "default_secret" });
+  const token = await getToken({ req: request, secret });
   const { pathname } = request.nextUrl;
 
   // 1. Immediately redirect marketplace to dashboard (disabled feature)

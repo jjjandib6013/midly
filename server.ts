@@ -53,12 +53,20 @@ io.on("connection", (socket) => {
 
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 5000;
-const JWT_SECRET = process.env.JWT_SECRET || 'secret';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+    console.error('[BOOT FATAL] JWT_SECRET environment variable is missing.');
+    process.exit(1);
+}
 
 app.use(cors({
    origin: function (origin, callback) {
-       // Allow all origins dynamically (crucial for Vercel preview environments)
-       callback(null, true);
+       const ALLOWED = (process.env.ALLOWED_ORIGINS || '').split(',').map(o => o.trim());
+       if (!origin || ALLOWED.includes(origin) || process.env.NODE_ENV === 'development') {
+           callback(null, true);
+       } else {
+           callback(new Error('CORS: Origin not allowed'));
+       }
    },
    credentials: true,
    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -115,9 +123,17 @@ export const requireKYC = async (req: Request, res: Response, next: NextFunction
 };
 
 // Secure endpoint to access KYC files
-app.get('/api/kyc/files/:filename', authenticateJWT, (req, res) => {
-   // Enhanced authorization can be added here
-   const filePath = path.join(__dirname, 'uploads/kyc', req.params.filename as string);
+app.get('/api/kyc/files/:filename', authenticateJWT, async (req, res): Promise<any> => {
+   const filename = path.basename(req.params.filename as string); // strip path traversal
+   if (!filename || filename.includes('..')) return res.status(400).json({ error: 'Invalid filename' });
+
+   // Verify ownership — only the user who submitted this KYC or an admin can access it
+   const kycImage = await prisma.kycImage.findFirst({
+      where: { file_path: { endsWith: filename }, kyc: { user_id: req.user.user_id } }
+   });
+   if (!kycImage && req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+
+   const filePath = path.join(__dirname, 'uploads/kyc', filename);
    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Not found' });
    res.sendFile(filePath);
 });
@@ -143,8 +159,8 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// POST Upload Image Proof
-app.post('/api/upload', upload.single('file'), (req, res): void => {
+// POST Upload Image Proof (secured)
+app.post('/api/upload', authenticateJWT, upload.single('file'), (req, res): void => {
    if (!req.file) { res.status(400).json({ error: 'No file uploaded' }); return; }
    const type = req.query.type as string;
    const destFolder = type === 'kyc' ? 'kyc' : (type === 'traderoom' ? 'public/trade_rooms' : 'general');
@@ -277,19 +293,7 @@ app.post('/api/auth/verify-email', authLimiter, async (req, res): Promise<any> =
    }
 });
 
-app.get('/api/auth/debug-email', async (req, res): Promise<any> => {
-   try {
-      const apiKey = process.env.RESEND_API_KEY;
-      const configInfo = {
-         key_provided: apiKey ? "YES (Length: " + apiKey.length + ")" : "MISSING",
-         domain_from: process.env.RESEND_FROM_EMAIL || "MISSING"
-      };
-
-      res.json({ status: "SUCCESS - Resend SDK Initialized over port 443. Check Resend Dashboard for delivery metrics.", config: configInfo });
-   } catch (error: any) {
-      res.json({ error: error.message });
-   }
-});
+// debug-email endpoint removed for production security
 
 app.post('/api/auth/resend-verification', authLimiter, async (req, res): Promise<any> => {
    try {
@@ -1189,11 +1193,10 @@ app.post('/api/transactions/:id/auto-release', authenticateJWT, async (req, res)
          return res.status(400).json({ error: 'Trade is not in verifiable state.' });
       }
 
-      // Allow bypass for the demo if 'forceDemo' is sent in body
-      const { forceDemo } = req.body;
+      // Server-side time validation only — no client bypass allowed
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-      if (!forceDemo && trade.item_delivered_at >= twentyFourHoursAgo) {
+      if (trade.item_delivered_at >= twentyFourHoursAgo) {
          return res.status(403).json({ error: '24 hours have not elapsed yet.' });
       }
 
@@ -1245,7 +1248,7 @@ app.post('/api/transactions/:id/auto-release', authenticateJWT, async (req, res)
 app.post('/api/messages/:txId', authenticateJWT, async (req, res): Promise<any> => {
    try {
       const txId = parseInt(req.params.txId as string);
-      const { text, isAi, riskLevel } = req.body;
+      const { text, isAi } = req.body;
 
       const trade = await prisma.transaction.findUnique({ where: { transaction_id: txId } });
       if (!trade || (trade.buyer_id !== req.user.user_id && trade.seller_id !== req.user.user_id)) {
@@ -1258,13 +1261,18 @@ app.post('/api/messages/:txId', authenticateJWT, async (req, res): Promise<any> 
          return res.status(400).json({ error: 'This trade room is closed. No further messages allowed.' });
       }
 
+      // Server-side risk analysis — never trust the client
+      const HIGH_RISK_PATTERNS = ['gcash', 'pay me direct', 'facebook', 'blue app', 'tiktok', 'black app', 'orange app', 'outside midly', 'pay outside', 'direct payment', 'send money'];
+      const textLower = (text || '').toLowerCase();
+      const computedRiskLevel = HIGH_RISK_PATTERNS.some(p => textLower.includes(p)) ? 'High' : 'Safe';
+
       const newMsg = await prisma.message.create({
          data: {
             transaction_id: txId,
             sender_id: req.user.user_id,
             message_text: text,
             is_system_generated: isAi || false,
-            risk_level: riskLevel || 'Safe'
+            risk_level: computedRiskLevel
          }
       });
 
