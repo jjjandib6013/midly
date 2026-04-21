@@ -19,6 +19,9 @@ router.post('/paymongo', async (req: Request, res: Response): Promise<any> => {
       // - 'payment.paid' when payment is made directly
       // - 'payment.failed' when a payment attempt fails
       if (eventType === 'payment.paid' || eventType === 'link.payment.paid' || eventType === 'checkout_session.payment.paid') {
+         // Log the FULL raw payload so we can debug exactly what PayMongo sends
+         console.log(`[Webhook] RAW PAYLOAD:`, JSON.stringify(event, null, 2));
+
          const eventData = event.data?.attributes?.data?.attributes || {};
          
          // Extract payment amount - structure varies by event type
@@ -30,16 +33,73 @@ router.post('/paymongo', async (req: Request, res: Response): Promise<any> => {
          }
 
          // Extract reference ID - PayMongo puts it in different places depending on event type
-         const referenceId = 
-            eventData.reference_number ||                          // Checkout Session
+         let referenceId = 
+            eventData.reference_number ||                          // Checkout Session direct
             eventData.remarks ||                                   // Payment Links
-            eventData.description ||                               // Direct payments
             eventData.metadata?.reference_number ||                // Sometimes in metadata
             eventData.payments?.[0]?.attributes?.description ||    // Nested in checkout payments
             '';
-             
-         console.log(`[Webhook] Received ${eventType} | ref: ${referenceId} | amount: ₱${amountPaid}`);
-         console.log(`[Webhook] Full event data keys: ${JSON.stringify(Object.keys(eventData))}`);
+
+         console.log(`[Webhook] Parsed: eventType=${eventType} | ref=${referenceId} | amount=₱${amountPaid}`);
+
+         // FALLBACK STRATEGY: If no reference found, match by checkout session ID
+         // Our pending transactions store: "Pending Top-Up via PayMongo (cs_xxx)"
+         // The payment.paid event might have the checkout session ID in source or metadata
+         if (!referenceId || !referenceId.startsWith('topup_')) {
+            const checkoutSessionId = 
+               event.data?.attributes?.data?.id ||                    // The payment/session ID itself
+               eventData.source?.id ||                                // Source reference
+               eventData.metadata?.checkout_session_id ||             // Metadata
+               '';
+
+            console.log(`[Webhook] No direct reference. Trying checkout session match: ${checkoutSessionId}`);
+
+            if (checkoutSessionId) {
+               // Search for a pending transaction that contains this checkout session ID
+               const pendingTx = await prisma.walletTransaction.findFirst({
+                  where: {
+                     type: 'deposit_pending',
+                     description: { contains: checkoutSessionId }
+                  }
+               });
+
+               if (pendingTx) {
+                  console.log(`[Webhook] MATCHED pending tx #${pendingTx.id} for user ${pendingTx.user_id}`);
+                  const userId = pendingTx.user_id;
+                  const depositAmount = amountPaid > 0 ? amountPaid : Number(pendingTx.amount);
+
+                  await prisma.$transaction(async (tx) => {
+                     const user = await tx.user.update({
+                        where: { user_id: userId },
+                        data: { wallet_balance: { increment: depositAmount } }
+                     });
+
+                     await tx.walletTransaction.create({
+                        data: {
+                           user_id: userId,
+                           type: 'deposit',
+                           amount: depositAmount,
+                           balance: user.wallet_balance || 0,
+                           description: `Top-Up via PayMongo (${eventType} → matched ${checkoutSessionId})`
+                        }
+                     });
+
+                     // Mark the pending transaction so we don't double-credit
+                     await tx.walletTransaction.update({
+                        where: { id: pendingTx.id },
+                        data: { type: 'deposit_fulfilled' }
+                     });
+                  });
+
+                  console.log(`[Webhook] Fulfilled Top-Up for User ${userId}: ₱${depositAmount}`);
+                  io.to(`user_${userId}`).emit('wallet_updated');
+                  return res.status(200).send('Fulfilled via session match');
+               }
+            }
+
+            console.log(`[Webhook] Could not match payment to any pending transaction.`);
+            return res.status(200).send('No matching transaction found');
+         }
 
          if (!referenceId) return res.status(200).send('No reference ID');
 
