@@ -6,7 +6,8 @@ import { io } from '../../../server'; // Note: io export needs to be accessed if
 const router = Router();
 
 router.get('/disputes', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
-   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+   const dbUser = await prisma.user.findUnique({ where: { user_id: req.user.user_id } });
+   if (!dbUser || dbUser.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
    try {
       const disputes = await prisma.dispute.findMany({
          where: { resolution: null },
@@ -26,7 +27,8 @@ router.get('/disputes', authenticateJWT, async (req: Request, res: Response): Pr
 });
 
 router.post('/disputes/:txId/resolve', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
-   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+   const dbUser = await prisma.user.findUnique({ where: { user_id: req.user.user_id } });
+   if (!dbUser || dbUser.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
    try {
       const txId = parseInt(req.params.txId as string);
       const { action } = req.body; // 'REFUND_BUYER' or 'FORWARD_TO_SELLER'
@@ -73,7 +75,8 @@ router.post('/disputes/:txId/resolve', authenticateJWT, async (req: Request, res
 });
 
 router.get('/users', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
-   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+   const dbUser = await prisma.user.findUnique({ where: { user_id: req.user.user_id } });
+   if (!dbUser || dbUser.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
    try {
       const users = await prisma.user.findMany({
          select: { user_id: true, first_name: true, last_name: true, email: true, role: true, is_banned: true, created_at: true },
@@ -86,7 +89,8 @@ router.get('/users', authenticateJWT, async (req: Request, res: Response): Promi
 });
 
 router.post('/users/:id/ban', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
-   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+   const dbUser = await prisma.user.findUnique({ where: { user_id: req.user.user_id } });
+   if (!dbUser || dbUser.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
    try {
       const targetId = parseInt(req.params.id as string);
       const { is_banned } = req.body;
@@ -98,7 +102,8 @@ router.post('/users/:id/ban', authenticateJWT, async (req: Request, res: Respons
 });
 
 router.get('/settings', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
-   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+   const dbUser = await prisma.user.findUnique({ where: { user_id: req.user.user_id } });
+   if (!dbUser || dbUser.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
    try {
       let settings = await prisma.platformSettings.findUnique({ where: { id: 1 } });
       if (!settings) {
@@ -112,7 +117,8 @@ router.get('/settings', authenticateJWT, async (req: Request, res: Response): Pr
 
 // Extended settings: now includes KYC thresholds (#5)
 router.post('/settings', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
-   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+   const dbUser = await prisma.user.findUnique({ where: { user_id: req.user.user_id } });
+   if (!dbUser || dbUser.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
    try {
       const { base_fee, kyc_biometric_threshold, kyc_review_threshold } = req.body;
       const updateData: any = {};
@@ -157,7 +163,8 @@ router.post('/settings', authenticateJWT, async (req: Request, res: Response): P
 });
 
 router.get('/metrics', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
-   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+   const dbUser = await prisma.user.findUnique({ where: { user_id: req.user.user_id } });
+   if (!dbUser || dbUser.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
    try {
       // Metric 1: Total Locked Vault Capital (Sum of all completed vault transactions that are "held" or pending)
       const agg = await prisma.payment.aggregate({ _sum: { amount: true }, where: { vault_status: 'held' } });
@@ -181,7 +188,8 @@ router.get('/metrics', authenticateJWT, async (req: Request, res: Response): Pro
 
 // GET all KYC records pending review
 router.get('/kyc', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
-   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+   const dbUser = await prisma.user.findUnique({ where: { user_id: req.user.user_id } });
+   if (!dbUser || dbUser.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
    try {
       const kycs = await prisma.kycVerification.findMany({
          where: {
@@ -201,7 +209,8 @@ router.get('/kyc', authenticateJWT, async (req: Request, res: Response): Promise
 
 // POST resolve a KYC application (approve or reject)
 router.post('/kyc/:id/resolve', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
-   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+   const dbUser = await prisma.user.findUnique({ where: { user_id: req.user.user_id } });
+   if (!dbUser || dbUser.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
    try {
       const kycId = parseInt(req.params.id as string);
       const { status, reason } = req.body; // status: 'verified' or 'rejected'

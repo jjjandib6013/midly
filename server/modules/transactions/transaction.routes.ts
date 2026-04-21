@@ -2,6 +2,9 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../../config/db';
 import { authenticateJWT, requireKYC } from '../../shared/middlewares/auth.middleware';
 import { io, logAudit } from '../../../server';
+import { encrypt, decrypt } from '../../../src/ai/cryptoUtils';
+import { createPaymentLink } from '../../utils/payments/paymongo';
+import { kycQueue } from '../../../src/ai/queue';
 
 const router = Router();
 
@@ -51,8 +54,11 @@ router.post('/listings/buy/:id', authenticateJWT, requireKYC, async (req, res): 
       if (!listing || listing.status !== 'open') return res.status(404).json({ error: 'Listing not available' });
       if (listing.seller_id === req.user.user_id) return res.status(400).json({ error: 'Cannot buy your own listing' });
 
+      const settings = await prisma.platformSettings.findUnique({ where: { id: 1 } });
+      const feeRate = Number(settings?.base_fee ?? 0.05);
+
       const basePrice = Number(listing.price);
-      const serviceFee = basePrice * 0.05;
+      const serviceFee = basePrice * feeRate;
       const totalAmount = basePrice + serviceFee;
 
       const tradeIdRes = await prisma.$transaction(async (tx) => {
@@ -113,8 +119,11 @@ router.post('', authenticateJWT, requireKYC, async (req, res): Promise<any> => {
       const buyerId = role === 'BUY' ? req.user.user_id : counterParty.user_id;
       const sellerId = role === 'SELL' ? req.user.user_id : counterParty.user_id;
 
+      const settings = await prisma.platformSettings.findUnique({ where: { id: 1 } });
+      const feeRate = Number(settings?.base_fee ?? 0.05);
+
       const basePrice = Number(agreedPrice);
-      const serviceFee = basePrice * 0.05;
+      const serviceFee = basePrice * feeRate;
       const totalAmount = basePrice + serviceFee;
 
       const tradeRes = await prisma.$transaction(async (tx) => {
@@ -332,33 +341,46 @@ router.put('/:id/progress', authenticateJWT, async (req, res): Promise<any> => {
                });
             });
          } else {
-            // External Gateway (Stripe/PayMongo spoof)
+            // External Gateway Checkout via PayMongo
+            // Wallet Premium Economics: Direct checkout incurs an extra 2% gateway fee
+            const gatewayFee = Number(trade.total_amount) * 0.02;
+            const amountToCharge = Number(trade.total_amount) + gatewayFee;
+
+            const gatewayResult = await createPaymentLink(
+               amountToCharge, 
+               `Escrow Trade #${tradeId}`, 
+               `trade_${tradeId}`
+            );
+
+            if (!gatewayResult.success) {
+               return res.status(402).json({ error: gatewayResult.error || 'Payment failed to generate.' });
+            }
+
             await prisma.$transaction(async (tx) => {
                await tx.payment.create({
                   data: {
                      transaction_id: trade.transaction_id,
-                     amount: trade.total_amount,
-                     payment_method: paymentMethod === 'gcash' ? 'GCash' : 'Credit Card',
-                     vault_status: 'locked',
+                     amount: amountToCharge, // Includes the 2% extra fee
+                     payment_method: paymentMethod,
+                     vault_status: 'pending_deposit', // Asynchronous wait for Webhook
                      deposit_date: new Date()
                   }
                });
 
-               await tx.transaction.update({
-                  where: { transaction_id: tradeId },
-                  data: { status: 'active' }
-               });
-
+               // Note: Trade status remains 'awaiting_payment' until Webhook confirms deposit
                await tx.message.create({
                   data: {
                      transaction_id: tradeId,
                      sender_id: trade.buyer_id,
-                     message_text: `[SYSTEM LOG] The Buyer has securely deposited ₱${Number(trade.total_amount).toLocaleString()} into the Midly Smart Vault via ${paymentMethod === 'gcash' ? 'GCash' : 'Credit / Debit Card'}. Seller, please proceed to Handover the item.`,
+                     message_text: `[SYSTEM LOG] The Buyer has opted to pay directly via ${paymentMethod.toUpperCase()}. A checkout link has been generated. The Smart Vault will remain waiting until the deposit is confirmed by the gateway.`,
                      is_system_generated: true,
                      risk_level: 'Safe'
                   }
                });
             });
+
+            // Return the checkout URL so the client can redirect the buyer
+            return res.json({ status: 'PENDING_GATEWAY', checkoutUrl: gatewayResult.checkoutUrl });
          }
 
          io.to(`trade_${tradeId}`).emit('trade_updated', 'active');
@@ -374,9 +396,11 @@ router.put('/:id/progress', authenticateJWT, async (req, res): Promise<any> => {
                data: {
                   status: 'verifying',
                   item_delivered_at: new Date(),
-                  ...(credentials ? { account_credentials: credentials } : {})
+                  ...(credentials ? { account_credentials: encrypt(credentials) } : {})
                }
             });
+
+            await kycQueue.add('auto-release', { tradeId }, { delay: 24 * 60 * 60 * 1000 });
 
             await tx.message.create({
                data: {
@@ -402,7 +426,8 @@ router.put('/:id/progress', authenticateJWT, async (req, res): Promise<any> => {
                where: { transaction_id: tradeId },
                data: {
                   status: 'completed',
-                  buyer_approved_at: new Date()
+                  buyer_approved_at: new Date(),
+                  account_credentials: null
                }
             });
 
@@ -412,11 +437,14 @@ router.put('/:id/progress', authenticateJWT, async (req, res): Promise<any> => {
                data: { vault_status: 'released', release_date: new Date() }
             });
 
-            // 3. Increment seller wallet by Base Price (the Total Amount - Service Fee)
+            // 3. Increment seller wallet and reputation
             const amountToReceive = Number(trade.agreed_price);
             const updatedSeller = await tx.user.update({
                where: { user_id: trade.seller_id },
-               data: { wallet_balance: { increment: amountToReceive } }
+               data: { 
+                  wallet_balance: { increment: amountToReceive },
+                  reputation_score: { increment: 0.01 }
+               }
             });
             await tx.walletTransaction.create({
                data: { user_id: trade.seller_id, type: 'escrow_release', amount: amountToReceive, balance: updatedSeller.wallet_balance || 0, description: `Escrow Release - Trade #${tradeId}` }
@@ -602,7 +630,17 @@ router.post('/:id/request-cancel', authenticateJWT, async (req, res): Promise<an
 
       if (!trade) return res.status(404).json({ error: 'Trade not found.' });
       if (trade.buyer_id !== req.user.user_id && trade.seller_id !== req.user.user_id) return res.status(403).json({ error: 'Forbidden.' });
-      if (trade.status !== 'active') return res.status(400).json({ error: 'Mutual Cancellation applies to the Active Vault phase.' });
+      
+      if (trade.status !== 'active' && trade.status !== 'verifying') {
+         return res.status(400).json({ error: 'Mutual Cancellation applies to the Active or Verifying Vault phases.' });
+      }
+
+      if (trade.status === 'verifying' && trade.item_delivered_at) {
+         const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000);
+         if (trade.item_delivered_at < fourHoursAgo) {
+            return res.status(400).json({ error: 'The 4-hour cancellation window has passed. You must raise a dispute instead.' });
+         }
+      }
 
       await prisma.$transaction(async (tx) => {
          await tx.transaction.update({

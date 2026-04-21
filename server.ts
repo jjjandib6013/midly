@@ -29,6 +29,8 @@ import userRoutes from './server/modules/users/user.routes';
 import adminRoutes from './server/modules/admin/admin.routes';
 import transactionRoutes from './server/modules/transactions/transaction.routes';
 import messageRoutes from './server/modules/messages/message.routes';
+import walletRoutes from './server/modules/wallet/wallet.routes';
+import webhookRoutes from './server/modules/webhooks/webhook.routes';
 
 dotenv.config();
 
@@ -150,6 +152,8 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api', transactionRoutes); // Fallback for /listings and /notifications which are defined inside transactionRoutes
 app.use('/api/messages', messageRoutes);
+app.use('/api/wallet', walletRoutes);
+app.use('/api/webhooks', webhookRoutes);
 
 
 // Transactions and Messages have been moved to their respective routes

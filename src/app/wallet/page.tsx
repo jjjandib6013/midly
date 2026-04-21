@@ -20,9 +20,12 @@ export default function Wallet() {
   const [isVerified, setIsVerified] = useState(false);
   const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
-  // BUG-03: Separate state for each modal
   const [depositAmount, setDepositAmount] = useState("");
   const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [withdrawBankCode, setWithdrawBankCode] = useState("");
+  const [withdrawAccountNumber, setWithdrawAccountNumber] = useState("");
+  const [withdrawAccountName, setWithdrawAccountName] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -33,13 +36,14 @@ export default function Wallet() {
     if (!token) return;
 
     try {
-      const walletRes = await fetch(`${API_URL}/api/user/wallet`, {
+      // Consolidated wallet endpoint returns balance + history
+      const walletRes = await fetch(`${API_URL}/api/wallet`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (walletRes.ok) {
         const data = await walletRes.json();
-        const bal = data.available_balance ?? data.wallet_balance;
-        if (bal !== undefined) setBalance(Number(bal).toFixed(2));
+        setBalance(Number(data.balance || 0).toFixed(2));
+        setHistory(data.transactions || []);
       }
     } catch (e) { console.error("Wallet fetch error:", e); }
 
@@ -53,16 +57,8 @@ export default function Wallet() {
   };
 
   const fetchHistory = async () => {
-    if (!token) return;
-    try {
-      const res = await fetch(`${API_URL}/api/wallet/history`, {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setHistory(data.transactions || []);
-      }
-    } catch(e) { console.error(e); }
+    // History is already fetched in fetchWallet
+    await fetchWallet();
   };
 
   useEffect(() => {
@@ -110,21 +106,23 @@ export default function Wallet() {
 
   const handleDeposit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsProcessing(true);
     try {
-      const res = await fetch(`${API_URL}/api/wallet/deposit`, {
+      const res = await fetch(`${API_URL}/api/wallet/topup`, {
         method: "POST",
         headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-        // BUG-04: Send as number
         body: JSON.stringify({ amount: parseFloat(depositAmount) })
       });
-      if (res.ok) {
-        toast.success(`Successfully deposited ₱${depositAmount}`);
+      const data = await res.json();
+      if (res.ok && data.checkoutUrl) {
+        toast.success("Redirecting to payment gateway...");
         setDepositAmount("");
         setIsDepositModalOpen(false);
-        fetchWallet();
-        fetchHistory();
-      } else { toast.error("Deposit failed"); }
+        // Redirect to PayMongo checkout
+        window.open(data.checkoutUrl, '_blank');
+      } else { toast.error(data.error || "Deposit failed"); }
     } catch (e) { toast.error("Server error"); }
+    setIsProcessing(false);
   };
 
   const handleWithdraw = async (e: React.FormEvent) => {
@@ -135,28 +133,40 @@ export default function Wallet() {
       return;
     }
 
-    // EDGE-03: Client-side balance check
     if (parseFloat(withdrawAmount) > parseFloat(balance)) {
       toast.error("Insufficient balance for this withdrawal.");
       return;
     }
 
+    if (!withdrawBankCode || !withdrawAccountNumber || !withdrawAccountName) {
+      toast.error("Please fill in all bank details.");
+      return;
+    }
+
+    setIsProcessing(true);
     try {
       const res = await fetch(`${API_URL}/api/wallet/withdraw`, {
         method: "POST",
         headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-        // BUG-04: Send as number
-        body: JSON.stringify({ amount: parseFloat(withdrawAmount) })
+        body: JSON.stringify({ 
+          amount: parseFloat(withdrawAmount),
+          bankCode: withdrawBankCode,
+          accountNumber: withdrawAccountNumber,
+          accountName: withdrawAccountName
+        })
       });
       const data = await res.json();
       if (res.ok) {
-        toast.success(`Successfully withdrew ₱${withdrawAmount} to bank`);
+        toast.success(data.message || `Withdrawal of ₱${withdrawAmount} is being processed.`);
         setWithdrawAmount("");
+        setWithdrawBankCode("");
+        setWithdrawAccountNumber("");
+        setWithdrawAccountName("");
         setIsWithdrawModalOpen(false);
         fetchWallet();
-        fetchHistory();
       } else { toast.error(data.error || "Withdrawal failed"); }
     } catch (e) { toast.error("Server error"); }
+    setIsProcessing(false);
   };
 
   return (
@@ -287,8 +297,9 @@ export default function Wallet() {
                <button className="absolute top-8 right-8 text-text-muted hover:text-white transition-colors bg-white/5 p-2 rounded-full" onClick={() => setIsDepositModalOpen(false)} aria-label="Close deposit modal">
                   <X className="w-5 h-5" />
                </button>
-               <h2 className="text-4xl font-black text-white mb-2 tracking-tight uppercase">Deposit Funds</h2>
-               <p className="text-text-muted mb-10 font-medium">Add fiat capital into your Midly Wallet.</p>
+               <h2 className="text-4xl font-black text-white mb-2 tracking-tight uppercase">Top Up</h2>
+               <p className="text-text-muted mb-4 font-medium">Add funds via GCash, Maya, Card, or Online Banking.</p>
+               <p className="text-xs text-text-muted/60 mb-10 font-medium">You will be redirected to PayMongo&apos;s secure checkout to complete payment.</p>
                <form onSubmit={handleDeposit} className="space-y-8">
                   <div className="relative">
                   <span className="absolute left-8 top-1/2 -translate-y-1/2 text-3xl text-white font-light">₱</span>
@@ -303,7 +314,9 @@ export default function Wallet() {
                      className="w-full bg-dark-bg border border-dark-border rounded-3xl py-8 pl-20 pr-8 text-white focus:outline-none focus:border-primary/50 text-5xl font-black tracking-tighter transition-all shadow-inner" 
                   />
                   </div>
-                  <NeonButton type="submit" className="w-full justify-center text-lg !py-6 tracking-widest uppercase">CONFIRM DEPOSIT</NeonButton>
+                  <NeonButton type="submit" className="w-full justify-center text-lg !py-6 tracking-widest uppercase" disabled={isProcessing}>
+                     {isProcessing ? 'GENERATING LINK...' : 'PROCEED TO PAYMENT'}
+                  </NeonButton>
                </form>
             </div>
          </div>
@@ -324,25 +337,59 @@ export default function Wallet() {
                   <span className="text-white font-black tracking-tight text-xl">₱{Number(balance).toLocaleString()}</span>
                </div>
 
-               <form onSubmit={handleWithdraw} className="space-y-8">
+               <form onSubmit={handleWithdraw} className="space-y-6">
                   <div className="relative">
-                  <span className="absolute left-8 top-1/2 -translate-y-1/2 text-3xl text-white font-light">₱</span>
-                  <input 
-                     id="withdraw-amount"
-                     type="number" 
-                     value={withdrawAmount} 
-                     onChange={(e) => setWithdrawAmount(e.target.value)} 
-                     required min="100"
-                     max={parseFloat(balance)}
-                     placeholder="0.00" 
-                     autoFocus
-                     className="w-full bg-dark-bg border border-dark-border rounded-3xl py-8 pl-20 pr-8 text-white focus:outline-none focus:border-white text-5xl font-black tracking-tighter transition-all shadow-inner" 
-                  />
+                     <span className="absolute left-8 top-1/2 -translate-y-1/2 text-3xl text-white font-light">₱</span>
+                     <input 
+                        id="withdraw-amount"
+                        type="number" 
+                        value={withdrawAmount} 
+                        onChange={(e) => setWithdrawAmount(e.target.value)} 
+                        required min="500"
+                        max={parseFloat(balance)}
+                        placeholder="0.00" 
+                        autoFocus
+                        className="w-full bg-dark-bg border border-dark-border rounded-3xl py-8 pl-20 pr-8 text-white focus:outline-none focus:border-white text-5xl font-black tracking-tighter transition-all shadow-inner" 
+                     />
                   </div>
+                  <select
+                     value={withdrawBankCode}
+                     onChange={(e) => setWithdrawBankCode(e.target.value)}
+                     required
+                     className="w-full bg-dark-bg border border-dark-border rounded-2xl py-4 px-6 text-white focus:outline-none focus:border-white/30 text-sm font-bold tracking-wide transition-all appearance-none uppercase"
+                  >
+                     <option value="" disabled>Select Bank / E-Wallet</option>
+                     <option value="GCASH">GCash</option>
+                     <option value="MAYA">Maya</option>
+                     <option value="BPI">BPI</option>
+                     <option value="BDO">BDO</option>
+                     <option value="UNIONBANK">UnionBank</option>
+                     <option value="LANDBANK">Landbank</option>
+                     <option value="METROBANK">Metrobank</option>
+                  </select>
+                  <input
+                     type="text"
+                     value={withdrawAccountNumber}
+                     onChange={(e) => setWithdrawAccountNumber(e.target.value)}
+                     required
+                     placeholder="Account / Mobile Number"
+                     className="w-full bg-dark-bg border border-dark-border rounded-2xl py-4 px-6 text-white focus:outline-none focus:border-white/30 text-sm font-bold tracking-wide transition-all"
+                  />
+                  <input
+                     type="text"
+                     value={withdrawAccountName}
+                     onChange={(e) => setWithdrawAccountName(e.target.value)}
+                     required
+                     placeholder="Account Holder Name"
+                     className="w-full bg-dark-bg border border-dark-border rounded-2xl py-4 px-6 text-white focus:outline-none focus:border-white/30 text-sm font-bold tracking-wide transition-all"
+                  />
+                  <p className="text-xs text-text-muted/60 font-medium">A ₱25 processing fee will be deducted from your balance.</p>
                   {parseFloat(withdrawAmount) > parseFloat(balance) && (
                     <p className="text-red-500 text-sm font-medium" role="alert">Insufficient balance</p>
                   )}
-                  <NeonButton type="submit" variant="secondary" className="w-full justify-center text-lg !py-6 tracking-widest uppercase hover:border-white" disabled={parseFloat(withdrawAmount) > parseFloat(balance)}>PROCESS WITHDRAWAL</NeonButton>
+                  <NeonButton type="submit" variant="secondary" className="w-full justify-center text-lg !py-6 tracking-widest uppercase hover:border-white" disabled={parseFloat(withdrawAmount) > parseFloat(balance) || isProcessing}>
+                     {isProcessing ? 'PROCESSING...' : 'PROCESS WITHDRAWAL'}
+                  </NeonButton>
                </form>
             </div>
          </div>

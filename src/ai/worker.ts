@@ -537,6 +537,82 @@ async function finalizePhase3(kycId: number, distance: number, biometricThreshol
 }
 
 // ==========================================
+// AUTO-RELEASE HANDLER
+// ==========================================
+export async function processAutoRelease(data: { tradeId: number }) {
+    const { tradeId } = data;
+    console.log(`[AI Worker] Processing auto-release for Trade ID ${tradeId}`);
+
+    try {
+        await prisma.$transaction(async (tx) => {
+            // Re-fetch trade inside the serializable transaction to prevent race conditions (Issue #5)
+            const freshTrade = await tx.transaction.findUnique({
+                where: { transaction_id: tradeId },
+                include: { payment: true }
+            });
+
+            if (!freshTrade) throw new Error('Trade not found');
+
+            // If it's already disputed, released, or frozen, abort.
+            if (freshTrade.status !== 'verifying' || freshTrade.payment?.vault_status === 'frozen') {
+                console.log(`[AI Worker] Auto-release aborted for Trade ID ${tradeId} - status changed to ${freshTrade.status}/${freshTrade.payment?.vault_status}`);
+                return;
+            }
+
+            // Execute auto-release
+            await tx.transaction.update({
+                where: { transaction_id: tradeId },
+                data: {
+                    status: 'completed',
+                    account_credentials: null // Issue #3 & #9: Nullify credentials on completion
+                }
+            });
+
+            if (freshTrade.payment) {
+                await tx.payment.update({
+                   where: { payment_id: freshTrade.payment.payment_id },
+                   data: { vault_status: 'released', release_date: new Date() }
+                });
+            }
+
+            const amount = Number(freshTrade.total_amount);
+            
+            // Release funds to seller
+            await tx.user.update({
+                where: { user_id: freshTrade.seller_id },
+                data: { 
+                   wallet_balance: { increment: amount },
+                   reputation_score: { increment: 0.01 } // Issue #9: Increase reputation
+                }
+            });
+
+            // Notify
+            await tx.notification.create({
+                data: {
+                    user_id: freshTrade.seller_id,
+                    message: `Auto-release completed for Trade #${tradeId}. ₱${amount.toFixed(2)} has been credited to your wallet.`,
+                    type: 'system_alert',
+                    reference_id: tradeId
+                }
+            });
+
+            await tx.notification.create({
+                data: {
+                    user_id: freshTrade.buyer_id,
+                    message: `Inspection period expired for Trade #${tradeId}. Funds have been automatically released to the seller.`,
+                    type: 'system_alert',
+                    reference_id: tradeId
+                }
+            });
+        });
+        console.log(`[AI Worker] Successfully auto-released Trade ID ${tradeId}`);
+    } catch (error) {
+        console.error(`[AI Worker] Error processing auto-release for Trade ID ${tradeId}:`, error);
+        throw error;
+    }
+}
+
+// ==========================================
 // BULLMQ WORKER INITIALIZATION (#1)
 // ==========================================
 const USE_FALLBACK = process.env.KYC_QUEUE_FALLBACK !== 'false';
@@ -544,6 +620,7 @@ if (!USE_FALLBACK) {
     const worker = new Worker('kyc-processing', async job => {
         if (job.name === 'verify-kyc-phase2') await processKycPhase2(job.data);
         else if (job.name === 'verify-kyc-phase3') await processKycPhase3(job.data);
+        else if (job.name === 'auto-release') await processAutoRelease(job.data);
     }, {
         connection: { host: REDIS_HOST, port: REDIS_PORT },
         concurrency: 2,
