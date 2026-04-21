@@ -19,21 +19,27 @@ router.post('/paymongo', async (req: Request, res: Response): Promise<any> => {
       // - 'payment.paid' when payment is made directly
       // - 'payment.failed' when a payment attempt fails
       if (eventType === 'payment.paid' || eventType === 'link.payment.paid' || eventType === 'checkout_session.payment.paid') {
-         const isCheckoutSession = eventType === 'checkout_session.payment.paid';
-         const paymentData = eventType === 'link.payment.paid' 
-            ? event.data.attributes.data.attributes  // Link wraps payment data one level deeper
-            : isCheckoutSession 
-               ? event.data.attributes.data.attributes.payments[0].attributes // Checkout session has payments array
-               : event.data.attributes.data.attributes;
+         const eventData = event.data?.attributes?.data?.attributes || {};
          
-         // For Links, remarks are on the link itself, not the payment
-         const referenceId = isCheckoutSession
-            ? event.data.attributes.data.attributes.reference_number
-            : (event.data.attributes.data?.attributes?.remarks || event.data.attributes.data?.attributes?.description || '');
-            
-         const amountPaid = Number(paymentData.amount) / 100; // Convert centavos back to PHP
+         // Extract payment amount - structure varies by event type
+         let amountPaid = 0;
+         if (eventType === 'checkout_session.payment.paid' && eventData.payments?.[0]) {
+            amountPaid = Number(eventData.payments[0].attributes?.amount || 0) / 100;
+         } else {
+            amountPaid = Number(eventData.amount || 0) / 100;
+         }
 
+         // Extract reference ID - PayMongo puts it in different places depending on event type
+         const referenceId = 
+            eventData.reference_number ||                          // Checkout Session
+            eventData.remarks ||                                   // Payment Links
+            eventData.description ||                               // Direct payments
+            eventData.metadata?.reference_number ||                // Sometimes in metadata
+            eventData.payments?.[0]?.attributes?.description ||    // Nested in checkout payments
+            '';
+             
          console.log(`[Webhook] Received ${eventType} | ref: ${referenceId} | amount: ₱${amountPaid}`);
+         console.log(`[Webhook] Full event data keys: ${JSON.stringify(Object.keys(eventData))}`);
 
          if (!referenceId) return res.status(200).send('No reference ID');
 
