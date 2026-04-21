@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import Navbar from "@/components/layout/Navbar";
 import { Toaster } from "react-hot-toast";
 import { Providers } from "@/components/Providers";
 import SmoothScroll from "@/components/layout/SmoothScroll";
+import AppLayout from "@/components/layout/AppLayout";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -35,10 +35,9 @@ export default function RootLayout({
         <Providers>
           <SmoothScroll>
             <Toaster position="top-right" toastOptions={{ style: { background: '#1c1c1f', color: '#fff', border: '1px solid #333' } }} />
-            <Navbar />
-            <main className="flex-1 flex flex-col pt-16 sm:pt-20 lg:pt-24">
+            <AppLayout>
               {children}
-            </main>
+            </AppLayout>
           </SmoothScroll>
         </Providers>
       </body>

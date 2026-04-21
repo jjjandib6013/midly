@@ -148,8 +148,7 @@ app.use('/api', userRoutes);
 // Admin APIs moved to Admin Routes
 app.use('/api/admin', adminRoutes);
 app.use('/api/transactions', transactionRoutes);
-app.use('/api/listings', transactionRoutes); // Let listings be handled in transaction routes for now since they are tightly coupled
-app.use('/api/notifications', transactionRoutes);
+app.use('/api', transactionRoutes); // Fallback for /listings and /notifications which are defined inside transactionRoutes
 app.use('/api/messages', messageRoutes);
 
 

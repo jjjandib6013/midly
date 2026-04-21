@@ -89,11 +89,7 @@ export default function Navbar() {
     await signOut({ callbackUrl: "/" });
   };
 
-  const navLinks: any[] = isAuthenticated ? [
-    ...(isAdmin ? [{ name: "Admin Panel", href: "/admin", icon: ShieldCheck }] : []),
-    { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { name: "Identity Verification", href: "/kyc", icon: ShieldCheck }
-  ] : [
+  const navLinks: any[] = isAuthenticated ? [] : [
     { name: "Platform", href: "/" },
   ];
 
@@ -168,19 +164,20 @@ export default function Navbar() {
               <span className="relative z-10 text-2xl font-black tracking-tighter text-white uppercase translate-y-[1px]">MIDLY</span>
             </Link>
 
-            <div className="hidden md:flex items-center gap-8 pl-8 border-l border-white/[0.04] h-8">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.name}
-                  href={link.href}
-                  className={`text-xs font-bold tracking-widest uppercase transition-all flex items-center gap-2 ${pathname === link.href ? "text-primary" : "text-[#8892b0] hover:text-white"
-                    }`}
-                >
-                  {link.icon && <link.icon className="w-4 h-4" />}
-                  {link.name}
-                </Link>
-              ))}
-            </div>
+            {!isAuthenticated && (
+              <div className="hidden md:flex items-center gap-8 pl-8 border-l border-white/[0.04] h-8">
+                {navLinks.map((link) => (
+                  <Link
+                    key={link.name}
+                    href={link.href}
+                    className={`text-xs font-bold tracking-widest uppercase transition-all flex items-center gap-2 ${pathname === link.href ? "text-primary" : "text-[#8892b0] hover:text-white"
+                      }`}
+                  >
+                    {link.name}
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-8">
@@ -245,14 +242,16 @@ export default function Navbar() {
               </div>
             )}
 
-            <button
-              className="md:hidden p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center text-white touch-manipulation"
-              onClick={() => setIsMobileMenuOpen(true)}
-              aria-label="Open menu"
-              aria-expanded={isMobileMenuOpen}
-            >
-              <Menu className="h-6 w-6" />
-            </button>
+            {!isAuthenticated && (
+              <button
+                className="md:hidden p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center text-white touch-manipulation"
+                onClick={() => setIsMobileMenuOpen(true)}
+                aria-label="Open menu"
+                aria-expanded={isMobileMenuOpen}
+              >
+                <Menu className="h-6 w-6" />
+              </button>
+            )}
           </div>
         </div>
       </div>
