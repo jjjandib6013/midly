@@ -110,18 +110,45 @@ router.get('/settings', authenticateJWT, async (req: Request, res: Response): Pr
    }
 });
 
+// Extended settings: now includes KYC thresholds (#5)
 router.post('/settings', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
    try {
-      const { base_fee } = req.body;
-      const parsedFee = parseFloat(base_fee);
-      if (isNaN(parsedFee) || parsedFee < 0 || parsedFee > 1) {
-         return res.status(400).json({ error: 'Fee must be between 0.00 and 1.00' });
+      const { base_fee, kyc_biometric_threshold, kyc_review_threshold } = req.body;
+      const updateData: any = {};
+
+      if (base_fee !== undefined) {
+         const parsedFee = parseFloat(base_fee);
+         if (isNaN(parsedFee) || parsedFee < 0 || parsedFee > 1) {
+            return res.status(400).json({ error: 'Fee must be between 0.00 and 1.00' });
+         }
+         updateData.base_fee = parsedFee;
       }
+
+      if (kyc_biometric_threshold !== undefined) {
+         const parsed = parseFloat(kyc_biometric_threshold);
+         if (isNaN(parsed) || parsed < 0.1 || parsed > 1.0) {
+            return res.status(400).json({ error: 'Biometric threshold must be between 0.1 and 1.0' });
+         }
+         updateData.kyc_biometric_threshold = parsed;
+      }
+
+      if (kyc_review_threshold !== undefined) {
+         const parsed = parseFloat(kyc_review_threshold);
+         if (isNaN(parsed) || parsed < 0.1 || parsed > 1.0) {
+            return res.status(400).json({ error: 'Review threshold must be between 0.1 and 1.0' });
+         }
+         updateData.kyc_review_threshold = parsed;
+      }
+
+      if (Object.keys(updateData).length === 0) {
+         return res.status(400).json({ error: 'No valid settings provided' });
+      }
+
       const settings = await prisma.platformSettings.upsert({
          where: { id: 1 },
-         update: { base_fee: parsedFee },
-         create: { id: 1, base_fee: parsedFee }
+         update: updateData,
+         create: { id: 1, ...updateData }
       });
       res.json({ settings });
    } catch (e) {
@@ -145,6 +172,55 @@ router.get('/metrics', authenticateJWT, async (req: Request, res: Response): Pro
       res.json({ lockedCapital, tradesCount, activeUsers });
    } catch (e) {
       res.status(500).json({ error: 'Failed to fetch system metrics' });
+   }
+});
+
+// ==========================================
+// KYC ADMIN REVIEW QUEUE (#7)
+// ==========================================
+
+// GET all KYC records pending review
+router.get('/kyc', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
+   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+   try {
+      const kycs = await prisma.kycVerification.findMany({
+         where: {
+            status: { in: ['pending_review', 'verifying_phase2', 'verifying_phase3', 'rejected'] }
+         },
+         include: {
+            user: { select: { user_id: true, first_name: true, last_name: true, email: true } },
+            images: true
+         },
+         orderBy: { kyc_id: 'desc' }
+      });
+      res.json({ kycs });
+   } catch (e) {
+      res.status(500).json({ error: 'Failed to fetch KYC queue' });
+   }
+});
+
+// POST resolve a KYC application (approve or reject)
+router.post('/kyc/:id/resolve', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
+   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+   try {
+      const kycId = parseInt(req.params.id as string);
+      const { status, reason } = req.body; // status: 'verified' or 'rejected'
+
+      if (!['verified', 'rejected'].includes(status)) {
+         return res.status(400).json({ error: 'Status must be verified or rejected' });
+      }
+
+      await prisma.kycVerification.update({
+         where: { kyc_id: kycId },
+         data: {
+            status: status,
+            rejection_reason: status === 'rejected' ? (reason || 'Rejected by admin review.') : null
+         }
+      });
+
+      res.json({ success: true, status });
+   } catch (e) {
+      res.status(500).json({ error: 'Failed to resolve KYC application' });
    }
 });
 

@@ -1,15 +1,51 @@
 import { Router, Request, Response } from 'express';
 import { authenticateJWT } from '../../shared/middlewares/auth.middleware';
 import { prisma } from '../../config/db';
+import { z } from 'zod';
+import { encrypt } from '../../../src/ai/cryptoUtils';
+import { kycQueue } from '../../../src/ai/queue';
+import { aiKycLimiter } from '../../shared/middlewares/rateLimiter';
+import path from 'path';
+import fs from 'fs';
+import crypto from 'crypto';
+import sharp from 'sharp';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
 const router = Router();
 
-// Secure endpoint to access KYC files
+// ==========================================
+// S3 CLIENT FOR KYC UPLOADS (#6)
+// ==========================================
+const s3Client = (process.env.AWS_BUCKET_NAME && process.env.AWS_ACCESS_KEY_ID) ? new S3Client({
+   region: process.env.AWS_REGION || 'auto',
+   endpoint: process.env.AWS_ENDPOINT,
+   credentials: {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+   },
+   forcePathStyle: true,
+}) : null;
+
+async function uploadToS3(localPath: string, s3Key: string): Promise<void> {
+   if (!s3Client) return;
+   const fileBuffer = fs.readFileSync(localPath);
+   await s3Client.send(new PutObjectCommand({
+      Bucket: process.env.AWS_BUCKET_NAME!,
+      Key: s3Key,
+      Body: fileBuffer,
+      ContentType: 'image/jpeg',
+      ServerSideEncryption: 'AES256',
+   }));
+   console.log(`[KYC] Uploaded to S3: ${s3Key}`);
+}
+
+// ==========================================
+// SECURE KYC FILE ACCESS
+// ==========================================
 router.get('/files/:filename', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
-   const filename = path.basename(req.params.filename as string); // strip path traversal
+   const filename = path.basename(req.params.filename as string);
    if (!filename || filename.includes('..')) return res.status(400).json({ error: 'Invalid filename' });
 
-   // Verify ownership — only the user who submitted this KYC or an admin can access it
    const kycImage = await prisma.kycImage.findFirst({
       where: { file_path: { endsWith: filename }, kyc: { user_id: req.user.user_id } }
    });
@@ -20,8 +56,15 @@ router.get('/files/:filename', authenticateJWT, async (req: Request, res: Respon
    res.sendFile(filePath);
 });
 
-// POST KYC Submission
+// ==========================================
+// POST KYC — DEMO AUTO-VERIFY (#8 — GUARDED)
+// ==========================================
 router.post('/', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
+   // Issue #8: Block auto-verify in production
+   if (process.env.NODE_ENV === 'production') {
+      return res.status(403).json({ error: 'Direct KYC bypass is disabled in production. Use the 3-phase verification flow.' });
+   }
+
    try {
       const { id_type, id_number, birthdate } = req.body;
       const user = await prisma.user.findUnique({ where: { user_id: req.user.user_id } });
@@ -35,7 +78,7 @@ router.post('/', authenticateJWT, async (req: Request, res: Response): Promise<a
             id_number: id_number || '00000',
             id_name: `${user.first_name} ${user.last_name}`,
             birthdate: new Date(birthdate || '1990-01-01'),
-            status: 'verified' // Auto verified for demo capstone
+            status: 'verified' // Auto verified for demo/development ONLY
          },
          update: {
             id_type: id_type || 'ID',
@@ -51,13 +94,9 @@ router.post('/', authenticateJWT, async (req: Request, res: Response): Promise<a
    }
 });
 
-import { z } from 'zod';
-import { encrypt } from '../../../src/ai/cryptoUtils';
-import { kycQueue } from '../../../src/ai/queue';
-import { aiKycLimiter } from '../../shared/middlewares/rateLimiter';
-import path from 'path';
-import fs from 'fs';
-
+// ==========================================
+// VALIDATION SCHEMAS
+// ==========================================
 const kycPhase1Schema = z.object({
    idType: z.string().min(2, "ID Type is required"),
    idNumber: z.string().min(4, "Invalid ID Number")
@@ -68,10 +107,13 @@ const kycPhase2Schema = z.object({
 });
 
 const kycPhase3Schema = z.object({
-   livenessImage: z.string().min(1, "Liveness snapshot is required")
+   livenessFrames: z.array(z.string()).min(3, "At least 3 liveness frames are required").max(10, "Maximum 10 frames allowed"),
+   challenge: z.string().optional()
 });
 
-// Dev Reset KYC
+// ==========================================
+// DEV RESET KYC
+// ==========================================
 router.post('/reset', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
    try {
       await prisma.kycImage.deleteMany({ where: { kyc: { user_id: req.user.user_id } } });
@@ -82,7 +124,9 @@ router.post('/reset', authenticateJWT, async (req: Request, res: Response): Prom
    }
 });
 
-// Phase 1: Identity Sync
+// ==========================================
+// PHASE 1: IDENTITY SYNC
+// ==========================================
 router.post('/phase1', authenticateJWT, aiKycLimiter, async (req: Request, res: Response): Promise<any> => {
    try {
       const parsedParams = kycPhase1Schema.safeParse(req.body);
@@ -117,7 +161,9 @@ router.post('/phase1', authenticateJWT, aiKycLimiter, async (req: Request, res: 
    }
 });
 
-// Phase 2: Document Processing Upload
+// ==========================================
+// PHASE 2: DOCUMENT PROCESSING (#6, #10)
+// ==========================================
 router.post('/phase2', authenticateJWT, aiKycLimiter, async (req: Request, res: Response): Promise<any> => {
    try {
       const parsedParams = kycPhase2Schema.safeParse(req.body);
@@ -137,7 +183,36 @@ router.post('/phase2', authenticateJWT, aiKycLimiter, async (req: Request, res: 
       if (fs.existsSync(rawPath)) fs.renameSync(rawPath, kycDomainPath);
       else if (!fs.existsSync(kycDomainPath)) return res.status(400).json({ error: 'Image not found.' });
 
-      await prisma.kycImage.create({ data: { kyc_id: kyc.kyc_id, image_type: 'Front', file_path: `/uploads/kyc/${filename}` } });
+      // Validate minimum dimensions (#10)
+      try {
+         const metadata = await sharp(kycDomainPath).metadata();
+         if (!metadata.width || !metadata.height || metadata.width < 800 || metadata.height < 500) {
+            return res.status(400).json({ error: 'Image resolution is too low. Minimum 800×500 pixels required.' });
+         }
+      } catch (imgErr) {
+         return res.status(400).json({ error: 'Could not read image metadata. Ensure the file is a valid image.' });
+      }
+
+      // Compute SHA-256 hash for integrity (#10)
+      const fileBuffer = fs.readFileSync(kycDomainPath);
+      const fileHash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+
+      // Upload to S3 if configured (#6)
+      let workerFilePath = kycDomainPath;
+      const s3Key = `kyc/${req.user.user_id}/${filename}`;
+      if (s3Client) {
+         await uploadToS3(kycDomainPath, s3Key);
+         workerFilePath = s3Key; // Worker will download from S3
+      }
+
+      await prisma.kycImage.create({
+         data: {
+            kyc_id: kyc.kyc_id,
+            image_type: 'Front',
+            file_path: s3Client ? s3Key : `/uploads/kyc/${filename}`,
+            file_hash: fileHash
+         }
+      });
 
       await prisma.kycVerification.update({
          where: { kyc_id: kyc.kyc_id },
@@ -146,7 +221,7 @@ router.post('/phase2', authenticateJWT, aiKycLimiter, async (req: Request, res: 
 
       await kycQueue.add('verify-kyc-phase2', {
          kycId: kyc.kyc_id,
-         filePath: kycDomainPath,
+         filePath: workerFilePath,
          idType: kyc.id_type,
          idNumberEncrypted: kyc.id_number,
          idNameEncrypted: kyc.id_name,
@@ -160,33 +235,50 @@ router.post('/phase2', authenticateJWT, aiKycLimiter, async (req: Request, res: 
    }
 });
 
-// Phase 3: Liveness Verification Upload
+// ==========================================
+// PHASE 3: MULTI-FRAME LIVENESS (#4, #6)
+// ==========================================
 router.post('/phase3', authenticateJWT, aiKycLimiter, async (req: Request, res: Response): Promise<any> => {
    try {
       const parsedParams = kycPhase3Schema.safeParse(req.body);
-      if (!parsedParams.success) return res.status(400).json({ error: 'Validation failed' });
-      const { livenessImage } = parsedParams.data;
+      if (!parsedParams.success) return res.status(400).json({ error: 'Validation failed. At least 3 liveness frames are required.' });
+      const { livenessFrames, challenge } = parsedParams.data;
 
       const kyc = await prisma.kycVerification.findUnique({ where: { user_id: req.user.user_id } });
       if (!kyc || kyc.phase < 2 || kyc.status !== 'phase2_verified') {
          return res.status(400).json({ error: 'Phase 2 not verified. AI must check ID first.' });
       }
 
-      const base64Data = livenessImage.replace(/^data:image\/jpeg;base64,/, "");
+      // Save the first frame as the primary selfie record
+      const base64Data = livenessFrames[0].replace(/^data:image\/\w+;base64,/, '');
       const livenessFilename = `liveness-${req.user.user_id}-${Date.now()}.jpg`;
       const livenessDomainPath = path.join(__dirname, '../../../uploads/kyc', livenessFilename);
       fs.writeFileSync(livenessDomainPath, base64Data, 'base64');
 
-      await prisma.kycImage.create({ data: { kyc_id: kyc.kyc_id, image_type: 'Selfie', file_path: `/uploads/kyc/${livenessFilename}` } });
+      // Upload primary frame to S3 (#6)
+      const s3Key = `kyc/${req.user.user_id}/${livenessFilename}`;
+      if (s3Client) {
+         await uploadToS3(livenessDomainPath, s3Key);
+      }
+
+      await prisma.kycImage.create({
+         data: {
+            kyc_id: kyc.kyc_id,
+            image_type: 'Selfie',
+            file_path: s3Client ? s3Key : `/uploads/kyc/${livenessFilename}`
+         }
+      });
 
       await prisma.kycVerification.update({
          where: { kyc_id: kyc.kyc_id },
          data: { status: 'verifying_phase3', phase: 3 }
       });
 
+      // Pass ALL frames to worker for multi-frame liveness analysis (#4)
       await kycQueue.add('verify-kyc-phase3', {
          kycId: kyc.kyc_id,
-         livenessFilePath: livenessDomainPath
+         livenessFrames: livenessFrames,
+         challenge: challenge || 'blink_and_turn'
       });
 
       res.json({ message: 'Verifying Phase 3 Liveness Matrix' });

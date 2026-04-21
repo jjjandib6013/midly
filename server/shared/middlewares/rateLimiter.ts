@@ -1,4 +1,4 @@
-import { rateLimit } from 'express-rate-limit';
+import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 
 export const authLimiter = rateLimit({
    windowMs: 15 * 60 * 1000, // 15 minutes
@@ -8,6 +8,10 @@ export const authLimiter = rateLimit({
 
 export const aiKycLimiter = rateLimit({
    windowMs: 15 * 60 * 1000,
-   limit: 10,
-   message: { error: 'LLM Analysis Limit exceeded. Please try again after 15 minutes.' }
+   limit: 5,
+   keyGenerator: (req, res) => {
+      if ((req as any).user?.user_id) return String((req as any).user.user_id);
+      return ipKeyGenerator(req, res);
+   },
+   message: { error: 'KYC submission limit exceeded. Please try again after 15 minutes.' }
 });

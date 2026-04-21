@@ -92,8 +92,10 @@ model KycVerification {
   birthdate        DateTime?  @db.Date
   status           String?    @default("pending") @db.VarChar(50)
   phase            Int        @default(1)
-  face_descriptor  Json?
+  face_descriptor  Float[]    @default([])
   rejection_reason String?    @db.VarChar(255)
+  match_distance   Float?
+  ocr_raw_text     String?
   images           KycImage[]
   user             User       @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
 
@@ -105,6 +107,7 @@ model KycImage {
   kyc_id      Int
   image_type  String          @db.VarChar(20)
   file_path   String          @db.VarChar(255)
+  file_hash   String?         @db.VarChar(64)
   uploaded_at DateTime?       @default(now()) @db.Timestamp(6)
   kyc         KycVerification @relation(fields: [kyc_id], references: [kyc_id], onDelete: Cascade)
 
@@ -229,9 +232,11 @@ model Notification {
 }
 
 model PlatformSettings {
-  id         Int      @id @default(1)
-  base_fee   Decimal  @default(0.05) @db.Decimal(5, 4)
-  updated_at DateTime @default(now()) @updatedAt @db.Timestamp(6)
+  id                       Int      @id @default(1)
+  base_fee                 Decimal  @default(0.05) @db.Decimal(5, 4)
+  kyc_biometric_threshold  Float    @default(0.55)
+  kyc_review_threshold     Float    @default(0.45)
+  updated_at               DateTime @default(now()) @updatedAt @db.Timestamp(6)
 
   @@map("platform_settings")
 }

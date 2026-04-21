@@ -22,6 +22,8 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [feeInput, setFeeInput] = useState("5.0");
+  const [biometricThreshold, setBiometricThreshold] = useState("0.55");
+  const [reviewThreshold, setReviewThreshold] = useState("0.45");
   const [isLoading, setIsLoading] = useState(true);
   
   const loadData = async () => {
@@ -41,6 +43,8 @@ export default function AdminDashboard() {
            const d = await setRes.json();
            setPlatformSettings(d.settings);
            setFeeInput((Number(d.settings.base_fee) * 100).toFixed(1));
+           if (d.settings.kyc_biometric_threshold !== undefined) setBiometricThreshold(String(d.settings.kyc_biometric_threshold));
+           if (d.settings.kyc_review_threshold !== undefined) setReviewThreshold(String(d.settings.kyc_review_threshold));
         }
         if(disRes.ok) {
            const d = await disRes.json();
@@ -95,7 +99,7 @@ export default function AdminDashboard() {
       } catch(e) { toast.error("Server API Error"); }
   };
 
-  const handleResolveKyc = async (kycId: number, status: 'approved' | 'rejected') => {
+  const handleResolveKyc = async (kycId: number, status: 'verified' | 'rejected') => {
       try {
          const res = await fetch(`${API_URL}/api/admin/kyc/${kycId}/resolve`, {
             method: "POST",
@@ -128,25 +132,35 @@ export default function AdminDashboard() {
       } catch(e) { toast.error("Server API Error"); }
   };
 
-  const handleUpdateFee = async () => {
-     try {
-         const rawInput = parseFloat(feeInput);
-         if (isNaN(rawInput)) return toast.error("Invalid number provided for fee.");
-         const decimalFee = rawInput / 100;
-         const res = await fetch(`${API_URL}/api/admin/settings`, {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ base_fee: decimalFee })
-         });
-         if (res.ok) {
-            toast.success("Platform settings updated successfully.");
-            loadData();
-         } else {
-            const err = await res.json();
-            toast.error(err.error || "Failed to update settings.");
-         }
-     } catch (e) { toast.error("Server API Error"); }
-  }
+   const handleUpdateSettings = async () => {
+      try {
+          const rawInput = parseFloat(feeInput);
+          if (isNaN(rawInput)) return toast.error("Invalid number provided for fee.");
+          const decimalFee = rawInput / 100;
+
+          const body: any = { base_fee: decimalFee };
+
+          const bt = parseFloat(biometricThreshold);
+          const rt = parseFloat(reviewThreshold);
+          if (!isNaN(bt)) body.kyc_biometric_threshold = bt;
+          if (!isNaN(rt)) body.kyc_review_threshold = rt;
+
+          if (rt >= bt) return toast.error("Review threshold must be lower than biometric threshold.");
+
+          const res = await fetch(`${API_URL}/api/admin/settings`, {
+             method: "POST",
+             headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+             body: JSON.stringify(body)
+          });
+          if (res.ok) {
+             toast.success("Platform settings updated successfully.");
+             loadData();
+          } else {
+             const err = await res.json();
+             toast.error(err.error || "Failed to update settings.");
+          }
+      } catch (e) { toast.error("Server API Error"); }
+   }
 
 
   if (!isAdmin) return (
@@ -348,7 +362,6 @@ export default function AdminDashboard() {
                </div>
             )}
 
-            {/* TAB: KYC */}
             {activeTab === "KYC" && (
                <div className="animate-in fade-in duration-300">
                   <header className="mb-8">
@@ -364,37 +377,58 @@ export default function AdminDashboard() {
                      </div>
                   ) : (
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {kycs.map(k => (
+                        {kycs.map((k: any) => (
                            <div key={k.kyc_id} className="border border-zinc-800 rounded-xl p-5 bg-zinc-900/30 flex flex-col">
                               <div className="flex items-start justify-between mb-4">
                                  <div>
-                                    <span className="bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider mb-2 inline-block">Flagged for Review</span>
-                                    <h3 className="text-base font-medium text-zinc-100 truncate max-w-[200px]">{k.user.email}</h3>
-                                    <p className="text-sm text-zinc-400 mt-1">{k.id_name}</p>
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider mb-2 inline-block ${
+                                       k.status === 'pending_review' ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' :
+                                       k.status === 'rejected' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                                       'bg-zinc-800 text-zinc-300'
+                                    }`}>{k.status?.replace(/_/g, ' ')}</span>
+                                    <h3 className="text-base font-medium text-zinc-100 truncate max-w-[200px]">{k.user?.email}</h3>
+                                    <p className="text-sm text-zinc-400 mt-1">{k.user?.first_name} {k.user?.last_name}</p>
                                  </div>
                                  <div className="text-right flex flex-col items-end">
                                     <span className="text-xs bg-zinc-800 border border-zinc-700 px-2 py-1 rounded text-zinc-300">{k.id_type}</span>
-                                    <p className="text-xs font-mono text-zinc-400 mt-1">{k.id_number}</p>
-                                    <p className="text-[10px] text-zinc-500 mt-1">DOB: {new Date(k.birthdate).toLocaleDateString()}</p>
+                                    {k.match_distance !== null && k.match_distance !== undefined && (
+                                       <p className={`text-xs font-mono mt-2 px-2 py-0.5 rounded ${k.match_distance < 0.45 ? 'bg-green-500/10 text-green-400' : k.match_distance < 0.55 ? 'bg-yellow-500/10 text-yellow-400' : 'bg-red-500/10 text-red-400'}`}>
+                                          Distance: {Number(k.match_distance).toFixed(4)}
+                                       </p>
+                                    )}
                                  </div>
                               </div>
 
+                              {k.rejection_reason && (
+                                 <div className="bg-red-500/5 border border-red-500/10 rounded-lg p-3 mb-4">
+                                    <p className="text-xs text-red-400">{k.rejection_reason}</p>
+                                 </div>
+                              )}
+
+                              {k.ocr_raw_text && (
+                                 <details className="mb-4">
+                                    <summary className="text-[10px] uppercase font-semibold text-zinc-500 cursor-pointer hover:text-zinc-300 transition-colors">OCR Extracted Text</summary>
+                                    <pre className="mt-2 bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-[11px] text-zinc-400 max-h-32 overflow-y-auto whitespace-pre-wrap">{k.ocr_raw_text}</pre>
+                                 </details>
+                              )}
+
                               <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-3 mb-5 group">
-                                 <h4 className="text-[10px] uppercase font-semibold text-zinc-500 mb-2 flex items-center gap-2"><Key className="w-3 h-3"/> Document</h4>
-                                 {k.images?.[0] ? (
-                                    <a href={k.images[0].file_path} target="_blank" rel="noreferrer" className="block relative aspect-video bg-zinc-900 rounded border border-zinc-800 hover:border-zinc-700 transition-colors overflow-hidden">
-                                       <img src={k.images[0].file_path} className="w-full h-full object-cover opacity-90 transition-transform group-hover:scale-[1.02]" alt="ID Document"/>
-                                    </a>
-                                 ) : (
-                                    <div className="aspect-video bg-zinc-900 rounded border border-zinc-800 flex items-center justify-center">
-                                       <span className="text-xs text-zinc-500">Image missing</span>
-                                    </div>
-                                 )}
+                                 <h4 className="text-[10px] uppercase font-semibold text-zinc-500 mb-2 flex items-center gap-2"><Key className="w-3 h-3"/> Documents ({k.images?.length || 0})</h4>
+                                 <div className="grid grid-cols-2 gap-2">
+                                    {k.images?.map((img: any, idx: number) => (
+                                       <div key={idx} className="relative aspect-video bg-zinc-900 rounded border border-zinc-800 overflow-hidden">
+                                          <div className="absolute top-1 left-1 z-10">
+                                             <span className="bg-zinc-900/80 text-zinc-400 text-[9px] px-1.5 py-0.5 rounded uppercase">{img.image_type}</span>
+                                          </div>
+                                          <img src={img.file_path?.startsWith('/') ? `${API_URL}${img.file_path}` : img.file_path} className="w-full h-full object-cover opacity-90" alt={img.image_type}/>
+                                       </div>
+                                    ))}
+                                 </div>
                               </div>
 
                               <div className="flex gap-3 mt-auto">
                                  <button 
-                                    onClick={() => handleResolveKyc(k.kyc_id, 'approved')} 
+                                    onClick={() => handleResolveKyc(k.kyc_id, 'verified')} 
                                     className="flex-1 bg-white text-black hover:bg-zinc-200 text-sm font-medium py-2 rounded-md transition-colors"
                                  >
                                     Approve
@@ -496,12 +530,11 @@ export default function AdminDashboard() {
                </div>
             )}
 
-            {/* TAB: SETTINGS */}
             {activeTab === "SETTINGS" && (
                <div className="animate-in fade-in duration-300 max-w-lg">
                   <header className="mb-8">
                      <h1 className="text-2xl font-semibold text-zinc-100 mb-1">Platform Settings</h1>
-                     <p className="text-sm text-zinc-400">Manage global platform parameters and billing rules.</p>
+                     <p className="text-sm text-zinc-400">Manage global platform parameters, billing, and KYC thresholds.</p>
                   </header>
 
                   <div className="bg-zinc-900/30 border border-zinc-800 rounded-xl p-6">
@@ -522,8 +555,37 @@ export default function AdminDashboard() {
                         </div>
 
                         <div className="pt-5 border-t border-zinc-800">
+                           <label className="block text-sm font-medium text-zinc-200 mb-1">KYC Biometric Thresholds</label>
+                           <p className="text-xs text-zinc-500 mb-4">Controls the face match distance boundaries. Lower = stricter matching.</p>
+                           
+                           <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                 <label className="text-[10px] uppercase font-semibold text-zinc-500 mb-1.5 block tracking-wider">Auto-Reject (≥)</label>
+                                 <input 
+                                    type="text" 
+                                    value={biometricThreshold}
+                                    onChange={(e) => setBiometricThreshold(e.target.value)}
+                                    className="w-full bg-zinc-950 border border-zinc-800 rounded-md py-2 px-3 text-zinc-100 text-sm focus:outline-none focus:border-zinc-600 transition-colors font-mono"
+                                    placeholder="0.55"
+                                 />
+                              </div>
+                              <div>
+                                 <label className="text-[10px] uppercase font-semibold text-zinc-500 mb-1.5 block tracking-wider">Auto-Approve ({'<'})</label>
+                                 <input 
+                                    type="text" 
+                                    value={reviewThreshold}
+                                    onChange={(e) => setReviewThreshold(e.target.value)}
+                                    className="w-full bg-zinc-950 border border-zinc-800 rounded-md py-2 px-3 text-zinc-100 text-sm focus:outline-none focus:border-zinc-600 transition-colors font-mono"
+                                    placeholder="0.45"
+                                 />
+                              </div>
+                           </div>
+                           <p className="text-[10px] text-zinc-600 mt-2">Distances between Auto-Approve and Auto-Reject will be sent to manual admin review.</p>
+                        </div>
+
+                        <div className="pt-5 border-t border-zinc-800">
                            <button 
-                              onClick={handleUpdateFee} 
+                              onClick={handleUpdateSettings} 
                               className="bg-white text-black hover:bg-zinc-200 font-medium text-sm px-4 py-2 rounded-md transition-colors"
                            >
                               Save Changes

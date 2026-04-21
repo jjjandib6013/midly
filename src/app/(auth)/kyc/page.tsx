@@ -24,7 +24,6 @@ export default function KYCVerification() {
   const [selectedID, setSelectedID] = useState<string | null>(null);
   const [idNumber, setIdNumber] = useState("");
   const [imageUrl, setImageUrl] = useState("");
-  const [livenessImage, setLivenessImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
   const [isProcessing, setIsProcessing] = useState(false);
@@ -32,6 +31,10 @@ export default function KYCVerification() {
   const [isAlreadyVerified, setIsAlreadyVerified] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [isMounted, setIsMounted] = useState(false);
+  const [livenessFrames, setLivenessFrames] = useState<string[]>([]);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [captureProgress, setCaptureProgress] = useState(0);
+  const [challengeText, setChallengeText] = useState("");
 
   const fetchProfile = useCallback(() => {
      setIsLoadingProfile(true);
@@ -81,9 +84,41 @@ export default function KYCVerification() {
       finally { setIsUploading(false); }
   };
 
-  const captureLiveness = useCallback(() => {
-      const imageSrc = webcamRef.current?.getScreenshot();
-      if (imageSrc) setLivenessImage(imageSrc);
+  // Multi-frame liveness capture (#4)
+  const challenges = [
+     "Look directly at the camera",
+     "Blink naturally",
+     "Turn your head slightly left",
+     "Turn your head slightly right",
+     "Look directly at the camera again"
+  ];
+
+  const startLivenessCapture = useCallback(async () => {
+     setIsCapturing(true);
+     setLivenessFrames([]);
+     setCaptureProgress(0);
+     const frames: string[] = [];
+     const totalFrames = 5;
+     const delayBetweenFrames = 700; // 700ms between frames
+
+     for (let i = 0; i < totalFrames; i++) {
+        setChallengeText(challenges[i]);
+        setCaptureProgress(((i) / totalFrames) * 100);
+        await new Promise(r => setTimeout(r, delayBetweenFrames));
+
+        const imageSrc = webcamRef.current?.getScreenshot();
+        if (imageSrc) frames.push(imageSrc);
+     }
+
+     setCaptureProgress(100);
+     setChallengeText("Capture complete!");
+     setLivenessFrames(frames);
+     setIsCapturing(false);
+
+     if (frames.length < 3) {
+        setError("Could not capture enough frames. Please ensure your camera is working and try again.");
+        setLivenessFrames([]);
+     }
   }, [webcamRef]);
 
   const handlePhase1 = async () => {
@@ -144,7 +179,7 @@ export default function KYCVerification() {
        const res = await fetch(`${API_URL}/api/kyc/phase3`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-          body: JSON.stringify({ livenessImage: livenessImage })
+          body: JSON.stringify({ livenessFrames: livenessFrames, challenge: 'blink_and_turn' })
        });
        const data = await res.json();
        if (!res.ok) throw new Error(data.error || "Selfie submission failed.");
@@ -159,8 +194,12 @@ export default function KYCVerification() {
              setIsAlreadyVerified(true);
              return;
           }
+          if (status === 'pending_review') {
+             setError("Your identity is under manual review. An admin will verify your submission shortly.");
+             return;
+          }
           if (status === 'rejected') {
-             setLivenessImage(null);
+             setLivenessFrames([]);
              const reason = profileData.kyc?.rejection_reason || "Biometric match failed. Selfie does not match ID document.";
              throw new Error(`Biometric Error: ${reason}`);
           }
@@ -181,7 +220,7 @@ export default function KYCVerification() {
          setStep(1);
          setImageUrl("");
          setIdNumber("");
-         setLivenessImage(null);
+         setLivenessFrames([]);
      } catch (err) { console.error(err); }
   };
 
@@ -299,11 +338,11 @@ export default function KYCVerification() {
 
             {step === 3 && (
                   <DynamicCard hoverEffect={false} className="border border-white/5 bg-[#0a0d14]/80 p-6 sm:p-10 md:p-14 text-center shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)]">
-                     <h2 className="text-xl sm:text-2xl font-black text-white mb-2 tracking-tight">Live Selfie</h2>
-                     <p className="text-[#8892b0] text-xs sm:text-sm mb-6 sm:mb-10">We need to match your face with the submitted document.</p>
+                     <h2 className="text-xl sm:text-2xl font-black text-white mb-2 tracking-tight">Live Identity Challenge</h2>
+                     <p className="text-[#8892b0] text-xs sm:text-sm mb-6 sm:mb-10">Follow the prompts below. We will capture multiple frames to verify you are a real person.</p>
                      
                      <div className="w-full max-w-sm mx-auto mb-6 sm:mb-10 aspect-video rounded-2xl sm:rounded-3xl overflow-hidden bg-[#030407] border-4 border-white/5 relative shadow-xl">
-                        {!livenessImage ? (
+                        {livenessFrames.length === 0 ? (
                            isMounted && (
                              <Webcam
                                 audio={false}
@@ -318,38 +357,57 @@ export default function KYCVerification() {
                            )
                         ) : (
                            // eslint-disable-next-line @next/next/no-img-element
-                           <img src={livenessImage} alt="Selfie" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                           <img src={livenessFrames[0]} alt="Selfie" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        )}
+
+                        {/* Challenge overlay */}
+                        {isCapturing && (
+                           <div className="absolute inset-0 flex flex-col items-center justify-end pb-6 bg-gradient-to-t from-black/60 to-transparent z-20">
+                              <div className="bg-primary/20 backdrop-blur-sm border border-primary/30 rounded-xl px-4 py-2 mb-3">
+                                 <p className="text-primary font-bold text-sm animate-pulse">{challengeText}</p>
+                              </div>
+                              <div className="w-3/4 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                                 <div className="h-full bg-primary transition-all duration-500 rounded-full" style={{ width: `${captureProgress}%` }} />
+                              </div>
+                           </div>
+                        )}
+
+                        {/* Capture complete indicator */}
+                        {livenessFrames.length > 0 && !isCapturing && (
+                           <div className="absolute top-3 right-3 z-10 bg-primary/20 border border-primary/30 rounded-lg px-3 py-1">
+                              <span className="text-primary text-xs font-bold">{livenessFrames.length} frames captured</span>
+                           </div>
                         )}
 
                         <div className="absolute bottom-3 sm:bottom-4 left-0 right-0 flex justify-center z-10">
-                           {!livenessImage ? (
+                           {livenessFrames.length === 0 && !isCapturing ? (
                                <button 
                                  type="button" 
                                  onClick={(e) => { 
                                      e.preventDefault(); 
-                                     captureLiveness(); 
+                                     startLivenessCapture(); 
                                  }} 
                                  className="w-12 h-12 sm:w-14 sm:h-14 bg-primary text-black rounded-full flex items-center justify-center hover:scale-105 transition-transform shadow-lg border-2 border-white/20 z-50 touch-manipulation">
                                   <Camera className="w-5 h-5 sm:w-6 sm:h-6" />
                                </button>
-                           ) : (
-                               <button type="button" onClick={(e) => { e.preventDefault(); setLivenessImage(null); }} className="w-auto px-4 sm:px-6 py-2 bg-[#0a0d14] text-white rounded-full flex items-center gap-2 hover:bg-white/10 transition-colors shadow-lg border border-white/20 font-bold text-[10px] sm:text-xs uppercase tracking-widest z-50 touch-manipulation">
+                           ) : livenessFrames.length > 0 && !isCapturing ? (
+                               <button type="button" onClick={(e) => { e.preventDefault(); setLivenessFrames([]); setCaptureProgress(0); setChallengeText(''); }} className="w-auto px-4 sm:px-6 py-2 bg-[#0a0d14] text-white rounded-full flex items-center gap-2 hover:bg-white/10 transition-colors shadow-lg border border-white/20 font-bold text-[10px] sm:text-xs uppercase tracking-widest z-50 touch-manipulation">
                                   <RotateCcw className="w-3 h-3 sm:w-4 sm:h-4" /> Retake
                                </button>
-                           )}
+                           ) : null}
                         </div>
                      </div>
                      
                       {isProcessing && (
                          <div className="flex items-center justify-center gap-2 sm:gap-3 p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-primary/5 border border-primary/20 mb-4 sm:mb-6">
                             <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 border-primary border-t-transparent animate-spin shrink-0" />
-                            <span className="text-xs sm:text-sm text-primary font-bold">AI is analyzing your identity documents...</span>
+                            <span className="text-xs sm:text-sm text-primary font-bold">AI is analyzing your liveness frames...</span>
                          </div>
                       )}
                       
                       <div className="flex flex-col-reverse sm:flex-row gap-3 sm:gap-4">
-                         <NeonButton variant="ghost" className="w-full sm:flex-1 !py-4 sm:!py-5 text-xs sm:text-sm uppercase font-bold touch-manipulation" disabled={isProcessing} onClick={() => setStep(2)}>Back</NeonButton>
-                         <NeonButton className="w-full sm:flex-1 !py-4 sm:!py-5 text-[10px] sm:text-sm uppercase font-bold tracking-widest touch-manipulation" disabled={isProcessing || !livenessImage} onClick={handlePhase3}>
+                         <NeonButton variant="ghost" className="w-full sm:flex-1 !py-4 sm:!py-5 text-xs sm:text-sm uppercase font-bold touch-manipulation" disabled={isProcessing || isCapturing} onClick={() => setStep(2)}>Back</NeonButton>
+                         <NeonButton className="w-full sm:flex-1 !py-4 sm:!py-5 text-[10px] sm:text-sm uppercase font-bold tracking-widest touch-manipulation" disabled={isProcessing || isCapturing || livenessFrames.length < 3} onClick={handlePhase3}>
                             {isProcessing ? "Processing..." : "Verify Identity"} <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5 ml-2" />
                          </NeonButton>
                       </div>
