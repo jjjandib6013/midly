@@ -110,7 +110,7 @@ let globalSocket: any = null;
   ];
 
   // Authenticated nav links (shown inline in navbar on desktop)
-  const authNavLinks = [
+  const authNavLinks: { name: string; href: string; icon: any; showBadge?: boolean }[] = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { name: "Wallet", href: "/wallet", icon: Wallet },
     ...(!isKycVerified ? [{ name: "Verify", href: "/kyc", icon: ShieldCheck }] : []),

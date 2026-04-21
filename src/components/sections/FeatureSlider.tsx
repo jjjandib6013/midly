@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, Variants } from "framer-motion";
 import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
 
 export const defaultSlides = [
@@ -33,7 +33,7 @@ export const defaultSlides = [
 
 const transition = { ease: [0.25, 0.1, 0.25, 1], duration: 0.8 };
 
-const textVariants = {
+const textVariants: Variants = {
   enter: (direction: number) => ({
     y: direction > 0 ? 80 : -80,
     opacity: 0,
