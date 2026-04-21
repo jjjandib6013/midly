@@ -60,7 +60,13 @@ const PORT = process.env.PORT || 5000;
 
 app.use(cors({
    origin: function (origin, callback) {
-       const ALLOWED = (process.env.ALLOWED_ORIGINS || '').split(',').map(o => o.trim());
+       const HARDCODED = [
+           'https://midlyph.com',
+           'https://www.midlyph.com',
+           'http://localhost:3000',
+       ];
+       const ENV_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').map(o => o.trim()).filter(Boolean);
+       const ALLOWED = [...new Set([...HARDCODED, ...ENV_ORIGINS])];
        if (!origin || ALLOWED.includes(origin) || process.env.NODE_ENV === 'development') {
            callback(null, true);
        } else {
