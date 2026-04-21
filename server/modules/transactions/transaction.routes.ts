@@ -730,4 +730,37 @@ router.post('/:id/accept-cancel', authenticateJWT, async (req, res): Promise<any
 });
 
 
+// GET Single Transaction by ID (must be LAST to avoid intercepting /listings, /notifications, etc.)
+router.get('/:id', authenticateJWT, async (req, res): Promise<any> => {
+   try {
+      const tradeId = parseInt(req.params.id as string);
+      if (isNaN(tradeId)) return res.status(400).json({ error: 'Invalid trade ID' });
+
+      const trade = await prisma.transaction.findUnique({
+         where: { transaction_id: tradeId },
+         include: {
+            buyer: { select: { user_id: true, email: true, first_name: true, last_name: true, reputation_score: true } },
+            seller: { select: { user_id: true, email: true, first_name: true, last_name: true, reputation_score: true } },
+            payment: true
+         }
+      });
+
+      if (!trade) return res.status(404).json({ error: 'Trade not found' });
+
+      // Ensure user is a participant
+      const userId = req.user.user_id;
+      if (trade.buyer_id !== userId && trade.seller_id !== userId) {
+         return res.status(403).json({ error: 'You are not a participant in this trade' });
+      }
+
+      const my_role = trade.buyer_id === userId ? 'BUY' : 'SELL';
+      const is_initiator = trade.buyer_id === userId; // buyer initiates by default
+
+      res.json({ trade, my_role, is_initiator });
+   } catch (e) {
+      console.error('GET /transactions/:id error:', e);
+      res.status(500).json({ error: 'Server error' });
+   }
+});
+
 export default router;
