@@ -31,7 +31,7 @@ export const defaultSlides = [
   }
 ];
 
-const transition = { ease: [0.25, 0.1, 0.25, 1], duration: 0.8 };
+const transition: any = { ease: [0.25, 0.1, 0.25, 1], duration: 0.8 };
 
 const textVariants: Variants = {
   enter: (direction: number) => ({
