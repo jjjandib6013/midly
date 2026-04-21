@@ -69,7 +69,7 @@ export default function NeonButton({
 
   const variants = {
     primary:
-      "bg-primary text-white hover:bg-primary-hover shadow-lg shadow-primary/20 border border-primary/20 px-8 py-3",
+      "bg-primary text-[#0a0d14] hover:bg-primary-hover shadow-lg shadow-primary/20 border border-primary/20 px-8 py-3",
     secondary:
       "bg-dark-panel backdrop-blur-md border border-dark-border text-text-muted hover:border-text-muted/50 hover:text-white px-8 py-3",
     danger:

@@ -8,6 +8,7 @@ import { ShieldCheck, ArrowRight, Lock, CheckCircle2, PackageSearch, MessageSqua
 import Link from "next/link";
 import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
+import FeatureSlider from "@/components/sections/FeatureSlider";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -73,8 +74,8 @@ export default function Home() {
         <div data-speed="-0.15" className="absolute top-0 right-0 w-[50vw] h-[100vh] bg-primary/5 blur-[180px] rounded-full pointer-events-none -z-10 translate-x-1/3 -translate-y-1/4" />
         <div data-speed="-0.25" className="absolute bottom-0 left-0 w-[40vw] h-[40vw] bg-white/[0.02] blur-[120px] rounded-full pointer-events-none -z-10 -translate-x-1/2 translate-y-1/2" />
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 lg:gap-8 w-full items-center">
-          <div className="lg:col-span-7 flex flex-col items-start relative z-10">
+        <div className="grid grid-cols-1 gap-16 lg:gap-8 w-full items-center">
+          <div className="flex flex-col items-start relative z-10 max-w-4xl">
             <div className="hero-badge inline-flex items-center gap-3 px-4 py-2 rounded-full border border-primary/20 bg-primary/[0.03] text-primary text-xs font-bold tracking-widest uppercase mb-10 shadow-[0_0_20px_rgba(63,229,108,0.1)]">
               <ShieldCheck className="w-4 h-4" />
               Hardware Identity Verification
@@ -111,26 +112,11 @@ export default function Home() {
               <span className="text-white">CS2</span>
             </div>
           </div>
-
-          {/* Right Side Visual Graphic with Parallax depth */}
-          <div data-speed="0.1" className="lg:col-span-5 hidden lg:flex justify-end relative">
-            <div className="w-[500px] h-[600px] rounded-[3rem] border border-white/5 bg-[#090b10]/40 backdrop-blur-3xl relative overflow-hidden flex items-center justify-center p-10 shadow-2xl">
-              <div className="absolute top-0 right-0 p-12 opacity-5">
-                <ShieldCheck className="w-full h-full" />
-              </div>
-              {/* Abstract UI Representation */}
-              <div className="w-full h-full flex flex-col gap-6 relative z-10 hero-btn">
-                <div className="w-full h-32 rounded-2xl border border-primary/20 bg-primary/5 animate-pulse" />
-                <div className="flex gap-6 w-full h-24">
-                  <div className="flex-1 rounded-2xl border border-white/5 bg-white/[0.02]" />
-                  <div className="flex-1 rounded-2xl border border-white/5 bg-white/[0.02]" />
-                </div>
-                <div className="w-full h-48 rounded-2xl border border-white/10 bg-white/[0.04] mt-auto" />
-              </div>
-            </div>
-          </div>
         </div>
       </section>
+
+      {/* Advanced Image Slider Section */}
+      <FeatureSlider />
 
       {/* Structured Grid Section */}
       <section className="w-full px-4 sm:px-6 lg:px-16 py-16 sm:py-24 lg:py-32 max-w-[1600px] mx-auto border-t border-white/[0.02] relative">
@@ -138,7 +124,7 @@ export default function Home() {
           <div>
             <h2 className="text-sm font-black text-primary tracking-widest uppercase mb-4">Architecture</h2>
             <h3 className="text-fluid-section font-black text-white tracking-tighter uppercase leading-[0.9]">
-              Zero-Trust <br /> Guarantee.
+              Zero-Trust <span className="block sm:inline">Guarantee.</span>
             </h3>
           </div>
           <p className="text-lg text-[#8892b0] max-w-md font-medium leading-relaxed border-l-2 border-white/10 pl-6">

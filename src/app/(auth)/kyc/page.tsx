@@ -27,6 +27,7 @@ export default function KYCVerification() {
   const [isUploading, setIsUploading] = useState(false);
 
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingStatus, setProcessingStatus] = useState("Initializing...");
   const [error, setError] = useState("");
   const [isAlreadyVerified, setIsAlreadyVerified] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
@@ -150,6 +151,11 @@ export default function KYCVerification() {
        if (!res.ok) throw new Error(data.error || "Document upload failed.");
 
        for (let i = 0; i < 20; i++) {
+          if (i === 2) setProcessingStatus("Scanning document...");
+          if (i === 5) setProcessingStatus("Extracting text...");
+          if (i === 8) setProcessingStatus("Verifying face...");
+          if (i === 11) setProcessingStatus("Finalizing analysis...");
+          
           await new Promise(r => setTimeout(r, 3000));
           const profileRes = await fetch(`${API_URL}/api/user/profile`, { headers: { "Authorization": `Bearer ${token}` } });
           const profileData = await profileRes.json();
@@ -185,6 +191,10 @@ export default function KYCVerification() {
        if (!res.ok) throw new Error(data.error || "Selfie submission failed.");
 
        for (let i = 0; i < 20; i++) {
+          if (i === 2) setProcessingStatus("Analyzing frames...");
+          if (i === 5) setProcessingStatus("Verifying liveness...");
+          if (i === 8) setProcessingStatus("Cross-referencing ID...");
+
           await new Promise(r => setTimeout(r, 3000));
           const profileRes = await fetch(`${API_URL}/api/user/profile`, { headers: { "Authorization": `Bearer ${token}` } });
           const profileData = await profileRes.json();
@@ -246,11 +256,24 @@ export default function KYCVerification() {
 
       <div className="max-w-3xl mx-auto" ref={containerRef}>
          {error && (
-            <div className="mb-6 sm:mb-8 p-3 sm:p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-500 text-xs sm:text-sm flex items-center justify-between gap-3 font-bold tracking-wide">
-               <div className="flex items-center gap-2 sm:gap-3">
-                 <ShieldAlert className="w-4 h-4 sm:w-5 sm:h-5"/> {error}
+            <div className="mb-6 sm:mb-8 p-4 sm:p-5 bg-red-500/10 border border-red-500/30 rounded-xl flex flex-col gap-4 shadow-xl">
+               <div className="flex items-start justify-between gap-4">
+                 <div className="flex items-start gap-3">
+                    <ShieldAlert className="w-5 h-5 text-red-500 shrink-0 mt-0.5"/> 
+                    <div>
+                       <h4 className="text-red-500 font-bold tracking-tight text-sm sm:text-base mb-1">Verification Failed</h4>
+                       <p className="text-red-400 text-xs sm:text-sm">{error}</p>
+                    </div>
+                 </div>
+                 <button onClick={() => setError("")} className="text-red-500 hover:text-white transition-colors shrink-0 p-1" type="button"><X className="w-4 h-4"/></button>
                </div>
-               <button onClick={() => setError("")} className="hover:text-white transition-colors" type="button"><X className="w-4 h-4"/></button>
+               {error.includes("Verification failed.") && (
+                   <div className="pt-3 border-t border-red-500/20">
+                      <NeonButton onClick={() => { setError(""); setImageUrl(""); setStep(2); }} className="w-full sm:w-auto !py-3 !px-6 text-xs bg-red-500/10 text-red-500 border-red-500 hover:bg-red-500 hover:text-white">
+                         Try a different photo <ArrowRight className="w-4 h-4 ml-2" />
+                      </NeonButton>
+                   </div>
+               )}
             </div>
          )}
          
@@ -321,9 +344,9 @@ export default function KYCVerification() {
                      </label>
 
                      {isProcessing && (
-                         <div className="flex items-center justify-center gap-2 sm:gap-3 p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-primary/5 border border-primary/20 mb-4 sm:mb-6">
-                            <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 border-primary border-t-transparent animate-spin shrink-0" />
-                            <span className="text-xs sm:text-sm text-primary font-bold">AI is scanning your document...</span>
+                         <div className="flex flex-col items-center justify-center p-6 sm:p-8 rounded-xl sm:rounded-2xl bg-primary/5 border border-primary/20 mb-4 sm:mb-6">
+                            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-4 border-primary border-t-transparent animate-spin shrink-0 mb-4" />
+                            <span className="text-sm sm:text-base text-primary font-bold text-center tracking-wide">{processingStatus}</span>
                          </div>
                       )}
                      
@@ -399,9 +422,9 @@ export default function KYCVerification() {
                      </div>
                      
                       {isProcessing && (
-                         <div className="flex items-center justify-center gap-2 sm:gap-3 p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-primary/5 border border-primary/20 mb-4 sm:mb-6">
-                            <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 border-primary border-t-transparent animate-spin shrink-0" />
-                            <span className="text-xs sm:text-sm text-primary font-bold">AI is analyzing your liveness frames...</span>
+                         <div className="flex flex-col items-center justify-center p-6 sm:p-8 rounded-xl sm:rounded-2xl bg-primary/5 border border-primary/20 mb-4 sm:mb-6">
+                            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-4 border-primary border-t-transparent animate-spin shrink-0 mb-4" />
+                            <span className="text-sm sm:text-base text-primary font-bold text-center tracking-wide">{processingStatus}</span>
                          </div>
                       )}
                       

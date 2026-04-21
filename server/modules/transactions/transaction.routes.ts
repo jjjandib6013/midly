@@ -161,7 +161,7 @@ router.post('', authenticateJWT, requireKYC, async (req, res): Promise<any> => {
             }
          });
 
-         await tx.notification.create({
+         const notif = await tx.notification.create({
             data: {
                user_id: counterParty.user_id,
                message: `You have received a new Private Escrow Request for ${itemCategory}.`,
@@ -169,6 +169,9 @@ router.post('', authenticateJWT, requireKYC, async (req, res): Promise<any> => {
                reference_id: trade.transaction_id
             }
          });
+
+         const io = req.app.get('io');
+         if (io) io.to(`user_${counterParty.user_id}`).emit('new_notification', notif);
 
          return trade;
       });
@@ -242,7 +245,7 @@ router.put('/:id/accept-invite', authenticateJWT, async (req, res): Promise<any>
 
          // Notify the initiator that their invite was accepted
          const initiatorId = invitedUserId === trade.buyer_id ? trade.seller_id : trade.buyer_id;
-         await tx.notification.create({
+         const acceptNotif = await tx.notification.create({
             data: {
                user_id: initiatorId,
                message: `Your Private Escrow invite for Trade #${tradeId} has been accepted! The Agreement Phase is now active.`,
@@ -250,6 +253,9 @@ router.put('/:id/accept-invite', authenticateJWT, async (req, res): Promise<any>
                reference_id: tradeId
             }
          });
+
+         const io = req.app.get('io');
+         if (io) io.to(`user_${initiatorId}`).emit('new_notification', acceptNotif);
 
          await tx.message.create({
             data: {

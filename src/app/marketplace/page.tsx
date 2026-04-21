@@ -46,7 +46,7 @@ export default function Marketplace() {
             headers: { "Authorization": `Bearer ${token}` }
          })
             .then(res => res.json())
-            .then(data => { if (data.kyc?.status === 'approved') setIsVerified(true); })
+            .then(data => { if (data.kyc?.status === 'verified') setIsVerified(true); })
             .catch(console.error);
       }
    }, [token]);
@@ -145,7 +145,11 @@ export default function Marketplace() {
                               {listing.seller.first_name[0]}
                            </div>
                            <span className="text-sm text-text-muted">{listing.seller.first_name} {listing.seller.last_name}</span>
-                           <span className="text-xs text-yellow-500 ml-auto flex items-center gap-1">★ {Number(listing.seller.reputation_score).toFixed(1)}</span>
+                           {Number(listing.seller.reputation_score) > 0 ? (
+                              <span className="text-xs text-yellow-500 ml-auto flex items-center gap-1">★ {Number(listing.seller.reputation_score).toFixed(1)}</span>
+                           ) : (
+                              <span className="text-[10px] px-2 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded ml-auto uppercase tracking-widest font-bold">New Seller</span>
+                           )}
                         </div>
                      </div>
                      <NeonButton className="w-full justify-center" onClick={() => handleBuyNow(listing.listing_id)}>

@@ -3,8 +3,6 @@ import jwt from 'jsonwebtoken';
 import { prisma } from '../../config/db';
 import dotenv from 'dotenv';
 
-dotenv.config();
-
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
     console.error("[BOOT FATAL] JWT_SECRET environment variable is missing.");

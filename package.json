@@ -32,6 +32,7 @@
     "dotenv": "^17.4.1",
     "express": "^5.2.1",
     "express-rate-limit": "^8.3.2",
+    "framer-motion": "^12.38.0",
     "gsap": "^3.14.2",
     "ioredis": "^5.10.1",
     "ioredis-mock": "^8.13.1",

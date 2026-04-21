@@ -10,6 +10,7 @@ import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { API_URL } from "@/lib/api";
+import { io } from "socket.io-client";
 
 export default function Wallet() {
   const { data: session } = useSession();
@@ -65,6 +66,22 @@ export default function Wallet() {
     if (!token) return;
     fetchWallet();
     fetchHistory();
+
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const userId = payload.user_id;
+
+      const socket = io(API_URL, { transports: ['websocket', 'polling'], withCredentials: true });
+      socket.emit("join_user", userId);
+      
+      socket.on("wallet_updated", () => {
+         fetchWallet();
+      });
+
+      return () => {
+         socket.disconnect();
+      };
+    } catch (e) {}
   }, [token]);
 
   useGSAP(() => {
@@ -297,7 +314,7 @@ export default function Wallet() {
                <button className="absolute top-8 right-8 text-text-muted hover:text-white transition-colors bg-white/5 p-2 rounded-full" onClick={() => setIsDepositModalOpen(false)} aria-label="Close deposit modal">
                   <X className="w-5 h-5" />
                </button>
-               <h2 className="text-4xl font-black text-white mb-2 tracking-tight uppercase">Top Up</h2>
+               <h2 className="text-4xl font-black text-white mb-2 tracking-tight uppercase flex items-center gap-4">Top Up <span className="text-[10px] bg-red-500/10 text-red-500 border border-red-500/20 px-2 py-1 rounded tracking-widest font-bold">[DEMO/SIMULATION]</span></h2>
                <p className="text-text-muted mb-4 font-medium">Add funds via GCash, Maya, Card, or Online Banking.</p>
                <p className="text-xs text-text-muted/60 mb-10 font-medium">You will be redirected to PayMongo&apos;s secure checkout to complete payment.</p>
                <form onSubmit={handleDeposit} className="space-y-8">
@@ -330,7 +347,7 @@ export default function Wallet() {
                <button className="absolute top-8 right-8 text-text-muted hover:text-white transition-colors bg-white/5 p-2 rounded-full" onClick={() => setIsWithdrawModalOpen(false)} aria-label="Close withdraw modal">
                   <X className="w-5 h-5" />
                </button>
-               <h2 className="text-4xl font-black text-white mb-2 tracking-tight uppercase">Withdraw Funds</h2>
+               <h2 className="text-4xl font-black text-white mb-2 tracking-tight uppercase flex items-center gap-4">Withdraw Funds <span className="text-[10px] bg-red-500/10 text-red-500 border border-red-500/20 px-2 py-1 rounded tracking-widest font-bold">[DEMO/SIMULATION]</span></h2>
                
                <div className="flex justify-between items-center mb-10 bg-dark-bg p-5 rounded-2xl border border-dark-border">
                   <span className="text-text-muted text-xs uppercase font-bold tracking-widest flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" /> Accessible Balance</span>

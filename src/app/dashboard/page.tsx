@@ -7,7 +7,7 @@ import Link from "next/link";
 import {
    PlusCircle, ShieldCheck, ArrowRight, Wallet, Clock,
    CheckCircle2, AlertTriangle, Send, Package, XCircle,
-   Zap, Eye, ChevronRight, Activity
+   Zap, Eye, ChevronRight, Activity, Store
 } from "lucide-react";
 import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
@@ -99,7 +99,7 @@ export default function Dashboard() {
          <div className="dash-header flex flex-col md:flex-row items-start md:items-end justify-between mb-8 sm:mb-12 lg:mb-16 gap-6 sm:gap-8 border-b border-white/[0.04] pb-6 sm:pb-8">
             <div>
                <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-white tracking-tighter uppercase leading-none">
-                 Your<br/> <span className="text-[#8892b0]">Dashboard</span>
+                 Your <span className="block sm:inline text-[#8892b0]">Dashboard</span>
                </h1>
             </div>
              <div className="flex flex-col items-start md:items-end gap-4 sm:gap-6 border-l md:border-l-0 md:border-r-2 border-primary/50 pl-4 sm:pl-6 md:pl-0 md:pr-6 w-full md:w-auto">
@@ -134,12 +134,12 @@ export default function Dashboard() {
                   
                   <DynamicCard hoverEffect className="dash-metric p-5 sm:p-6 md:p-8 flex flex-col justify-between">
                      <div className="flex items-center justify-between mb-8">
-                        <span className="text-xs font-black text-[#8892b0] uppercase tracking-widest">In Escrow</span>
+                        <span className="text-xs font-black text-[#8892b0] uppercase tracking-widest">In Escrow (Your Funds)</span>
                         <ShieldCheck className="w-5 h-5 text-purple-400" />
                      </div>
                      <p className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tighter">
                         <span className="text-[#8892b0] text-xl lg:text-3xl pr-1">₱</span>
-                        {trades.filter(t => ['active', 'verifying'].includes(t.status)).reduce((s, t) => s + Number(t.total_amount || 0), 0).toLocaleString()}
+                        {trades.filter(t => ['active', 'verifying'].includes(t.status)).reduce((s, t) => s + Number(t.agreed_price || 0), 0).toLocaleString()}
                      </p>
                   </DynamicCard>
 
@@ -164,10 +164,12 @@ export default function Dashboard() {
                   {live.length === 0 ? (
                       <div className="dash-header p-12 rounded-[2rem] border border-dashed border-white/10 flex flex-col items-center justify-center text-center">
                          <div className="w-16 h-16 rounded-full bg-white/[0.02] flex items-center justify-center mb-4">
-                            <Send className="w-6 h-6 text-[#8892b0]" />
+                            <Store className="w-6 h-6 text-[#8892b0]" />
                          </div>
-                         <p className="text-[#8892b0] font-medium mb-1">No active transactions right now.</p>
-                         <p className="text-xs text-[#8892b0]/50 tracking-widest uppercase">History is clean.</p>
+                         <p className="text-[#8892b0] font-medium mb-3">P2P Escrow protects buyers and sellers during digital trades.</p>
+                         <Link href="/marketplace" className="text-primary hover:text-white transition-colors text-sm font-bold uppercase tracking-widest flex items-center gap-2">
+                            Start your first trade on the Marketplace <ArrowRight className="w-4 h-4" />
+                         </Link>
                       </div>
                   ) : (
                      <div className="flex flex-col gap-4">
@@ -215,7 +217,10 @@ export default function Dashboard() {
                </div>
 
                {sorted.length === 0 ? (
-                   <p className="text-center text-[#8892b0] text-sm py-10 font-medium">Log empty.</p>
+                   <div className="text-center py-10">
+                      <p className="text-[#8892b0] text-sm font-medium mb-2">No past activity found.</p>
+                      <Link href="/marketplace" className="text-primary text-xs font-bold uppercase tracking-widest hover:underline">Explore Marketplace</Link>
+                   </div>
                ) : (
                   <div className="flex flex-col gap-4">
                      {sorted.slice(0, 7).map((t, i) => {

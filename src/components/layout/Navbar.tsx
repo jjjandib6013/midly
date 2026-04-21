@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ShieldCheck, User, Menu, Bell, Wallet, LayoutDashboard, X, LogOut, ArrowRight, Store } from "lucide-react";
+import { ShieldCheck, User, Menu, Bell, Wallet, LayoutDashboard, X, LogOut, ArrowRight, Store, CheckCircle2 } from "lucide-react";
 import NeonButton from "@/components/ui/NeonButton";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
@@ -23,6 +23,7 @@ export default function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotifs, setShowNotifs] = useState(false);
+  const [isKycVerified, setIsKycVerified] = useState(false);
 
   const navRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
@@ -43,9 +44,10 @@ export default function Navbar() {
     }).catch(console.error);
   };
 
+let globalSocket: any = null;
+
   useEffect(() => {
     setIsAuthenticated(status === "authenticated");
-    let socket: any;
 
     if (token) {
       try {
@@ -53,13 +55,22 @@ export default function Navbar() {
         if (payload.role === 'admin') setIsAdmin(true);
         const userId = payload.user_id;
 
-        socket = io(API_URL, { transports: ['websocket', 'polling'], withCredentials: true });
-        socket.emit("join_user", userId);
-        socket.on("new_notification", () => {
+        if (!globalSocket) {
+           globalSocket = io(API_URL, { transports: ['websocket', 'polling'], withCredentials: true });
+           globalSocket.emit("join_user", userId);
+        }
+        
+        globalSocket.on("new_notification", () => {
            fetchNotifs();
         });
       } catch (e) { }
       fetchNotifs();
+      fetch(`${API_URL}/api/user/profile`, {
+         headers: { "Authorization": `Bearer ${token}` }
+      })
+      .then(res => res.json())
+      .then(data => { if (data.kyc?.status === 'verified') setIsKycVerified(true); })
+      .catch(console.error);
     }
 
     // Initial entrance animation
@@ -71,7 +82,9 @@ export default function Navbar() {
     }
     
     return () => {
-       if (socket) socket.disconnect();
+       if (globalSocket) {
+         globalSocket.off("new_notification");
+       }
     }
   }, [pathname, status, token]);
 
@@ -99,10 +112,8 @@ export default function Navbar() {
   // Authenticated nav links (shown inline in navbar on desktop)
   const authNavLinks = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { name: "Marketplace", href: "/marketplace", icon: Store },
     { name: "Wallet", href: "/wallet", icon: Wallet },
-    { name: "Profile", href: "/profile", icon: User },
-    { name: "Verify", href: "/kyc", icon: ShieldCheck },
+    ...(!isKycVerified ? [{ name: "Verify", href: "/kyc", icon: ShieldCheck }] : []),
   ];
 
   if (isAdmin) {
@@ -160,7 +171,10 @@ export default function Navbar() {
     } else {
       gsap.to(notifMenuRef.current, {
         opacity: 0, y: -10, scale: 0.95, duration: 0.2, ease: "power3.in",
-        onComplete: () => { if (notifMenuRef.current) notifMenuRef.current.style.display = 'none'; }
+        onComplete: () => { 
+          if (notifMenuRef.current) notifMenuRef.current.style.display = 'none'; 
+          setNotifications([]); // Clear history once closed
+        }
       });
     }
   }, [showNotifs]);
@@ -198,6 +212,7 @@ export default function Navbar() {
                     >
                       <link.icon className={`w-3.5 h-3.5 ${isActive ? "text-primary" : ""}`} />
                       {link.name}
+                      {link.showBadge && <CheckCircle2 className="w-3.5 h-3.5 text-primary ml-1" />}
                     </Link>
                   );
                 })}
@@ -263,14 +278,15 @@ export default function Navbar() {
                   </div>
                 </div>
 
-                {/* Logout button - desktop only */}
-                <button
-                  onClick={handleLogout}
-                  className="hidden md:flex items-center gap-2 px-3 py-2 text-[10px] lg:text-xs font-bold tracking-widest uppercase text-[#8892b0] hover:text-red-400 transition-colors"
+                <Link
+                  href="/profile"
+                  className="relative p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center text-[#8892b0] hover:text-white transition-colors"
+                  aria-label="Profile"
                 >
-                  <LogOut className="w-3.5 h-3.5" />
-                  Logout
-                </button>
+                  <User className="w-5 h-5" />
+                  {isKycVerified && <CheckCircle2 className="absolute top-1 right-1 w-3 h-3 text-primary bg-[#030407] rounded-full" />}
+                </Link>
+
               </>
             ) : (
               <div className="hidden md:flex items-center gap-6">

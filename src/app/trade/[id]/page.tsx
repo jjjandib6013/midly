@@ -3,7 +3,7 @@ import { useSession } from 'next-auth/react';
 
 import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
-import { ShieldCheck, MessageSquare, CheckCircle2, ShieldAlert, Paperclip, ImageIcon, ArrowRight, Copy, Wallet, Smartphone, CreditCard, Lock, Timer, Unlock, XCircle, Key } from "lucide-react";
+import { ShieldCheck, MessageSquare, CheckCircle2, ShieldAlert, Paperclip, ImageIcon, ArrowRight, Copy, Wallet, Smartphone, CreditCard, Lock, Timer, Unlock, XCircle, Key, Eye, EyeOff } from "lucide-react";
 import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
 import { io } from "socket.io-client";
@@ -46,7 +46,9 @@ export default function TradeHub() {
    const [isDisputingModalOpen, setIsDisputingModalOpen] = useState(false);
    const [disputeReason, setDisputeReason] = useState("");
    const [isCancelRequestModalOpen, setIsCancelRequestModalOpen] = useState(false);
+   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
    const [pendingUpload, setPendingUpload] = useState<File | null>(null);
+   const [showCredentials, setShowCredentials] = useState(false);
 
    const [timeRemaining, setTimeRemaining] = useState({ hours: 24, minutes: 0, seconds: 0, isExpired: false });
 
@@ -109,7 +111,7 @@ export default function TradeHub() {
                const formatted = data.messages.map((m: any) => ({
                   id: m.message_id.toString(),
                   text: m.message_text,
-                  sender: m.sender_id === myUserId ? "user" : (m.is_system_generated ? "ai" : "other"),
+                  sender: m.is_system_generated ? "ai" : (m.sender_id === myUserId ? "user" : "other"),
                   timestamp: new Date(m.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                }));
                setMessages(formatted);
@@ -156,7 +158,7 @@ export default function TradeHub() {
          setMessages(prev => [...prev, {
             id: msg.message_id.toString(),
             text: msg.message_text,
-            sender: msg.sender_id === myUserId ? 'user' : (msg.is_system_generated ? 'ai' : 'other'),
+            sender: msg.is_system_generated ? 'ai' : (msg.sender_id === myUserId ? 'user' : 'other'),
             timestamp: new Date(msg.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
          }]);
       });
@@ -201,6 +203,7 @@ export default function TradeHub() {
             // Upload to trade room specifically
             const uploadRes = await fetch(`${API_URL}/api/upload?type=traderoom`, {
                method: "POST",
+               headers: { "Authorization": `Bearer ${token}` },
                body: formData
             });
             const uploadData = await uploadRes.json();
@@ -228,14 +231,7 @@ export default function TradeHub() {
 
          if (isHighRisk) {
             toast.error("AI Warning: High Risk keyword detected.");
-            setTimeout(async () => {
-               const aiMsgText = "Warning: Attempting to take payments outside Midly violates terms and voids escrow protection.";
-               await fetch(`${API_URL}/api/messages/${tradeId}`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-                  body: JSON.stringify({ text: aiMsgText, isAi: true, riskLevel: "High" })
-               });
-            }, 1500);
+            // AI warning message is generated server-side automatically
          }
       } catch (e) {
          console.error("Message failed to send", e);
@@ -330,7 +326,7 @@ export default function TradeHub() {
             body: JSON.stringify({ reason: disputeReason })
          });
          if (res.ok) {
-            toast.error("Dispute active. Funds locked completely.");
+            toast("Dispute active. Funds locked completely.", { icon: "🔒" });
             setIsDisputingModalOpen(false);
             fetchTrade();
          } else {
@@ -348,14 +344,17 @@ export default function TradeHub() {
       if (!trade || !['pending_invite', 'agreement', 'awaiting_payment'].includes(trade.status)) {
          toast.error("Cannot cancel at this stage."); return;
       }
-      if (!confirm("Are you sure you want to completely cancel this trade? No funds have been secured yet.")) return;
+      setIsCancelModalOpen(true);
+   };
+
+   const confirmCancelTrade = async () => {
       try {
          setIsLoading(true);
          const res = await fetch(`${API_URL}/api/transactions/${tradeId}/cancel`, {
             method: "POST",
             headers: { "Authorization": `Bearer ${token}` }
          });
-         if (res.ok) { toast.success("Trade Permanently Cancelled!"); fetchTrade(); }
+         if (res.ok) { toast.success("Trade Permanently Cancelled!"); setIsCancelModalOpen(false); fetchTrade(); }
          else toast.error("Cancellation failed.");
       } catch (e) { } finally { setIsLoading(false); }
    };
@@ -502,7 +501,7 @@ export default function TradeHub() {
       <div className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 lg:py-8 flex flex-col lg:grid lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 lg:h-[calc(100vh-64px)] lg:max-h-[calc(100vh-64px)] lg:overflow-hidden">
 
          {/* Left Column: Flow & Details */}
-         <div className="flex flex-col gap-4 sm:gap-6 lg:overflow-y-auto lg:pr-2 custom-scrollbar lg:min-h-0 lg:max-h-full" data-lenis-prevent>
+         <div className="order-2 lg:order-1 flex flex-col gap-4 sm:gap-6 lg:overflow-y-auto lg:pr-2 custom-scrollbar lg:min-h-0 lg:max-h-full" data-lenis-prevent>
 
             {/* COUNTERPARTY IDENTITY */}
             {counterparty && (
@@ -601,17 +600,16 @@ export default function TradeHub() {
                                  <NeonButton className="flex-[2] justify-center !py-3 bg-dark-bg" onClick={() => handleTradeProgress('REQUEST_PAYMENT')}>
                                     Lock Terms & Request Payment <ArrowRight className="w-4 h-4 ml-2" />
                                  </NeonButton>
-                                 <NeonButton variant="ghost" className="flex-1 text-red-500 hover:bg-red-500/10 border border-red-500/50" onClick={handleCancelTrade}>
+                                 <button className="flex-1 text-red-500 hover:text-red-400 text-xs font-bold uppercase tracking-widest transition-colors" onClick={handleCancelTrade}>
                                     Cancel Trade
-                                 </NeonButton>
+                                 </button>
                               </div>
                            </>
                         ) : (
                            <>
-                              <p className="text-sm text-text-muted pb-2">Waiting for the Seller to lock terms and send the payment request.</p>
-                              <NeonButton variant="ghost" className="w-full text-red-500 hover:bg-red-500/10 border border-red-500/50" onClick={handleCancelTrade}>
+                              <button className="w-full text-red-500 hover:text-red-400 text-xs font-bold uppercase tracking-widest transition-colors mt-4" onClick={handleCancelTrade}>
                                  Cancel Trade
-                              </NeonButton>
+                              </button>
                            </>
                         )}
                      </>
@@ -635,25 +633,19 @@ export default function TradeHub() {
                                     </div>
                                  </div>
 
-                                 <div
-                                    onClick={() => setPaymentMethod('gcash')}
-                                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${paymentMethod === 'gcash' ? 'border-blue-500 bg-blue-500/10' : 'border-dark-border bg-dark-bg hover:border-blue-500/50'}`}
-                                 >
+                                 <div className="p-4 rounded-xl border-2 border-dark-border bg-dark-bg/50 opacity-50 cursor-not-allowed transition-all relative overflow-hidden group">
                                     <div className="flex flex-col items-center justify-center text-center">
-                                       <Smartphone className={`w-6 h-6 mb-2 ${paymentMethod === 'gcash' ? 'text-blue-500' : 'text-text-muted'}`} />
+                                       <Smartphone className="w-6 h-6 mb-2 text-text-muted" />
                                        <h4 className="text-sm font-bold text-white">GCash Direct</h4>
-                                       <p className="text-xs mt-1 text-text-muted">External Gateway</p>
+                                       <div className="mt-1 px-2 py-0.5 bg-dark-border rounded text-[10px] font-bold text-text-muted uppercase tracking-wider">Coming Soon</div>
                                     </div>
                                  </div>
 
-                                 <div
-                                    onClick={() => setPaymentMethod('credit_card')}
-                                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${paymentMethod === 'credit_card' ? 'border-purple-500 bg-purple-500/10' : 'border-dark-border bg-dark-bg hover:border-purple-500/50'}`}
-                                 >
+                                 <div className="p-4 rounded-xl border-2 border-dark-border bg-dark-bg/50 opacity-50 cursor-not-allowed transition-all relative overflow-hidden group">
                                     <div className="flex flex-col items-center justify-center text-center">
-                                       <CreditCard className={`w-6 h-6 mb-2 ${paymentMethod === 'credit_card' ? 'text-purple-500' : 'text-text-muted'}`} />
+                                       <CreditCard className="w-6 h-6 mb-2 text-text-muted" />
                                        <h4 className="text-sm font-bold text-white">Credit / Debit</h4>
-                                       <p className="text-xs mt-1 text-text-muted">Powered by Stripe</p>
+                                       <div className="mt-1 px-2 py-0.5 bg-dark-border rounded text-[10px] font-bold text-text-muted uppercase tracking-wider">Coming Soon</div>
                                     </div>
                                  </div>
                               </div>
@@ -682,16 +674,16 @@ export default function TradeHub() {
                                     )}
                                  </NeonButton>
                               )}
-                              <NeonButton variant="ghost" className="w-full mt-2 text-red-500 hover:bg-red-500/10 border border-red-500/50" onClick={handleCancelTrade}>
+                              <button className="w-full text-red-500 hover:text-red-400 text-xs font-bold uppercase tracking-widest transition-colors mt-4" onClick={handleCancelTrade}>
                                  Cancel Trade
-                              </NeonButton>
+                              </button>
                            </>
                         ) : (
                            <>
                               <p className="text-sm text-text-muted pb-2">Waiting for the Buyer to deposit funds into the Midly Smart Vault.</p>
-                              <NeonButton variant="ghost" className="w-full text-red-500 hover:bg-red-500/10 border border-red-500/50" onClick={handleCancelTrade}>
+                              <button className="w-full text-red-500 hover:text-red-400 text-xs font-bold uppercase tracking-widest transition-colors mt-4" onClick={handleCancelTrade}>
                                  Cancel Trade
-                              </NeonButton>
+                              </button>
                            </>
                         )}
                      </>
@@ -800,14 +792,19 @@ export default function TradeHub() {
                                        <div className="p-4 bg-dark-bg border border-primary/30 rounded-xl w-full relative overflow-hidden group">
                                           <div className="absolute inset-0 bg-primary/5 backdrop-blur-[2px]" />
                                           <div className="relative z-10">
-                                             <div className="flex items-center gap-2 mb-3">
-                                                <Unlock className="w-5 h-5 text-primary" />
-                                                <p className="text-sm text-primary font-black uppercase tracking-widest leading-none">Vault Unlocked</p>
+                                             <div className="flex items-center justify-between mb-3">
+                                                <div className="flex items-center gap-2">
+                                                   <Unlock className="w-5 h-5 text-primary" />
+                                                   <p className="text-sm text-primary font-black uppercase tracking-widest leading-none">Vault Unlocked</p>
+                                                </div>
+                                                <button onClick={() => { setShowCredentials(!showCredentials); if (!showCredentials) toast("Credentials Revealed", { icon: "👁️" }); }} className="text-text-muted hover:text-white transition-colors">
+                                                   {showCredentials ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                                </button>
                                              </div>
                                              <div className="bg-[#050608] border border-primary/20 p-4 rounded-lg relative overflow-hidden">
                                                 <div className="absolute top-0 right-0 h-full w-24 bg-gradient-to-l from-[#050608] to-transparent pointer-events-none" />
                                                 <p className="text-primary/90 font-mono text-sm break-all font-bold tracking-tight">
-                                                   {trade.account_credentials}
+                                                   {showCredentials ? trade.account_credentials : "••••••••••••••••"}
                                                 </p>
                                              </div>
                                              <NeonButton onClick={() => { navigator.clipboard.writeText(trade.account_credentials); toast.success("Credentials Copied to Clipboard"); }} className="w-full mt-3 !py-2.5 text-xs">
@@ -825,16 +822,20 @@ export default function TradeHub() {
                                           Approve Delivery & Release Funds
                                        </NeonButton>
                                     </div>
-                                    <button onClick={handleAutoRelease} className="w-full mt-2 text-[10px] text-primary bg-primary/10 border border-primary/20 py-2 rounded font-bold hover:bg-primary/20 transition-all uppercase tracking-widest">
-                                       [Developer Tool] Force 24h Skip
-                                    </button>
+                                    {process.env.NODE_ENV === 'development' && (
+                                       <button onClick={handleAutoRelease} className="w-full mt-2 text-[10px] text-primary bg-primary/10 border border-primary/20 py-2 rounded font-bold hover:bg-primary/20 transition-all uppercase tracking-widest">
+                                          [Developer Tool] Force 24h Skip
+                                       </button>
+                                    )}
                                  </div>
                               ) : (
                                  <>
                                     <p className="text-sm text-text-muted pb-2">Delivery confirmed. 24-hr Retrieval Lock active. Awaiting Buyer override or auto-release.</p>
-                                    <button onClick={handleAutoRelease} className="w-full mt-4 text-xs text-primary bg-primary/10 border border-primary/20 py-2 rounded font-bold hover:bg-primary/20 transition-all">
-                                       [Developer Tool] Force 24h Auto-Release Simulation
-                                    </button>
+                                    {process.env.NODE_ENV === 'development' && (
+                                       <button onClick={handleAutoRelease} className="w-full mt-4 text-xs text-primary bg-primary/10 border border-primary/20 py-2 rounded font-bold hover:bg-primary/20 transition-all">
+                                          [Developer Tool] Force 24h Auto-Release Simulation
+                                       </button>
+                                    )}
                                  </>
                               )}
                            </>
@@ -872,7 +873,7 @@ export default function TradeHub() {
          </div>
 
          {/* Right Column: Intelligent Chat */}
-         <div className="lg:col-span-2 flex flex-col h-[60vh] sm:h-[65vh] lg:h-full lg:max-h-full min-h-0 bg-dark-panel border border-dark-border rounded-2xl overflow-hidden shadow-2xl relative">
+         <div className="order-1 lg:order-2 lg:col-span-2 flex flex-col h-[60vh] sm:h-[65vh] lg:h-full lg:max-h-full min-h-0 bg-dark-panel border border-dark-border rounded-2xl overflow-hidden shadow-2xl relative">
             <div className="p-5 border-b border-dark-border bg-dark-bg flex items-center justify-between shrink-0">
                <div className="flex items-center gap-3">
                   <MessageSquare className="w-5 h-5 text-primary glow-icon" />
@@ -1071,6 +1072,38 @@ export default function TradeHub() {
                      </NeonButton>
                      <NeonButton className="flex-[1.5] bg-yellow-500/10 text-yellow-500 border-yellow-500 hover:bg-yellow-500 hover:text-black" onClick={confirmRequestCancellation} isLoading={isLoading}>
                         Submit Cancellation Request
+                     </NeonButton>
+                  </div>
+               </DynamicCard>
+            </div>
+         )}
+
+         {/* CANCEL MODAL */}
+         {isCancelModalOpen && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+               <DynamicCard className="w-full max-w-lg bg-[#0a0d14] border border-red-500/30 p-6 md:p-8 flex flex-col gap-6" hoverEffect={false}>
+                  <div className="flex items-center gap-3 border-b border-red-500/20 pb-4">
+                     <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center shrink-0">
+                        <XCircle className="w-6 h-6 text-red-500 glow-icon" />
+                     </div>
+                     <div>
+                        <h2 className="text-xl font-bold text-white tracking-tight">Cancel Trade</h2>
+                        <p className="text-xs text-red-400 mt-1">This action cannot be undone.</p>
+                     </div>
+                  </div>
+
+                  <div className="space-y-4 text-sm font-medium">
+                     <p className="text-text-muted">
+                        Are you sure you want to completely cancel this trade? This is permanent. No funds will be transferred and the Smart Escrow will be dissolved.
+                     </p>
+                  </div>
+
+                  <div className="flex gap-3 mt-4 pt-4 border-t border-dark-border">
+                     <NeonButton variant="ghost" className="flex-1 border-white/10 hover:bg-white/5 text-text-muted" onClick={() => setIsCancelModalOpen(false)}>
+                        Go Back
+                     </NeonButton>
+                     <NeonButton className="flex-1 bg-red-500/10 text-red-500 border-red-500 hover:bg-red-500 hover:text-white" onClick={confirmCancelTrade} isLoading={isLoading}>
+                        Cancel Trade
                      </NeonButton>
                   </div>
                </DynamicCard>

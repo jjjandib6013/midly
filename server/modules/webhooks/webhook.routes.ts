@@ -18,15 +18,19 @@ router.post('/paymongo', async (req: Request, res: Response): Promise<any> => {
       // - 'link.payment.paid' when payment is made through a Payment Link
       // - 'payment.paid' when payment is made directly
       // - 'payment.failed' when a payment attempt fails
-      if (eventType === 'payment.paid' || eventType === 'link.payment.paid') {
+      if (eventType === 'payment.paid' || eventType === 'link.payment.paid' || eventType === 'checkout_session.payment.paid') {
+         const isCheckoutSession = eventType === 'checkout_session.payment.paid';
          const paymentData = eventType === 'link.payment.paid' 
             ? event.data.attributes.data.attributes  // Link wraps payment data one level deeper
-            : event.data.attributes.data.attributes;
+            : isCheckoutSession 
+               ? event.data.attributes.data.attributes.payments[0].attributes // Checkout session has payments array
+               : event.data.attributes.data.attributes;
          
          // For Links, remarks are on the link itself, not the payment
-         const referenceId = event.data.attributes.data?.attributes?.remarks 
-            || event.data.attributes.data?.attributes?.description
-            || '';
+         const referenceId = isCheckoutSession
+            ? event.data.attributes.data.attributes.reference_number
+            : (event.data.attributes.data?.attributes?.remarks || event.data.attributes.data?.attributes?.description || '');
+            
          const amountPaid = Number(paymentData.amount) / 100; // Convert centavos back to PHP
 
          console.log(`[Webhook] Received ${eventType} | ref: ${referenceId} | amount: ₱${amountPaid}`);
@@ -58,6 +62,7 @@ router.post('/paymongo', async (req: Request, res: Response): Promise<any> => {
             });
 
             console.log(`[Webhook] Fulfilled Top-Up for User ${userId}: ₱${amountPaid}`);
+            io.to(`user_${userId}`).emit('wallet_updated');
 
          } else if (referenceId.startsWith('trade_')) {
             // ==========================================
@@ -155,6 +160,7 @@ router.post('/simulate', async (req: Request, res: Response): Promise<any> => {
          });
 
          console.log(`[Webhook Simulator] Fulfilled Top-Up for User ${userId}: ₱${amount}`);
+         io.to(`user_${userId}`).emit('wallet_updated');
          return res.json({ status: 'OK', message: `Simulated top-up of ₱${amount} for User ${userId}` });
 
       } else if (type === 'trade') {

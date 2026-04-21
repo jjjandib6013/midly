@@ -39,7 +39,7 @@ export async function createPaymentLink(amount: number, description: string, ref
   try {
     const encodedKey = Buffer.from(`${paymongoSecretKey}:`).toString('base64');
     
-    const response = await fetch('https://api.paymongo.com/v1/links', {
+    const response = await fetch('https://api.paymongo.com/v1/checkout_sessions', {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
@@ -49,9 +49,22 @@ export async function createPaymentLink(amount: number, description: string, ref
       body: JSON.stringify({
         data: {
           attributes: {
-            amount: Math.round(amount * 100), // PayMongo expects centavos
-            description: description,
-            remarks: referenceId // We use this to identify the payment in webhooks
+            send_email_receipt: false,
+            show_description: true,
+            show_line_items: true,
+            payment_method_types: ["card", "paymaya", "gcash", "grab_pay", "dob", "dob_ubp"],
+            reference_number: referenceId, // Crucial for webhook matching
+            line_items: [
+              {
+                currency: "PHP",
+                amount: Math.round(amount * 100), // PayMongo expects centavos
+                description: description,
+                name: "Midly Wallet Deposit",
+                quantity: 1
+              }
+            ],
+            success_url: `http://localhost:3000/wallet?status=success`,
+            cancel_url: `http://localhost:3000/wallet?status=cancelled`
           }
         }
       })
@@ -61,10 +74,10 @@ export async function createPaymentLink(amount: number, description: string, ref
 
     if (!response.ok) {
       console.error('[PayMongo API Error]', JSON.stringify(result.errors));
-      return { success: false, error: result.errors?.[0]?.detail || 'Failed to generate PayMongo link' };
+      return { success: false, error: result.errors?.[0]?.detail || 'Failed to generate PayMongo session' };
     }
 
-    console.log(`[PayMongo ${isDevMode ? 'Test' : 'Live'}] Created payment link: ${result.data.attributes.checkout_url}`);
+    console.log(`[PayMongo ${isDevMode ? 'Test' : 'Live'}] Created checkout session: ${result.data.attributes.checkout_url}`);
 
     return {
       success: true,

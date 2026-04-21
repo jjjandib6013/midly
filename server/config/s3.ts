@@ -4,9 +4,6 @@ import multerS3 from 'multer-s3';
 import path from 'path';
 import crypto from 'crypto';
 import fs from 'fs';
-import dotenv from 'dotenv';
-
-dotenv.config();
 
 export const s3Config = process.env.AWS_BUCKET_NAME && process.env.AWS_ACCESS_KEY_ID ? new S3Client({
    region: process.env.AWS_REGION || 'auto',

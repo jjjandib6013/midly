@@ -1,8 +1,10 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import crypto from 'crypto';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
-import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import { RegisterSchema } from './src/lib/validations';
@@ -57,6 +59,8 @@ io.on("connection", (socket) => {
 });
 
 const PORT = process.env.PORT || 5000;
+
+app.set('io', io);
 
 app.use(cors({
    origin: function (origin, callback) {
@@ -156,10 +160,10 @@ app.use('/api', userRoutes);
 // Admin APIs moved to Admin Routes
 app.use('/api/admin', adminRoutes);
 app.use('/api/transactions', transactionRoutes);
-app.use('/api', transactionRoutes); // Fallback for /listings and /notifications which are defined inside transactionRoutes
 app.use('/api/messages', messageRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/webhooks', webhookRoutes);
+app.use('/api', transactionRoutes); // Fallback for /listings and /notifications which are defined inside transactionRoutes
 
 
 // Transactions and Messages have been moved to their respective routes
