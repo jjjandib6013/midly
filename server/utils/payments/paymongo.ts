@@ -63,8 +63,8 @@ export async function createPaymentLink(amount: number, description: string, ref
                 quantity: 1
               }
             ],
-            success_url: `http://localhost:3000/wallet?status=success`,
-            cancel_url: `http://localhost:3000/wallet?status=cancelled`
+            success_url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/wallet?status=success`,
+            cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/wallet?status=cancelled`
           }
         }
       })
