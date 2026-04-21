@@ -37,31 +37,7 @@ export default function Sidebar() {
 
    return (
       <>
-         {/* Desktop Sidebar */}
-         <aside className="hidden md:flex flex-col fixed left-0 top-24 bottom-0 w-64 bg-[#050608] border-r border-white/[0.04] p-6 overflow-y-auto z-40">
-            <div className="flex flex-col gap-2">
-               {navLinks.map((link) => {
-                  const isActive = pathname.startsWith(link.href);
-                  return (
-                     <Link
-                        key={link.name}
-                        href={link.href}
-                        className={`flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-300 font-bold uppercase tracking-widest text-xs
-                           ${isActive 
-                              ? "bg-primary/10 text-primary border border-primary/20 shadow-[0_0_15px_rgba(63,229,108,0.15)]" 
-                              : "text-[#8892b0] hover:text-white hover:bg-white/[0.02]"
-                           }
-                        `}
-                     >
-                        <link.icon className={`w-5 h-5 ${isActive ? "text-primary" : "text-[#8892b0]"}`} />
-                        {link.name}
-                     </Link>
-                  );
-               })}
-            </div>
-         </aside>
-
-         {/* Mobile Bottom Navigation */}
+         {/* Mobile Bottom Navigation Only */}
          <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-[#030407]/90 backdrop-blur-xl border-t border-white/[0.04] z-50 flex items-center justify-around px-2 pb-safe">
             {navLinks.slice(0, 5).map((link) => {
                const isActive = pathname.startsWith(link.href);

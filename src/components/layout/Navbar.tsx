@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ShieldCheck, User, Menu, Bell, Wallet, LayoutDashboard, X, LogOut, ArrowRight } from "lucide-react";
+import { ShieldCheck, User, Menu, Bell, Wallet, LayoutDashboard, X, LogOut, ArrowRight, Store } from "lucide-react";
 import NeonButton from "@/components/ui/NeonButton";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
@@ -63,10 +63,12 @@ export default function Navbar() {
     }
 
     // Initial entrance animation
-    gsap.fromTo(navRef.current,
-      { y: -100, opacity: 0 },
-      { y: 0, opacity: 1, duration: 1, ease: "power4.out", delay: 0.2 }
-    );
+    if (navRef.current) {
+      gsap.fromTo(navRef.current,
+        { y: -100, opacity: 0 },
+        { y: 0, opacity: 1, duration: 1, ease: "power4.out", delay: 0.2 }
+      );
+    }
     
     return () => {
        if (socket) socket.disconnect();
@@ -89,9 +91,23 @@ export default function Navbar() {
     await signOut({ callbackUrl: "/" });
   };
 
-  const navLinks: any[] = isAuthenticated ? [] : [
+  // Unauthenticated nav links (landing page)
+  const publicNavLinks: any[] = [
     { name: "Platform", href: "/" },
   ];
+
+  // Authenticated nav links (shown inline in navbar on desktop)
+  const authNavLinks = [
+    { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+    { name: "Marketplace", href: "/marketplace", icon: Store },
+    { name: "Wallet", href: "/wallet", icon: Wallet },
+    { name: "Profile", href: "/profile", icon: User },
+    { name: "Verify", href: "/kyc", icon: ShieldCheck },
+  ];
+
+  if (isAdmin) {
+    authNavLinks.push({ name: "Admin", href: "/admin", icon: ShieldCheck });
+  }
 
   // GSAP animations for mobile menu
   useEffect(() => {
@@ -157,16 +173,41 @@ export default function Navbar() {
         className="fixed top-0 left-0 w-full z-50 bg-[#030407]/80 backdrop-blur-2xl border-b border-white/[0.04]"
       >
         <div className="w-full px-4 sm:px-6 lg:px-12 h-16 sm:h-20 lg:h-24 flex items-center justify-between">
-          <div className="flex items-center gap-12">
+          <div className="flex items-center gap-8 lg:gap-12">
             <Link href="/" className="flex items-center gap-3 group relative">
               <div className="absolute -inset-4 bg-primary/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
               <ShieldCheck className="relative z-10 h-8 w-8 text-primary drop-shadow-[0_0_15px_rgba(63,229,108,0.3)]" />
               <span className="relative z-10 text-2xl font-black tracking-tighter text-white uppercase translate-y-[1px]">MIDLY</span>
             </Link>
 
+            {/* Desktop Nav Links - Authenticated */}
+            {isAuthenticated && (
+              <div className="hidden md:flex items-center gap-1 lg:gap-2 pl-6 lg:pl-8 border-l border-white/[0.04] h-8">
+                {authNavLinks.map((link) => {
+                  const isActive = pathname.startsWith(link.href);
+                  return (
+                    <Link
+                      key={link.name}
+                      href={link.href}
+                      className={`flex items-center gap-2 px-3 lg:px-4 py-2 rounded-lg text-[10px] lg:text-xs font-bold tracking-widest uppercase transition-all duration-300
+                        ${isActive
+                          ? "text-primary bg-primary/10 border border-primary/20"
+                          : "text-[#8892b0] hover:text-white hover:bg-white/[0.03]"
+                        }
+                      `}
+                    >
+                      <link.icon className={`w-3.5 h-3.5 ${isActive ? "text-primary" : ""}`} />
+                      {link.name}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Desktop Nav Links - Unauthenticated */}
             {!isAuthenticated && (
               <div className="hidden md:flex items-center gap-8 pl-8 border-l border-white/[0.04] h-8">
-                {navLinks.map((link) => (
+                {publicNavLinks.map((link) => (
                   <Link
                     key={link.name}
                     href={link.href}
@@ -180,13 +221,9 @@ export default function Navbar() {
             )}
           </div>
 
-          <div className="flex items-center gap-8">
+          <div className="flex items-center gap-4 lg:gap-6">
             {isAuthenticated ? (
               <>
-                <Link href="/wallet" className="hidden md:flex items-center gap-2 text-xs font-bold tracking-widest uppercase text-[#8892b0] hover:text-primary transition-colors">
-                  <Wallet className="w-4 h-4" /> Wallet
-                </Link>
-
                 <div className="relative">
                   <button
                     onClick={() => setShowNotifs(!showNotifs)}
@@ -226,14 +263,14 @@ export default function Navbar() {
                   </div>
                 </div>
 
-                <Link
-                  href="/profile"
-                  className="hidden md:block"
+                {/* Logout button - desktop only */}
+                <button
+                  onClick={handleLogout}
+                  className="hidden md:flex items-center gap-2 px-3 py-2 text-[10px] lg:text-xs font-bold tracking-widest uppercase text-[#8892b0] hover:text-red-400 transition-colors"
                 >
-                  <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary hover:bg-primary hover:text-dark-bg transition-colors duration-300">
-                    <User className="h-4 w-4" />
-                  </div>
-                </Link>
+                  <LogOut className="w-3.5 h-3.5" />
+                  Logout
+                </button>
               </>
             ) : (
               <div className="hidden md:flex items-center gap-6">
@@ -256,7 +293,7 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* GSAP Full Screen Mobile Menu */}
+      {/* GSAP Full Screen Mobile Menu (unauthenticated only) */}
       <div
         ref={mobileMenuRef}
         className="fixed inset-0 z-[100] bg-[#030407] flex flex-col p-6 sm:p-8 transform -translate-y-full will-change-transform"
@@ -275,7 +312,7 @@ export default function Navbar() {
         </div>
 
         <div ref={menuLinksRef} className="flex flex-col gap-8 flex-1 justify-center pl-4">
-          {navLinks.map((link) => (
+          {publicNavLinks.map((link) => (
             <div key={link.name} className="overflow-hidden">
               <Link
                 href={link.href}
@@ -286,44 +323,12 @@ export default function Navbar() {
               </Link>
             </div>
           ))}
-
-          {isAuthenticated && (
-            <div className="overflow-hidden mt-8">
-              <Link
-                href="/wallet"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="text-5xl font-black tracking-tighter text-white hover:text-primary transition-colors flex items-center gap-4"
-              >
-                Wallet
-              </Link>
-            </div>
-          )}
-          {isAuthenticated && (
-            <div className="overflow-hidden">
-              <Link
-                href="/profile"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="text-5xl font-black tracking-tighter text-white hover:text-primary transition-colors flex items-center gap-4"
-              >
-                Profile
-              </Link>
-            </div>
-          )}
         </div>
 
-        {isAuthenticated ? (
-          <div className="mt-auto pt-10 pb-4 flex justify-between items-center border-t border-white/[0.04]">
-            <span className="text-sm font-bold text-[#8892b0] uppercase tracking-widest">SECURE SESSION</span>
-            <button onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }} className="flex items-center gap-2 text-[#8892b0] hover:text-red-500 font-bold uppercase tracking-widest text-xs transition-colors">
-              <LogOut className="h-4 w-4" /> Log Out
-            </button>
-          </div>
-        ) : (
-          <div className="mt-auto flex flex-col gap-4 pb-4">
-            <Link href="/login" onClick={() => setIsMobileMenuOpen(false)} className="text-center py-5 text-sm font-bold tracking-widest uppercase text-white bg-white/5 rounded-full">Log In</Link>
-            <Link href="/register" onClick={() => setIsMobileMenuOpen(false)}><NeonButton className="w-full !py-5 text-sm tracking-widest uppercase">Register</NeonButton></Link>
-          </div>
-        )}
+        <div className="mt-auto flex flex-col gap-4 pb-4">
+          <Link href="/login" onClick={() => setIsMobileMenuOpen(false)} className="text-center py-5 text-sm font-bold tracking-widest uppercase text-white bg-white/5 rounded-full">Log In</Link>
+          <Link href="/register" onClick={() => setIsMobileMenuOpen(false)}><NeonButton className="w-full !py-5 text-sm tracking-widest uppercase">Register</NeonButton></Link>
+        </div>
       </div>
     </>
   );
