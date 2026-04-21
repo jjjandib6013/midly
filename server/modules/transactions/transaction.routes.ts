@@ -26,6 +26,24 @@ router.get('/listings', async (req, res): Promise<any> => {
    }
 });
 
+// GET My Trades (For Dashboard/Transactions)
+router.get('/', authenticateJWT, async (req, res): Promise<any> => {
+   try {
+      const trades = await prisma.transaction.findMany({
+         where: { OR: [{ buyer_id: req.user.user_id }, { seller_id: req.user.user_id }] },
+         include: { 
+            buyer: { select: { email: true, first_name: true } }, 
+            seller: { select: { email: true, first_name: true } },
+            payment: true
+         },
+         orderBy: { updated_at: 'desc' }
+      });
+      res.json({ trades });
+   } catch (e) {
+      res.status(500).json({ error: 'Server error' });
+   }
+});
+
 // POST Create P2P Listing
 router.post('/listings', authenticateJWT, requireKYC, async (req, res): Promise<any> => {
    try {

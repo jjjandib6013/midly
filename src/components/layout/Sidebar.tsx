@@ -21,7 +21,7 @@ export default function Sidebar() {
       }
    }, [session]);
 
-   if (status !== "authenticated") return null;
+   if (status !== "authenticated" || pathname === "/") return null;
 
    const navLinks = [
       { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
