@@ -1,0 +1,677 @@
+import { Router, Request, Response } from 'express';
+import { prisma } from '../../config/db';
+import { authenticateJWT, requireKYC } from '../../shared/middlewares/auth.middleware';
+import { io, logAudit } from '../../../server';
+
+const router = Router();
+
+const TERMINAL_STATES = ['completed', 'cancelled', 'refunded'];
+const PRE_ACCEPTANCE_STATES = ['pending_invite'];
+
+
+// GET P2P Listings
+router.get('/listings', async (req, res): Promise<any> => {
+   try {
+      const listings = await prisma.listing.findMany({
+         where: { status: 'open' },
+         include: { seller: { select: { first_name: true, last_name: true, reputation_score: true } } },
+         orderBy: { created_at: 'desc' }
+      });
+      res.json({ listings });
+   } catch (e) {
+      res.status(500).json({ error: 'Server error' });
+   }
+});
+
+// POST Create P2P Listing
+router.post('/listings', authenticateJWT, requireKYC, async (req, res): Promise<any> => {
+   try {
+      const { gameType, itemName, price } = req.body;
+      if (Number(price) <= 0 || isNaN(Number(price))) return res.status(400).json({ error: 'Invalid price.' });
+      const listing = await prisma.listing.create({
+         data: {
+            seller_id: req.user.user_id,
+            game_type: gameType,
+            item_name: itemName,
+            price: Number(price)
+         }
+      });
+      res.json({ listing });
+   } catch (e) {
+      res.status(500).json({ error: 'Server error' });
+   }
+});
+
+// POST Buy Listing -> Auto Creates Escrow
+router.post('/listings/buy/:id', authenticateJWT, requireKYC, async (req, res): Promise<any> => {
+   try {
+      const listingId = parseInt(req.params.id as string);
+      const listing = await prisma.listing.findUnique({ where: { listing_id: listingId } });
+
+      if (!listing || listing.status !== 'open') return res.status(404).json({ error: 'Listing not available' });
+      if (listing.seller_id === req.user.user_id) return res.status(400).json({ error: 'Cannot buy your own listing' });
+
+      const basePrice = Number(listing.price);
+      const serviceFee = basePrice * 0.05;
+      const totalAmount = basePrice + serviceFee;
+
+      const tradeIdRes = await prisma.$transaction(async (tx) => {
+         await tx.listing.update({ where: { listing_id: listingId }, data: { status: 'sold' } });
+
+         const trade = await tx.transaction.create({
+            data: {
+               buyer_id: req.user.user_id,
+               seller_id: listing.seller_id,
+               item_type: listing.game_type + ' - ' + listing.item_name,
+               game_type: listing.game_type,
+               agreed_price: basePrice,
+               service_fee: serviceFee,
+               total_amount: basePrice + serviceFee,
+               status: 'agreement',
+               inspection_hours: 24,
+            }
+         });
+
+         // Phase 1: Agreement Phase initialized
+         await tx.message.create({
+            data: {
+               transaction_id: trade.transaction_id,
+               sender_id: req.user.user_id, // acting as system trigger
+               message_text: `MIDLY TRADE AGREEMENT PHASE INITIATED.\n\nItem: ${listing.item_name}\nPrice: ₱${basePrice.toLocaleString()}\n\nNo funds have been locked yet. Please discuss the terms. When ready, the Seller must Request Payment, and the Buyer will be prompted to deposit funds into the Midly Smart Vault.`,
+               is_system_generated: true,
+               risk_level: 'Safe'
+            }
+         });
+
+         return trade.transaction_id;
+      });
+
+      res.json({ tradeId: tradeIdRes });
+   } catch (e: any) {
+      res.status(400).json({ error: e.message || 'Server error' });
+   }
+});
+
+// POST Create Escrow Transaction
+router.post('', authenticateJWT, requireKYC, async (req, res): Promise<any> => {
+   try {
+      const {
+         role, // 'BUY' or 'SELL'
+         itemCategory,
+         itemDescription, // mapped to item_name now
+         tradeCategory, // new field: 'Game Account', 'In-Game Item', etc.
+         agreedPrice,
+         sellerEmail
+      } = req.body;
+
+      if (!agreedPrice || !sellerEmail) return res.status(400).json({ error: 'Missing logic' });
+
+      const counterParty = await prisma.user.findUnique({ where: { email: sellerEmail } });
+      if (!counterParty) return res.status(404).json({ error: 'Counterparty email not registered.' });
+      if (counterParty.user_id === req.user.user_id) return res.status(400).json({ error: 'Cannot trade with yourself.' });
+
+      const buyerId = role === 'BUY' ? req.user.user_id : counterParty.user_id;
+      const sellerId = role === 'SELL' ? req.user.user_id : counterParty.user_id;
+
+      const basePrice = Number(agreedPrice);
+      const serviceFee = basePrice * 0.05;
+      const totalAmount = basePrice + serviceFee;
+
+      const tradeRes = await prisma.$transaction(async (tx) => {
+         const trade = await tx.transaction.create({
+            data: {
+               buyer_id: buyerId,
+               seller_id: sellerId,
+               item_type: tradeCategory || 'Game Account', // legacy fallback
+               trade_category: tradeCategory || 'Game Account',
+               item_name: itemDescription,
+               game_type: itemCategory,
+               agreed_price: basePrice,
+               service_fee: serviceFee,
+               total_amount: totalAmount,
+               status: 'pending_invite',
+               inspection_hours: 24,
+            }
+         });
+
+         await tx.notification.create({
+            data: {
+               user_id: counterParty.user_id,
+               message: `You have received a new Private Escrow Request for ${itemCategory}.`,
+               type: 'escrow_invite',
+               reference_id: trade.transaction_id
+            }
+         });
+
+         return trade;
+      });
+
+      res.json({ transaction: tradeRes });
+   } catch (error: any) {
+      res.status(400).json({ error: error.message || 'Server error' });
+   }
+});
+
+// GET View Notifications
+router.get('/notifications', authenticateJWT, async (req, res): Promise<any> => {
+   try {
+      const data = await prisma.notification.findMany({
+         where: { user_id: req.user.user_id, is_read: false },
+         orderBy: { created_at: 'desc' }
+      });
+      res.json({ notifications: data });
+   } catch (e) { res.status(500).json({ error: 'Server err' }); }
+});
+
+// PUT Mark Notifications Read
+router.put('/notifications/mark-read', authenticateJWT, async (req, res): Promise<any> => {
+   try {
+      await prisma.notification.updateMany({
+         where: { user_id: req.user.user_id, is_read: false },
+         data: { is_read: true }
+      });
+      res.json({ success: true });
+   } catch (e) { res.status(500).json({ error: 'Server err' }); }
+});
+
+// PUT Accept Escrow Invite (Hardened: counterparty-only, idempotent, audit-logged)
+router.put('/:id/accept-invite', authenticateJWT, async (req, res): Promise<any> => {
+   try {
+      const tradeId = parseInt(req.params.id as string);
+
+      const trade = await prisma.transaction.findUnique({ where: { transaction_id: tradeId } });
+      if (!trade) return res.status(404).json({ error: 'Trade not found' });
+
+      // Idempotency: if trade already past pending_invite, return success silently
+      if (trade.status !== 'pending_invite') {
+         return res.json({ success: true, message: 'Trade already accepted.' });
+      }
+
+      // Authorization: must be part of the trade
+      if (req.user.user_id !== trade.buyer_id && req.user.user_id !== trade.seller_id) {
+         return res.status(403).json({ error: 'Forbidden. You are not part of this trade.' });
+      }
+
+      // CRITICAL: Only the counterparty (invited user) can accept, NOT the initiator
+      const inviteNotif = await prisma.notification.findFirst({
+         where: { reference_id: tradeId, type: 'escrow_invite' }
+      });
+      const invitedUserId = inviteNotif?.user_id;
+
+      if (!invitedUserId || req.user.user_id !== invitedUserId) {
+         return res.status(403).json({ error: 'Only the invited counterparty may accept this trade.' });
+      }
+
+      await prisma.$transaction(async (tx) => {
+         await tx.transaction.update({
+            where: { transaction_id: tradeId },
+            data: { status: 'agreement' }
+         });
+
+         await tx.notification.updateMany({
+            where: { reference_id: tradeId, type: 'escrow_invite' },
+            data: { is_read: true }
+         });
+
+         // Notify the initiator that their invite was accepted
+         const initiatorId = invitedUserId === trade.buyer_id ? trade.seller_id : trade.buyer_id;
+         await tx.notification.create({
+            data: {
+               user_id: initiatorId,
+               message: `Your Private Escrow invite for Trade #${tradeId} has been accepted! The Agreement Phase is now active.`,
+               type: 'escrow_accepted',
+               reference_id: tradeId
+            }
+         });
+
+         await tx.message.create({
+            data: {
+               transaction_id: tradeId,
+               sender_id: req.user.user_id,
+               message_text: `[SYSTEM LOG] The Counterparty has accepted the Private Escrow Request. The Room is now unlocked. You are in the Agreement Phase. Please discuss terms.`,
+               is_system_generated: true,
+               risk_level: 'Safe'
+            }
+         });
+
+         // Audit log
+         await logAudit(tx, tradeId, req.user.user_id, 'ACCEPT_INVITE', `User ${req.user.email} accepted escrow invite for trade #${tradeId}`, req.ip);
+      });
+
+      io.to(`trade_${tradeId}`).emit('trade_updated', 'agreement');
+      return res.json({ success: true });
+   } catch (e: any) {
+      res.status(500).json({ error: 'Server error' });
+   }
+});
+
+// PUT Escrow Progress
+router.put('/:id/progress', authenticateJWT, async (req, res): Promise<any> => {
+   try {
+      const tradeId = parseInt(req.params.id as string);
+      const { action, paymentMethod } = req.body; // 'PAY', 'DELIVER', 'APPROVE'
+
+      const trade = await prisma.transaction.findUnique({
+         where: { transaction_id: tradeId },
+         include: { payment: true, seller: true, buyer: true }
+      });
+
+      if (!trade) return res.status(404).json({ error: 'Trade not found' });
+      if (trade.buyer_id !== req.user.user_id && trade.seller_id !== req.user.user_id) {
+         return res.status(403).json({ error: 'Forbidden' });
+      }
+
+      // HARD BLOCK: No actions allowed in terminal or pre-acceptance states
+      if (TERMINAL_STATES.includes(trade.status || '')) {
+         return res.status(400).json({ error: 'Trade state is locked and cannot be altered.' });
+      }
+      if (PRE_ACCEPTANCE_STATES.includes(trade.status || '')) {
+         return res.status(400).json({ error: 'Trade is not active. Acceptance by both parties is required.' });
+      }
+
+      if (action === 'REQUEST_PAYMENT' && req.user.user_id === trade.seller_id) {
+         if (trade.status !== 'agreement') return res.status(400).json({ error: 'Trade not in agreement phase.' });
+         await prisma.transaction.update({
+            where: { transaction_id: tradeId },
+            data: { status: 'awaiting_payment' }
+         });
+         await prisma.message.create({
+            data: {
+               transaction_id: tradeId,
+               sender_id: req.user.user_id,
+               message_text: `[SYSTEM LOG] The Seller has locked the terms and requested payment. Buyer, please secure the funds to proceed.`,
+               is_system_generated: true,
+               risk_level: 'Safe'
+            }
+         });
+         io.to(`trade_${tradeId}`).emit('trade_updated', 'awaiting_payment');
+         return res.json({ status: 'AWAITING_PAYMENT' });
+      }
+
+      if (action === 'PAY' && req.user.user_id === trade.buyer_id) {
+         if (trade.status !== 'awaiting_payment') return res.status(400).json({ error: 'Trade not awaiting payment.' });
+
+         if (paymentMethod === 'midly_wallet' || !paymentMethod) {
+            const buyer = await prisma.user.findUnique({ where: { user_id: trade.buyer_id } });
+            if (!buyer || Number(buyer.wallet_balance) < Number(trade.total_amount)) {
+               return res.status(400).json({ error: 'Insufficient Midly Wallet balance. Please deposit funds first.' });
+            }
+
+            await prisma.$transaction(async (tx) => {
+               const updatedBuyer = await tx.user.update({
+                  where: { user_id: trade.buyer_id },
+                  data: { wallet_balance: { decrement: Number(trade.total_amount) } }
+               });
+               await tx.walletTransaction.create({
+                  data: { user_id: trade.buyer_id, type: 'escrow_lock', amount: -Number(trade.total_amount), balance: updatedBuyer.wallet_balance || 0, description: `Escrow Lock - Trade #${tradeId}` }
+               });
+
+               await tx.payment.create({
+                  data: {
+                     transaction_id: trade.transaction_id,
+                     amount: trade.total_amount,
+                     payment_method: 'Midly Wallet',
+                     vault_status: 'locked',
+                     deposit_date: new Date()
+                  }
+               });
+
+               await tx.transaction.update({
+                  where: { transaction_id: tradeId },
+                  data: { status: 'active' }
+               });
+
+               await tx.message.create({
+                  data: {
+                     transaction_id: tradeId,
+                     sender_id: trade.buyer_id,
+                     message_text: `[SYSTEM LOG] The Buyer has securely deposited ₱${Number(trade.total_amount).toLocaleString()} into the Midly Smart Vault via Midly Wallet. Seller, please proceed to Handover the item.`,
+                     is_system_generated: true,
+                     risk_level: 'Safe'
+                  }
+               });
+            });
+         } else {
+            // External Gateway (Stripe/PayMongo spoof)
+            await prisma.$transaction(async (tx) => {
+               await tx.payment.create({
+                  data: {
+                     transaction_id: trade.transaction_id,
+                     amount: trade.total_amount,
+                     payment_method: paymentMethod === 'gcash' ? 'GCash' : 'Credit Card',
+                     vault_status: 'locked',
+                     deposit_date: new Date()
+                  }
+               });
+
+               await tx.transaction.update({
+                  where: { transaction_id: tradeId },
+                  data: { status: 'active' }
+               });
+
+               await tx.message.create({
+                  data: {
+                     transaction_id: tradeId,
+                     sender_id: trade.buyer_id,
+                     message_text: `[SYSTEM LOG] The Buyer has securely deposited ₱${Number(trade.total_amount).toLocaleString()} into the Midly Smart Vault via ${paymentMethod === 'gcash' ? 'GCash' : 'Credit / Debit Card'}. Seller, please proceed to Handover the item.`,
+                     is_system_generated: true,
+                     risk_level: 'Safe'
+                  }
+               });
+            });
+         }
+
+         io.to(`trade_${tradeId}`).emit('trade_updated', 'active');
+         return res.json({ status: 'ACTIVE' });
+      }
+
+      if (action === 'DELIVER' && req.user.user_id === trade.seller_id) {
+         const { credentials } = req.body;
+         // Seller confirms delivery
+         await prisma.$transaction(async (tx) => {
+            await tx.transaction.update({
+               where: { transaction_id: tradeId },
+               data: {
+                  status: 'verifying',
+                  item_delivered_at: new Date(),
+                  ...(credentials ? { account_credentials: credentials } : {})
+               }
+            });
+
+            await tx.message.create({
+               data: {
+                  transaction_id: tradeId,
+                  sender_id: req.user.user_id,
+                  message_text: `[SYSTEM ALERT] The Seller has completed the Item Handover. The Retreival Lock is active. Buyer, please verify delivery or unveil the Credential Vault.`,
+                  is_system_generated: true,
+                  risk_level: 'Safe'
+               }
+            });
+         });
+         io.to(`trade_${tradeId}`).emit('trade_updated', 'verifying');
+         return res.json({ status: 'DELIVERED' });
+      }
+
+      if (action === 'APPROVE' && req.user.user_id === trade.buyer_id) {
+         // Buyer approves -> release funds to seller
+         if (!trade.payment) return res.status(400).json({ error: 'No active payment escrow' });
+
+         await prisma.$transaction(async (tx) => {
+            // 1. Update trade status
+            await tx.transaction.update({
+               where: { transaction_id: tradeId },
+               data: {
+                  status: 'completed',
+                  buyer_approved_at: new Date()
+               }
+            });
+
+            // 2. Update payment vault status
+            await tx.payment.update({
+               where: { payment_id: trade.payment!.payment_id },
+               data: { vault_status: 'released', release_date: new Date() }
+            });
+
+            // 3. Increment seller wallet by Base Price (the Total Amount - Service Fee)
+            const amountToReceive = Number(trade.agreed_price);
+            const updatedSeller = await tx.user.update({
+               where: { user_id: trade.seller_id },
+               data: { wallet_balance: { increment: amountToReceive } }
+            });
+            await tx.walletTransaction.create({
+               data: { user_id: trade.seller_id, type: 'escrow_release', amount: amountToReceive, balance: updatedSeller.wallet_balance || 0, description: `Escrow Release - Trade #${tradeId}` }
+            });
+         });
+
+         io.to(`trade_${tradeId}`).emit('trade_updated', 'completed');
+         return res.json({ status: 'APPROVED' });
+      }
+
+      res.status(400).json({ error: 'Invalid action or permission denied' });
+   } catch (error: any) {
+      res.status(500).json({ error: 'Server error', msg: error.message });
+   }
+});
+
+// POST Initiate Dispute
+router.post('/:id/dispute', authenticateJWT, async (req, res): Promise<any> => {
+   try {
+      const tradeId = parseInt(req.params.id as string);
+      const { reason } = req.body;
+
+      const trade = await prisma.transaction.findUnique({ where: { transaction_id: tradeId } });
+      if (!trade || (trade.buyer_id !== req.user.user_id && trade.seller_id !== req.user.user_id)) {
+         return res.status(403).json({ error: 'Forbidden' });
+      }
+      if (trade.status !== 'active' && trade.status !== 'verifying') {
+         return res.status(400).json({ error: 'Can only dispute active or verifying trades.' });
+      }
+
+      await prisma.$transaction(async (tx) => {
+         // Freeze the transaction status
+         await tx.transaction.update({
+            where: { transaction_id: tradeId },
+            data: { status: 'disputed' }
+         });
+
+         // Mathematically freeze the escrow so auto-timers are completely killed
+         const paymentCheck = await tx.payment.findUnique({ where: { transaction_id: tradeId } });
+         if (paymentCheck) {
+            await tx.payment.update({
+               where: { transaction_id: tradeId },
+               data: { vault_status: 'frozen' }
+            });
+         }
+
+         // Create Dispute ticket
+         await tx.dispute.create({
+            data: {
+               transaction_id: tradeId,
+               raised_by: req.user.user_id,
+               dispute_type: 'Item Mismatch / Fraud',
+               description: reason || 'No reason provided. Investigation flagged.'
+            }
+         });
+
+         // Secure System Message Evidence
+         await tx.message.create({
+            data: {
+               transaction_id: tradeId,
+               sender_id: req.user.user_id,
+               message_text: `[SYSTEM WARNING: SCAM DETECTION ACTIVATED]\nUser has officially filed a dispute. Reason: "${reason}".\n\nThe Midly Engine has frozen the Smart Vault entirely. No funds can move. Administrators have been pinged to enter this chat room.`,
+               is_system_generated: true,
+               risk_level: 'Critical'
+            }
+         });
+      });
+
+      io.to(`trade_${tradeId}`).emit('trade_updated', 'disputed');
+      res.json({ status: 'DISPUTED' });
+   } catch (e) {
+      res.status(500).json({ error: 'Server error' });
+   }
+});
+
+// POST Auto-Release System Trigger
+router.post('/:id/auto-release', authenticateJWT, async (req, res): Promise<any> => {
+   try {
+      const tradeId = parseInt(req.params.id as string);
+      const trade = await prisma.transaction.findUnique({
+         where: { transaction_id: tradeId },
+         include: { payment: true }
+      });
+
+      if (!trade) return res.status(404).json({ error: 'Not found' });
+      if (trade.status !== 'verifying' || !trade.item_delivered_at) {
+         return res.status(400).json({ error: 'Trade is not in verifiable state.' });
+      }
+
+      // Server-side time validation only — no client bypass allowed
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+      if (trade.item_delivered_at >= twentyFourHoursAgo) {
+         return res.status(403).json({ error: '24 hours have not elapsed yet.' });
+      }
+
+      if (!trade.payment) return res.status(400).json({ error: 'Vault empty' });
+
+      await prisma.$transaction(async (tx) => {
+         // Auto Approve trade status
+         await tx.transaction.update({
+            where: { transaction_id: tradeId },
+            data: { status: 'completed', buyer_approved_at: new Date() }
+         });
+
+         // Release funds
+         await tx.payment.update({
+            where: { payment_id: trade.payment!.payment_id },
+            data: { vault_status: 'released', release_date: new Date() }
+         });
+
+         // Increment seller wallet
+         const amountToReceive = Number(trade.agreed_price);
+         const updatedSeller = await tx.user.update({
+            where: { user_id: trade.seller_id },
+            data: { wallet_balance: { increment: amountToReceive } }
+         });
+         await tx.walletTransaction.create({
+            data: { user_id: trade.seller_id, type: 'escrow_release', amount: amountToReceive, balance: updatedSeller.wallet_balance || 0, description: `Escrow Auto-Release - Trade #${tradeId}` }
+         });
+
+         // System Log
+         await tx.message.create({
+            data: {
+               transaction_id: tradeId,
+               sender_id: trade.seller_id,
+               message_text: `[SYSTEM TRIGGER: AUTO-RELEASE EXECUTED]\n24-Hours elapsed without Buyer Override. The Smart Contract has verified delivery implicitly and successfully routed ₱${amountToReceive.toLocaleString()} to the Seller's wallet.`,
+               is_system_generated: true,
+               risk_level: 'Safe'
+            }
+         });
+      });
+
+      io.to(`trade_${tradeId}`).emit('trade_updated', 'completed');
+      res.json({ status: 'AUTO_RELEASED' });
+   } catch (e) {
+      res.status(500).json({ error: 'Server error' });
+   }
+});
+
+// POST Cancel Pre-Vault Trade (Bilateral)
+router.post('/:id/cancel', authenticateJWT, async (req, res): Promise<any> => {
+   try {
+      const tradeId = parseInt(req.params.id as string);
+      const trade = await prisma.transaction.findUnique({ where: { transaction_id: tradeId } });
+
+      if (!trade) return res.status(404).json({ error: 'Trade not found.' });
+      if (trade.buyer_id !== req.user.user_id && trade.seller_id !== req.user.user_id) return res.status(403).json({ error: 'Forbidden.' });
+
+      if (trade.status !== 'pending_invite' && trade.status !== 'agreement' && trade.status !== 'awaiting_payment') {
+         return res.status(400).json({ error: 'Cannot cancel directly. Funds may already be locked.' });
+      }
+
+      await prisma.$transaction(async (tx) => {
+         await tx.transaction.update({
+            where: { transaction_id: tradeId },
+            data: { status: 'cancelled' }
+         });
+
+         await tx.message.create({
+            data: {
+               transaction_id: tradeId,
+               sender_id: req.user.user_id,
+               message_text: `[SYSTEM ALERT] This Escrow Room has been permanently CANCELLED. No funds were transferred.`,
+               is_system_generated: true,
+               risk_level: 'Safe'
+            }
+         });
+      });
+
+      io.to(`trade_${tradeId}`).emit('trade_updated', 'cancelled');
+      res.json({ status: 'CANCELLED' });
+   } catch (error) {
+      res.status(500).json({ error: 'Server error' });
+   }
+});
+
+// POST Request Mutual Cancellation (Post-Vault)
+router.post('/:id/request-cancel', authenticateJWT, async (req, res): Promise<any> => {
+   try {
+      const tradeId = parseInt(req.params.id as string);
+      const trade = await prisma.transaction.findUnique({ where: { transaction_id: tradeId } });
+
+      if (!trade) return res.status(404).json({ error: 'Trade not found.' });
+      if (trade.buyer_id !== req.user.user_id && trade.seller_id !== req.user.user_id) return res.status(403).json({ error: 'Forbidden.' });
+      if (trade.status !== 'active') return res.status(400).json({ error: 'Mutual Cancellation applies to the Active Vault phase.' });
+
+      await prisma.$transaction(async (tx) => {
+         await tx.transaction.update({
+            where: { transaction_id: tradeId },
+            data: { cancel_requested_by: req.user.user_id }
+         });
+
+         await tx.message.create({
+            data: {
+               transaction_id: tradeId,
+               sender_id: req.user.user_id,
+               message_text: `[SYSTEM WARNING: CANCELLATION REQUESTED]\nA participant wants to back out and withdraw locked funds from the Smart Vault. The counterparty must Accept to instantly refund the buyer.`,
+               is_system_generated: true,
+               risk_level: 'Medium'
+            }
+         });
+      });
+
+      io.to(`trade_${tradeId}`).emit('trade_updated', 'cancel_requested');
+      res.json({ status: 'REQUEST_LOGGED' });
+   } catch (error) {
+      res.status(500).json({ error: 'Server error' });
+   }
+});
+
+// POST Accept Mutual Cancellation (Post-Vault)
+router.post('/:id/accept-cancel', authenticateJWT, async (req, res): Promise<any> => {
+   try {
+      const tradeId = parseInt(req.params.id as string);
+      const trade = await prisma.transaction.findUnique({ where: { transaction_id: tradeId }, include: { payment: true } });
+
+      if (!trade || !trade.payment) return res.status(404).json({ error: 'Trade not found.' });
+      if (trade.buyer_id !== req.user.user_id && trade.seller_id !== req.user.user_id) return res.status(403).json({ error: 'Forbidden.' });
+      if (!trade.cancel_requested_by || trade.cancel_requested_by === req.user.user_id) return res.status(400).json({ error: 'You cannot accept your own request or no request exists.' });
+
+      await prisma.$transaction(async (tx) => {
+         await tx.transaction.update({
+            where: { transaction_id: tradeId },
+            data: { status: 'cancelled', cancel_requested_by: null } // Refunded/Cancelled
+         });
+         await tx.payment.update({
+            where: { payment_id: trade.payment!.payment_id },
+            data: { vault_status: 'refunded', refund_date: new Date() }
+         });
+         const amount = Number(trade.total_amount);
+         const updatedBuyer = await tx.user.update({
+            where: { user_id: trade.buyer_id },
+            data: { wallet_balance: { increment: amount } }
+         });
+         await tx.walletTransaction.create({
+            data: { user_id: trade.buyer_id, type: 'escrow_refund', amount: amount, balance: updatedBuyer.wallet_balance || 0, description: `Mutual Cancellation Refund - Trade #${tradeId}` }
+         });
+         await tx.message.create({
+            data: {
+               transaction_id: tradeId,
+               sender_id: req.user.user_id,
+               message_text: `[SYSTEM ALERT] Mutual Cancellation Accepted. Escrow dissolved dynamically and ₱${amount.toLocaleString()} was immediately routed back to the Buyer's wallet in full.`,
+               is_system_generated: true,
+               risk_level: 'Safe'
+            }
+         });
+      });
+
+      io.to(`trade_${tradeId}`).emit('trade_updated', 'cancelled');
+      res.json({ status: 'CANCELLED' });
+   } catch (error) {
+      res.status(500).json({ error: 'Server error' });
+   }
+});
+
+
+export default router;
