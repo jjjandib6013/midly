@@ -11,7 +11,7 @@ export const aiKycLimiter = rateLimit({
    limit: 5,
    keyGenerator: (req, res) => {
       if ((req as any).user?.user_id) return String((req as any).user.user_id);
-      return ipKeyGenerator(req, res);
+      return ipKeyGenerator(req.ip || 'unknown');
    },
    message: { error: 'KYC submission limit exceeded. Please try again after 15 minutes.' }
 });
