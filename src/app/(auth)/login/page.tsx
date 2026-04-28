@@ -1,25 +1,33 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import Link from "next/link";
 import { ArrowRight, Lock, Mail, ShieldAlert } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
 import { signIn } from "next-auth/react";
 import toast from "react-hot-toast";
 import { LoginSchema } from "@/lib/validations";
 
-export default function Login() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const prefillEmail = searchParams.get("email");
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Pre-fill email from query param (coming from verify-email or reset-password)
+  useEffect(() => {
+    if (prefillEmail) setEmail(prefillEmail);
+  }, [prefillEmail]);
 
   useGSAP(() => {
      gsap.fromTo(containerRef.current, { opacity: 0, scale: 0.95 }, { opacity: 1, scale: 1, duration: 0.8, ease: "power4.out" });
@@ -84,10 +92,6 @@ export default function Login() {
   };
 
   return (
-    <div className="flex-1 flex items-center justify-center min-h-[calc(100vh-64px)] px-4 sm:px-6 py-8 sm:py-12 relative overflow-hidden">
-      {/* Background glow */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/5 blur-[120px] rounded-full pointer-events-none z-0" />
-
       <div
         ref={containerRef}
         className="w-full max-w-xl z-10 opacity-0"
@@ -159,6 +163,17 @@ export default function Login() {
           </div>
         </DynamicCard>
       </div>
+  );
+}
+
+export default function Login() {
+  return (
+    <div className="flex-1 flex items-center justify-center min-h-[calc(100vh-64px)] px-4 sm:px-6 py-8 sm:py-12 relative overflow-hidden">
+      {/* Background glow */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/5 blur-[120px] rounded-full pointer-events-none z-0" />
+      <Suspense fallback={<div className="text-white z-10 text-xl font-bold uppercase tracking-widest">Loading...</div>}>
+        <LoginForm />
+      </Suspense>
     </div>
   );
 }

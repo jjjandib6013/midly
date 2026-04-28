@@ -242,7 +242,7 @@ router.post('/reset-password', async (req: Request, res: Response): Promise<any>
          } as any
       });
 
-      res.json({ message: 'Password has been securely updated. You can now log in.' });
+      res.json({ message: 'Password has been securely updated.', email: user.email });
    } catch (error: any) {
       res.status(500).json({ error: 'Server error' });
    }

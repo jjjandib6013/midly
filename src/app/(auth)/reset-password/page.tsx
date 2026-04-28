@@ -4,11 +4,13 @@ import { useState, useRef, Suspense } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import Link from "next/link";
-import { ArrowRight, Lock, CheckCircle, ShieldAlert } from "lucide-react";
+import { ArrowRight, Lock, CheckCircle, ShieldAlert, Loader2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
 import { API_URL } from "@/lib/api";
+import { signIn } from "next-auth/react";
+import toast from "react-hot-toast";
 
 function ResetPasswordForm() {
   const searchParams = useSearchParams();
@@ -19,6 +21,9 @@ function ResetPasswordForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [isAutoLogging, setIsAutoLogging] = useState(false);
+  const [autoLoginFailed, setAutoLoginFailed] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -60,6 +65,41 @@ function ResetPasswordForm() {
       if (!res.ok) throw new Error(data.error || "Failed to reset password.");
       
       setSuccess(true);
+      setResetEmail(data.email || "");
+
+      // Auto-login: the user just typed their new password — no need to make them type it again
+      if (data.email) {
+        setIsAutoLogging(true);
+        try {
+          const loginRes = await signIn("credentials", {
+            email: data.email,
+            password: password,
+            redirect: false
+          });
+
+          if (loginRes?.error) {
+            throw new Error(loginRes.error);
+          }
+
+          toast.success("Password updated. Welcome back!");
+
+          // Route to correct dashboard based on role
+          try {
+            const sessionRes = await fetch("/api/auth/session");
+            const sessionData = await sessionRes.json();
+            if (sessionData?.user?.role === 'admin') {
+              window.location.href = "/admin";
+              return;
+            }
+          } catch (e) {}
+
+          window.location.href = "/dashboard";
+        } catch (loginErr) {
+          // Auto-login failed — fall back to manual login with email pre-filled
+          setIsAutoLogging(false);
+          setAutoLoginFailed(true);
+        }
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -97,16 +137,30 @@ function ResetPasswordForm() {
           {success ? (
             <div className="text-center space-y-6">
               <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-primary/50">
-                 <CheckCircle className="w-8 h-8 text-primary" />
+                 {isAutoLogging ? (
+                   <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                 ) : (
+                   <CheckCircle className="w-8 h-8 text-primary" />
+                 )}
               </div>
               <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Password Updated</h2>
-              <p className="text-[#8892b0]">Your new credentials have been securely stored. You may now log in.</p>
               
-              <Link href="/login" className="block mt-8">
-                 <NeonButton className="w-full text-sm !py-5 tracking-widest uppercase">
-                    Proceed to Login <ArrowRight className="w-4 h-4 ml-2" />
-                 </NeonButton>
-              </Link>
+              {isAutoLogging ? (
+                <p className="text-[#8892b0]">Signing you in automatically...</p>
+              ) : autoLoginFailed ? (
+                <>
+                  <p className="text-[#8892b0]">Your password has been updated. Please log in with your new credentials.</p>
+                  <Link href={`/login${resetEmail ? `?email=${encodeURIComponent(resetEmail)}` : ''}`} className="block mt-8">
+                     <NeonButton className="w-full text-sm !py-5 tracking-widest uppercase">
+                        Proceed to Login <ArrowRight className="w-4 h-4 ml-2" />
+                     </NeonButton>
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <p className="text-[#8892b0]">Your new credentials have been securely stored. Redirecting...</p>
+                </>
+              )}
             </div>
           ) : (
              <form className="space-y-8" onSubmit={handleReset}>

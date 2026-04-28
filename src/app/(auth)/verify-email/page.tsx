@@ -202,7 +202,7 @@ function VerifyEmailLogic() {
                <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Identity Verified</h2>
                <p className="text-[#8892b0]">Your email has been definitively linked to your account. You may now log in to the engine.</p>
                
-               <Link href="/login" className="block mt-8">
+               <Link href={`/login${emailParam ? `?email=${encodeURIComponent(emailParam)}` : ''}`} className="block mt-8">
                   <NeonButton className="w-full text-sm !py-5 tracking-widest uppercase">
                      Proceed to Login <ArrowRight className="w-4 h-4 ml-2" />
                   </NeonButton>
