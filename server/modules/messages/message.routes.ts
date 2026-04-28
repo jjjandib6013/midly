@@ -10,9 +10,14 @@ router.get('/:txId', authenticateJWT, async (req: Request, res: Response): Promi
    try {
       const txId = parseInt(req.params.txId as string);
 
-      // Ensure user is authorized
+      // Ensure user is authorized (admins can view any trade's messages for dispute mediation)
       const trade = await prisma.transaction.findUnique({ where: { transaction_id: txId } });
-      if (!trade || (trade.buyer_id !== req.user.user_id && trade.seller_id !== req.user.user_id)) {
+      if (!trade) return res.status(404).json({ error: 'Trade not found.' });
+
+      const dbUser = await prisma.user.findUnique({ where: { user_id: req.user.user_id } });
+      const isAdmin = dbUser?.role === 'admin';
+
+      if (!isAdmin && trade.buyer_id !== req.user.user_id && trade.seller_id !== req.user.user_id) {
          return res.status(403).json({ error: 'Forbidden.' });
       }
 

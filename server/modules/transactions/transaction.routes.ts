@@ -753,14 +753,17 @@ router.get('/:id', authenticateJWT, async (req, res): Promise<any> => {
 
       if (!trade) return res.status(404).json({ error: 'Trade not found' });
 
-      // Ensure user is a participant
+      // Allow admins to view any trade (for dispute mediation)
       const userId = req.user.user_id;
-      if (trade.buyer_id !== userId && trade.seller_id !== userId) {
+      const dbUser = await prisma.user.findUnique({ where: { user_id: userId } });
+      const isAdmin = dbUser?.role === 'admin';
+
+      if (!isAdmin && trade.buyer_id !== userId && trade.seller_id !== userId) {
          return res.status(403).json({ error: 'You are not a participant in this trade' });
       }
 
-      const my_role = trade.buyer_id === userId ? 'BUY' : 'SELL';
-      const is_initiator = trade.buyer_id === userId; // buyer initiates by default
+      const my_role = isAdmin ? 'ADMIN' : (trade.buyer_id === userId ? 'BUY' : 'SELL');
+      const is_initiator = isAdmin ? false : (trade.buyer_id === userId);
 
       res.json({ trade, my_role, is_initiator });
    } catch (e) {
