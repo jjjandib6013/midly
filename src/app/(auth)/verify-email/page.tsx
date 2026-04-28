@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useRef, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState, useRef, useCallback, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Mail, ShieldCheck, ShieldAlert, Loader2, ArrowRight } from "lucide-react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
@@ -10,17 +10,18 @@ import NeonButton from "@/components/ui/NeonButton";
 import Link from "next/link";
 import { API_URL } from "@/lib/api";
 import toast from "react-hot-toast";
-import { signIn } from "next-auth/react";
+
+const BROADCAST_CHANNEL_NAME = "midly_email_verification";
+const RESEND_COOLDOWN_SECONDS = 60;
 
 function VerifyEmailLogic() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   const emailParam = searchParams.get("email");
 
-  const [status, setStatus] = useState<"waiting" | "verifying" | "success" | "error" | "cross_verified">(token ? "verifying" : "waiting");
+  const [status, setStatus] = useState<"waiting" | "verifying" | "success" | "error">(token ? "verifying" : "waiting");
   const [errorMsg, setErrorMsg] = useState("");
-  const [verifyPassword, setVerifyPassword] = useState("");
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
   
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -28,43 +29,72 @@ function VerifyEmailLogic() {
      gsap.fromTo(containerRef.current, { opacity: 0, scale: 0.95 }, { opacity: 1, scale: 1, duration: 0.8, ease: "power4.out" });
   }, { scope: containerRef });
 
+  // Helper: check verification status from server
+  const checkVerificationStatus = useCallback(async () => {
+    if (!emailParam || status !== "waiting") return;
+    try {
+      const res = await fetch(`${API_URL}/api/auth/check-verification?email=${encodeURIComponent(emailParam)}`);
+      const data = await res.json();
+      if (data.verified) {
+        setStatus("success");
+        toast.success("Email verified successfully!");
+      }
+    } catch (e) {}
+  }, [emailParam, status]);
+
+  // 1. Direct token verification (Tab B — opened from email link)
   useEffect(() => {
     if (token && emailParam) {
       verifyToken(token, emailParam);
     }
   }, [token, emailParam]);
 
+  // 2. BroadcastChannel listener (Tab A — instant sync from Tab B)
   useEffect(() => {
-    if (status === "waiting" && emailParam) {
-      const interval = setInterval(async () => {
-        try {
-          const res = await fetch(`${API_URL}/api/auth/check-verification?email=${encodeURIComponent(emailParam)}`);
-          const data = await res.json();
-          if (data.verified) {
-            setStatus("cross_verified");
-          }
-        } catch (e) {}
-      }, 3000);
-      return () => clearInterval(interval);
+    if (status !== "waiting") return;
+    
+    try {
+      const bc = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
+      bc.onmessage = (event) => {
+        if (event.data?.type === "email_verified" && event.data?.email === emailParam) {
+          setStatus("success");
+          toast.success("Email verified successfully!");
+        }
+      };
+      return () => bc.close();
+    } catch (e) {
+      // BroadcastChannel not supported — polling + visibilitychange will handle it
     }
   }, [status, emailParam]);
 
-  const handleCrossDeviceLogin = async (e: React.FormEvent) => {
-     e.preventDefault();
-     setIsLoggingIn(true);
-     try {
-         const res = await signIn("credentials", { email: emailParam, password: verifyPassword, redirect: false });
-         if (res?.error) {
-            toast.error("Invalid password.");
-            setIsLoggingIn(false);
-         } else {
-            window.location.href = "/kyc";
-         }
-     } catch (err) {
-         toast.error("An error occurred");
-         setIsLoggingIn(false);
-     }
-  }
+  // 3. Polling fallback (cross-device scenario — e.g. user clicked link on phone)
+  useEffect(() => {
+    if (status !== "waiting" || !emailParam) return;
+    
+    const interval = setInterval(checkVerificationStatus, 5000);
+    return () => clearInterval(interval);
+  }, [status, emailParam, checkVerificationStatus]);
+
+  // 4. Revalidate on tab focus (user switches back to this tab)
+  useEffect(() => {
+    if (status !== "waiting") return;
+    
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        checkVerificationStatus();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [status, checkVerificationStatus]);
+
+  // 5. Resend cooldown timer
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
 
   const verifyToken = async (tkn: string, email: string) => {
     try {
@@ -79,10 +109,43 @@ function VerifyEmailLogic() {
       
       setStatus("success");
       toast.success("Email verified successfully! Please log in.");
+
+      // Broadcast to other tabs so they instantly update
+      try {
+        const bc = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
+        bc.postMessage({ type: "email_verified", email });
+        bc.close();
+      } catch (e) {
+        // BroadcastChannel not supported — other tabs will pick it up via polling
+      }
       
     } catch (err: any) {
       setStatus("error");
       setErrorMsg(err.message);
+    }
+  };
+
+  const handleResend = async () => {
+    if (resendCooldown > 0 || !emailParam) return;
+    
+    const loadingToast = toast.loading("Sending new verification email...");
+    try {
+      const res = await fetch(`${API_URL}/api/auth/resend-verification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailParam })
+      });
+      const data = await res.json();
+      toast.dismiss(loadingToast);
+      if (res.ok) {
+        toast.success("Verification email dispatched!");
+        setResendCooldown(RESEND_COOLDOWN_SECONDS);
+      } else {
+        throw new Error(data.error || "Failed to resend");
+      }
+    } catch(err: any) {
+      toast.dismiss(loadingToast);
+      toast.error(err.message);
     }
   };
 
@@ -102,31 +165,16 @@ function VerifyEmailLogic() {
                </div>
                <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Check Your Inbox</h2>
                <p className="text-[#8892b0]">We have dispatched a highly secured verification link to your email address {emailParam ? <span className="text-white font-bold">{emailParam}</span> : null}.</p>
-               <p className="text-sm font-medium text-white/50 mt-4">You cannot access the Midly platform until you click the link. If you didn't receive it, check your spam/junk folder.</p>
+               <p className="text-sm font-medium text-white/50 mt-4">You cannot access the Midly platform until you click the link. If you didn&apos;t receive it, check your spam/junk folder.</p>
                
                <div className="flex flex-col gap-3 mt-8">
                   {emailParam && (
                      <NeonButton 
-                        className="w-full text-xs sm:text-sm !py-4 sm:!py-5 tracking-widest uppercase touch-manipulation"
-                        onClick={async () => {
-                           const loadingToast = toast.loading("Sending new verification email...");
-                           try {
-                              const res = await fetch(`${API_URL}/api/auth/resend-verification`, {
-                                 method: 'POST',
-                                 headers: { 'Content-Type': 'application/json' },
-                                 body: JSON.stringify({ email: emailParam })
-                              });
-                              const data = await res.json();
-                              toast.dismiss(loadingToast);
-                              if (res.ok) toast.success("Verification email dispatched!");
-                              else throw new Error(data.error || "Failed to resend");
-                           } catch(err: any) {
-                              toast.dismiss(loadingToast);
-                              toast.error(err.message);
-                           }
-                        }}
+                        className={`w-full text-xs sm:text-sm !py-4 sm:!py-5 tracking-widest uppercase touch-manipulation ${resendCooldown > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        onClick={handleResend}
+                        disabled={resendCooldown > 0}
                      >
-                        Resend Verification Email
+                        {resendCooldown > 0 ? `Resend Available in ${resendCooldown}s` : "Resend Verification Email"}
                      </NeonButton>
                   )}
                   <Link href="/login" className="block">
@@ -176,23 +224,6 @@ function VerifyEmailLogic() {
                      Return to Login
                   </NeonButton>
                </Link>
-            </div>
-          )}
-
-          {status === "cross_verified" && (
-            <div className="text-center space-y-6">
-               <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-primary/50">
-                  <ShieldCheck className="w-8 h-8 text-primary" />
-               </div>
-               <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Verified on Phone!</h2>
-               <p className="text-[#8892b0]">We detected that you magically verified this account on another device.</p>
-               
-               <p className="text-xs text-white/50 bg-white/5 p-4 rounded-xl border border-white/10 mt-4 text-left">For your security, you must enter your password one time to establish the encrypted session on this device.</p>
-               
-               <form onSubmit={handleCrossDeviceLogin} className="space-y-4 pt-4 border-t border-white/10">
-                  <input type="password" placeholder="Confirm Password" value={verifyPassword} onChange={e=>setVerifyPassword(e.target.value)} className="w-full bg-[#030407] border border-white/10 text-white rounded-xl px-4 py-3 focus:border-primary/50 outline-none" required />
-                  <NeonButton type="submit" className="w-full text-sm py-4 tracking-widest uppercase" isLoading={isLoggingIn}>Securely Log In</NeonButton>
-               </form>
             </div>
           )}
 
