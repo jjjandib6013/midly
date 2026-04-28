@@ -41,25 +41,28 @@ router.post('/register', authLimiter, async (req: Request, res: Response): Promi
       const clientUrl = process.env.CLIENT_URL || "http://localhost:3000";
       const verifyUrl = `${clientUrl}/verify-email?token=${verification_token}&email=${encodeURIComponent(email)}`;
       
-      resend.emails.send({
-         to: user.email,
-         from: process.env.RESEND_FROM_EMAIL || 'support@midly.com',
-         subject: 'Midly - Verify Your Email Address',
-         html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #0a0d14; padding: 40px; border-radius: 12px; color: #fff; border: 1px solid #1f2937;">
-               <h2 style="color: #fff; font-size: 24px; text-transform: uppercase; margin-bottom: 20px; font-weight: 900;">Welcome to Midly</h2>
-               <p style="color: #8892b0; font-size: 16px; line-height: 1.5; margin-bottom: 40px; font-weight: 500;">
-                  You have successfully registered your account. To unlock the Midly Escrow Engine, you must first verify your email address.
-               </p>
-               <a href="${verifyUrl}" style="background-color: #3fe56c; color: #000; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: 900; font-size: 16px; display: inline-block; text-transform: uppercase; letter-spacing: 1px;">
-                  VERIFY EMAIL ADDRESS
-               </a>
-            </div>
-         `
-      }).catch(emailError => {
-         console.error("Resend delivery missing or error. Falling back to DEV mode.", emailError);
-         console.log(`[DEV ONLY] Verify Email Link: ${verifyUrl}`);
-      });
+      try {
+         const emailResult = await resend.emails.send({
+            to: user.email,
+            from: process.env.RESEND_FROM_EMAIL || 'support@midly.com',
+            subject: 'Midly - Verify Your Email Address',
+            html: `
+               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #0a0d14; padding: 40px; border-radius: 12px; color: #fff; border: 1px solid #1f2937;">
+                  <h2 style="color: #fff; font-size: 24px; text-transform: uppercase; margin-bottom: 20px; font-weight: 900;">Welcome to Midly</h2>
+                  <p style="color: #8892b0; font-size: 16px; line-height: 1.5; margin-bottom: 40px; font-weight: 500;">
+                     You have successfully registered your account. To unlock the Midly Escrow Engine, you must first verify your email address.
+                  </p>
+                  <a href="${verifyUrl}" style="background-color: #3fe56c; color: #000; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: 900; font-size: 16px; display: inline-block; text-transform: uppercase; letter-spacing: 1px;">
+                     VERIFY EMAIL ADDRESS
+                  </a>
+               </div>
+            `
+         });
+         console.log('[EMAIL] Registration verification sent:', JSON.stringify(emailResult));
+      } catch (emailError) {
+         console.error('[EMAIL ERROR] Failed to send registration verification email:', emailError);
+         console.log(`[DEV FALLBACK] Verify Email Link: ${verifyUrl}`);
+      }
 
       res.json({ message: 'User registered successfully', user_email: user.email });
    } catch (error: any) {
@@ -110,25 +113,29 @@ router.post('/resend-verification', authLimiter, async (req: Request, res: Respo
       const clientUrl = process.env.CLIENT_URL || "http://localhost:3000";
       const verifyUrl = `${clientUrl}/verify-email?token=${token}&email=${encodeURIComponent(email)}`;
       
-      resend.emails.send({
-         to: user.email,
-         from: process.env.RESEND_FROM_EMAIL || 'support@midly.com',
-         subject: 'Midly - Verify Your Email Address (Resend)',
-         html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #0a0d14; padding: 40px; border-radius: 12px; color: #fff; border: 1px solid #1f2937;">
-               <h2 style="color: #fff; font-size: 24px; text-transform: uppercase; margin-bottom: 20px; font-weight: 900;">Welcome to Midly</h2>
-               <p style="color: #8892b0; font-size: 16px; line-height: 1.5; margin-bottom: 40px; font-weight: 500;">
-                  You have requested a new verification link. To unlock the Midly Escrow Engine, you must first verify your email address.
-               </p>
-               <a href="${verifyUrl}" style="background-color: #3fe56c; color: #000; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: 900; font-size: 16px; display: inline-block; text-transform: uppercase; letter-spacing: 1px;">
-                  VERIFY EMAIL ADDRESS
-               </a>
-            </div>
-         `
-      }).catch(emailError => {
-         console.error("Resend delivery missing or error. Falling back to DEV mode.", emailError);
-         console.log(`[DEV ONLY] Verify Email Link: ${verifyUrl}`);
-      });
+      try {
+         const emailResult = await resend.emails.send({
+            to: user.email,
+            from: process.env.RESEND_FROM_EMAIL || 'support@midly.com',
+            subject: 'Midly - Verify Your Email Address (Resend)',
+            html: `
+               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #0a0d14; padding: 40px; border-radius: 12px; color: #fff; border: 1px solid #1f2937;">
+                  <h2 style="color: #fff; font-size: 24px; text-transform: uppercase; margin-bottom: 20px; font-weight: 900;">Welcome to Midly</h2>
+                  <p style="color: #8892b0; font-size: 16px; line-height: 1.5; margin-bottom: 40px; font-weight: 500;">
+                     You have requested a new verification link. To unlock the Midly Escrow Engine, you must first verify your email address.
+                  </p>
+                  <a href="${verifyUrl}" style="background-color: #3fe56c; color: #000; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: 900; font-size: 16px; display: inline-block; text-transform: uppercase; letter-spacing: 1px;">
+                     VERIFY EMAIL ADDRESS
+                  </a>
+               </div>
+            `
+         });
+         console.log('[EMAIL] Resend verification sent:', JSON.stringify(emailResult));
+      } catch (emailError) {
+         console.error('[EMAIL ERROR] Failed to resend verification email:', emailError);
+         console.log(`[DEV FALLBACK] Verify Email Link: ${verifyUrl}`);
+         return res.status(500).json({ error: 'Failed to send verification email. Please try again.' });
+      }
 
       res.json({ message: 'Verification email resent successfully' });
    } catch (error) {
@@ -174,28 +181,31 @@ router.post('/forgot-password', authLimiter, async (req: Request, res: Response)
       const clientUrl = process.env.CLIENT_URL || "http://localhost:3000";
       const resetUrl = `${clientUrl}/reset-password?token=${token}`;
 
-      resend.emails.send({
-         to: user.email,
-         from: process.env.RESEND_FROM_EMAIL || 'support@midly.com',
-         subject: 'Midly - Password Reset Request',
-         html: `
-               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #0a0d14; padding: 40px; border-radius: 12px; color: #fff; border: 1px solid #1f2937;">
-                  <h2 style="color: #fff; font-size: 24px; text-transform: uppercase; margin-bottom: 20px; font-weight: 900;">Password Reset</h2>
-                  <p style="color: #8892b0; font-size: 16px; line-height: 1.5; margin-bottom: 40px; font-weight: 500;">
-                     We received a request to securely reset your password on Midly. Click the button below to authenticate your new credentials.
-                  </p>
-                  <a href="${resetUrl}" style="background-color: #3fe56c; color: #000; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: 900; font-size: 16px; display: inline-block; text-transform: uppercase; letter-spacing: 1px;">
-                     RESET PASSWORD
-                  </a>
-                  <p style="margin-top: 40px; color: #8892b0; font-size: 12px; line-height: 1.5; font-weight: 500;">
-                     If you did not request this, please ignore this email. This secure link will expire in exactly 1 hour.
-                  </p>
-               </div>
-            `
-      }).catch(emailError => {
-         console.error("Resend missing or environment variables not configured.", emailError);
-         console.log(`[DEV ONLY] Reset Password Link: ${resetUrl}`);
-      });
+      try {
+         const emailResult = await resend.emails.send({
+            to: user.email,
+            from: process.env.RESEND_FROM_EMAIL || 'support@midly.com',
+            subject: 'Midly - Password Reset Request',
+            html: `
+                  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #0a0d14; padding: 40px; border-radius: 12px; color: #fff; border: 1px solid #1f2937;">
+                     <h2 style="color: #fff; font-size: 24px; text-transform: uppercase; margin-bottom: 20px; font-weight: 900;">Password Reset</h2>
+                     <p style="color: #8892b0; font-size: 16px; line-height: 1.5; margin-bottom: 40px; font-weight: 500;">
+                        We received a request to securely reset your password on Midly. Click the button below to authenticate your new credentials.
+                     </p>
+                     <a href="${resetUrl}" style="background-color: #3fe56c; color: #000; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: 900; font-size: 16px; display: inline-block; text-transform: uppercase; letter-spacing: 1px;">
+                        RESET PASSWORD
+                     </a>
+                     <p style="margin-top: 40px; color: #8892b0; font-size: 12px; line-height: 1.5; font-weight: 500;">
+                        If you did not request this, please ignore this email. This secure link will expire in exactly 1 hour.
+                     </p>
+                  </div>
+               `
+         });
+         console.log('[EMAIL] Password reset sent:', JSON.stringify(emailResult));
+      } catch (emailError) {
+         console.error('[EMAIL ERROR] Failed to send password reset email:', emailError);
+         console.log(`[DEV FALLBACK] Reset Password Link: ${resetUrl}`);
+      }
       res.json({ message: 'If that email is registered, a password reset link has been sent.' });
    } catch (error: any) {
       res.status(500).json({ error: 'Server error' });
