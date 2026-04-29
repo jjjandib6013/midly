@@ -3,7 +3,7 @@ import { useSession } from 'next-auth/react';
 
 import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
-import { ShieldCheck, MessageSquare, CheckCircle2, ShieldAlert, Paperclip, ImageIcon, ArrowRight, Copy, Wallet, Smartphone, CreditCard, Lock, Timer, Unlock, XCircle, Key, Eye, EyeOff, Clock, Server } from "lucide-react";
+import { ShieldCheck, MessageSquare, CheckCircle2, ShieldAlert, Paperclip, ImageIcon, ArrowRight, Copy, Wallet, Smartphone, CreditCard, Lock, Timer, Unlock, XCircle, Key, Eye, EyeOff, Clock, Server, X, UploadCloud } from "lucide-react";
 import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
 import { io } from "socket.io-client";
@@ -45,6 +45,9 @@ export default function TradeHub() {
    // Unified Modal State
    const [isDisputingModalOpen, setIsDisputingModalOpen] = useState(false);
    const [disputeReason, setDisputeReason] = useState("");
+   const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
+   const [isUploadingEvidence, setIsUploadingEvidence] = useState(false);
+   const evidenceInputRef = useRef<HTMLInputElement>(null);
    const [isCancelRequestModalOpen, setIsCancelRequestModalOpen] = useState(false);
    const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
    const [pendingUpload, setPendingUpload] = useState<File | null>(null);
@@ -55,6 +58,13 @@ export default function TradeHub() {
    const [isAdminResolving, setIsAdminResolving] = useState(false);
 
    const [timeRemaining, setTimeRemaining] = useState({ hours: 24, minutes: 0, seconds: 0, isExpired: false });
+
+   const computeSHA256 = async (file: File) => {
+       const buffer = await file.arrayBuffer();
+       const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+       const hashArray = Array.from(new Uint8Array(hashBuffer));
+       return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+   };
 
    useEffect(() => {
       if (trade?.status === 'verifying' && trade?.item_delivered_at) {
@@ -316,31 +326,79 @@ export default function TradeHub() {
       setIsDisputingModalOpen(true);
    };
 
+   const handleEvidenceSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (!e.target.files) return;
+      const files = Array.from(e.target.files);
+      const validFiles = files.filter(f => {
+         if (f.size > 5 * 1024 * 1024) { toast.error(`${f.name} is larger than 5MB`); return false; }
+         if (!['image/jpeg', 'image/png', 'application/pdf'].includes(f.type)) { toast.error(`${f.name} is not a supported format`); return false; }
+         return true;
+      });
+      if (evidenceFiles.length + validFiles.length > 5) {
+         toast.error("Maximum 5 files allowed.");
+         return;
+      }
+      setEvidenceFiles(prev => [...prev, ...validFiles]);
+   };
+
+   const removeEvidence = (index: number) => {
+      setEvidenceFiles(prev => prev.filter((_, i) => i !== index));
+   };
+
    const submitDispute = async () => {
       if (!disputeReason.trim()) {
          toast.error("Please provide a reason to file this dispute.");
          return;
       }
+      if (evidenceFiles.length === 0) {
+         toast.error("Please attach at least one piece of evidence (Screenshot or PDF).");
+         return;
+      }
 
       try {
          setIsLoading(true);
+         setIsUploadingEvidence(true);
+         
          const res = await fetch(`${API_URL}/api/transactions/${tradeId}/dispute`, {
             method: "POST",
             headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
             body: JSON.stringify({ reason: disputeReason })
          });
-         if (res.ok) {
-            toast("Dispute active. Funds locked completely.", { icon: "🔒" });
-            setIsDisputingModalOpen(false);
-            fetchTrade();
-         } else {
-            const data = await res.json();
-            toast.error(data.error || "Failed to initiate dispute.");
+         
+         if (!res.ok) {
+             const data = await res.json();
+             throw new Error(data.error || "Failed to initiate dispute.");
          }
-      } catch (e) {
-         toast.error("Server error. Please reach out to support.");
+
+         for (const file of evidenceFiles) {
+            const urlRes = await fetch(`${API_URL}/api/transactions/${tradeId}/evidence/upload-url`, {
+               method: "POST",
+               headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+               body: JSON.stringify({ mime_type: file.type, file_name: file.name, size_bytes: file.size })
+            });
+            if (!urlRes.ok) throw new Error("Failed to get upload URL");
+            const { uploadUrl, storageKey } = await urlRes.json();
+
+            const uploadRes = await fetch(uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
+            if (!uploadRes.ok) throw new Error("Cloud Storage Upload Failed");
+
+            const hash = await computeSHA256(file);
+            await fetch(`${API_URL}/api/transactions/${tradeId}/evidence/confirm`, {
+               method: "POST",
+               headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+               body: JSON.stringify({ storage_key: storageKey, original_name: file.name, mime_type: file.type, size_bytes: file.size, sha256_hash: hash })
+            });
+         }
+
+         toast("Dispute active. Evidence secured.", { icon: "🔒" });
+         setIsDisputingModalOpen(false);
+         setEvidenceFiles([]);
+         fetchTrade();
+      } catch (e: any) {
+         toast.error(e.message || "Server error. Please reach out to support.");
       } finally {
          setIsLoading(false);
+         setIsUploadingEvidence(false);
       }
    };
 
@@ -1234,15 +1292,57 @@ export default function TradeHub() {
                            className="w-full bg-dark-bg border border-dark-border text-white rounded-xl focus:border-red-500 p-4 transition-colors resize-none placeholder:text-white/20 custom-scrollbar"
                         />
                      </div>
+                     <div className="space-y-2 mt-4">
+                        <label className="text-xs uppercase tracking-widest text-text-muted font-bold flex justify-between">
+                           <span>Attach Evidence</span>
+                           <span>{evidenceFiles.length}/5 Files</span>
+                        </label>
+                        <div 
+                           className={`border-2 border-dashed ${isUploadingEvidence ? 'border-primary/50 bg-primary/5' : 'border-dark-border hover:border-red-500/50'} rounded-xl p-6 text-center transition-colors cursor-pointer relative`}
+                           onClick={() => !isUploadingEvidence && evidenceInputRef.current?.click()}
+                        >
+                           <input 
+                              type="file" 
+                              multiple 
+                              accept="image/jpeg,image/png,application/pdf"
+                              className="hidden" 
+                              ref={evidenceInputRef}
+                              onChange={handleEvidenceSelect}
+                              disabled={isUploadingEvidence}
+                           />
+                           <div className="flex flex-col items-center gap-2">
+                              <UploadCloud className={`w-8 h-8 ${isUploadingEvidence ? 'text-primary animate-bounce' : 'text-white/30'}`} />
+                              <p className="text-sm text-white/60">{isUploadingEvidence ? 'Encrypting & Uploading to Secure Vault...' : 'Click to upload Screenshots or PDFs'}</p>
+                              <p className="text-xs text-white/30">Max 5MB per file</p>
+                           </div>
+                        </div>
+
+                        {evidenceFiles.length > 0 && (
+                           <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-3">
+                              {evidenceFiles.map((file, i) => (
+                                 <div key={i} className="relative group bg-dark-bg border border-dark-border rounded-lg p-2 flex items-center justify-between">
+                                    <span className="text-xs text-white truncate max-w-[80%]">{file.name}</span>
+                                    <button 
+                                       onClick={(e) => { e.stopPropagation(); removeEvidence(i); }}
+                                       disabled={isUploadingEvidence}
+                                       className="text-red-400 hover:text-red-300 p-1 bg-red-500/10 rounded-md disabled:opacity-50"
+                                    >
+                                       <X className="w-3 h-3" />
+                                    </button>
+                                 </div>
+                              ))}
+                           </div>
+                        )}
+                     </div>
                      <p className="text-xs text-white/40 italic">Note: Your entire chat history will be automatically provided to the Admin as evidence.</p>
                   </div>
 
                   <div className="flex gap-3 mt-4 pt-4 border-t border-dark-border">
-                     <NeonButton variant="ghost" className="flex-1 border-white/10 hover:bg-white/5 text-text-muted" onClick={() => setIsDisputingModalOpen(false)}>
+                     <NeonButton variant="ghost" className="flex-1 border-white/10 hover:bg-white/5 text-text-muted" onClick={() => setIsDisputingModalOpen(false)} disabled={isUploadingEvidence}>
                         Cancel
                      </NeonButton>
-                     <NeonButton className="flex-1 bg-red-500/10 text-red-500 border-red-500 hover:bg-red-500 hover:text-white" onClick={submitDispute} isLoading={isLoading}>
-                        Freeze Vault & Dispute
+                     <NeonButton className="flex-1 bg-red-500/10 text-red-500 border-red-500 hover:bg-red-500 hover:text-white disabled:opacity-50" onClick={submitDispute} isLoading={isLoading || isUploadingEvidence}>
+                        {isUploadingEvidence ? 'Securing Evidence...' : 'Freeze Vault & Dispute'}
                      </NeonButton>
                   </div>
                </DynamicCard>

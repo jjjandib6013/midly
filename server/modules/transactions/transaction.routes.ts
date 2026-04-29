@@ -6,6 +6,8 @@ import { io, logAudit } from '../../../server';
 import { encrypt, decrypt } from '../../../src/ai/cryptoUtils';
 import { createPaymentLink } from '../../utils/payments/paymongo';
 import { kycQueue } from '../../../src/ai/queue';
+import { generateUploadUrl } from '../../utils/s3';
+import crypto from 'crypto';
 
 const router = Router();
 
@@ -542,6 +544,60 @@ router.post('/:id/dispute', authenticateJWT, disputeLimiter, async (req, res): P
       res.json({ status: 'DISPUTED' });
    } catch (e: any) {
       if (e.code === 'P2002') return res.status(409).json({ error: 'A dispute is already active for this transaction.' });
+      res.status(500).json({ error: 'Server error' });
+   }
+});
+
+// POST Generate Presigned Evidence Upload URL
+router.post('/:id/evidence/upload-url', authenticateJWT, async (req, res): Promise<any> => {
+   try {
+      const tradeId = parseInt(req.params.id as string);
+      const { mime_type, file_name, size_bytes } = req.body;
+
+      const trade = await prisma.transaction.findUnique({ where: { transaction_id: tradeId }, include: { dispute: true } });
+      if (!trade || !trade.dispute) return res.status(404).json({ error: 'Active dispute not found.' });
+      if (trade.buyer_id !== req.user.user_id && trade.seller_id !== req.user.user_id) return res.status(403).json({ error: 'Forbidden' });
+      
+      const allowedMimes = ['image/jpeg', 'image/png', 'application/pdf'];
+      if (!allowedMimes.includes(mime_type)) return res.status(400).json({ error: 'Invalid file type. Only JPG, PNG, and PDF allowed.' });
+      if (size_bytes > 5 * 1024 * 1024) return res.status(400).json({ error: 'File size exceeds 5MB limit.' });
+
+      const evidenceCount = await prisma.disputeEvidence.count({ where: { dispute_id: trade.dispute.dispute_id, uploaded_by: req.user.user_id } });
+      if (evidenceCount >= 5) return res.status(400).json({ error: 'Maximum 5 files allowed per party.' });
+
+      const storageKey = crypto.randomUUID();
+      const uploadUrl = await generateUploadUrl(`evidence/${trade.dispute.dispute_id}/${req.user.user_id}/${storageKey}`, mime_type);
+
+      res.json({ uploadUrl, storageKey });
+   } catch (e) {
+      res.status(500).json({ error: 'Server error' });
+   }
+});
+
+// POST Confirm Evidence Upload
+router.post('/:id/evidence/confirm', authenticateJWT, async (req, res): Promise<any> => {
+   try {
+      const tradeId = parseInt(req.params.id as string);
+      const { storage_key, original_name, mime_type, size_bytes, sha256_hash } = req.body;
+
+      const trade = await prisma.transaction.findUnique({ where: { transaction_id: tradeId }, include: { dispute: true } });
+      if (!trade || !trade.dispute) return res.status(404).json({ error: 'Active dispute not found.' });
+      if (trade.buyer_id !== req.user.user_id && trade.seller_id !== req.user.user_id) return res.status(403).json({ error: 'Forbidden' });
+
+      await prisma.disputeEvidence.create({
+         data: {
+            dispute_id: trade.dispute.dispute_id,
+            uploaded_by: req.user.user_id,
+            storage_key,
+            original_name,
+            mime_type,
+            size_bytes,
+            sha256_hash
+         }
+      });
+
+      res.json({ status: 'CONFIRMED' });
+   } catch (e) {
       res.status(500).json({ error: 'Server error' });
    }
 });

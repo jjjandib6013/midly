@@ -29,6 +29,7 @@ model User {
   audit_logs               AuditLog[]
   handled_disputes         Dispute[]           @relation("HandledDisputes")
   raised_disputes          Dispute[]           @relation("RaisedDisputes")
+  evidence_uploaded        DisputeEvidence[]
   kyc_verification         KycVerification?
   listings                 Listing[]           @relation("UserListings")
   messages                 Message[]
@@ -169,11 +170,30 @@ model Dispute {
   raised_at            DateTime?   @default(now()) @db.Timestamp(6)
   resolved_at          DateTime?   @db.Timestamp(6)
   handled_by           Int?
-  handler              User?       @relation("HandledDisputes", fields: [handled_by], references: [user_id])
-  raiser               User        @relation("RaisedDisputes", fields: [raised_by], references: [user_id])
-  transaction          Transaction @relation(fields: [transaction_id], references: [transaction_id], onDelete: Cascade)
+  handler              User?             @relation("HandledDisputes", fields: [handled_by], references: [user_id])
+  raiser               User              @relation("RaisedDisputes", fields: [raised_by], references: [user_id])
+  transaction          Transaction       @relation(fields: [transaction_id], references: [transaction_id], onDelete: Cascade)
+  evidence             DisputeEvidence[]
 
   @@map("dispute")
+}
+
+model DisputeEvidence {
+  id            String   @id @default(uuid())
+  dispute_id    Int
+  uploaded_by   Int
+  storage_key   String   // R2/S3 object key (UUID)
+  original_name String   // User's filename (for display only)
+  mime_type     String
+  size_bytes    Int
+  sha256_hash   String   // Tamper detection
+  uploaded_at   DateTime @default(now()) @db.Timestamp(6)
+  
+  dispute       Dispute  @relation(fields: [dispute_id], references: [dispute_id], onDelete: Cascade)
+  uploader      User     @relation(fields: [uploaded_by], references: [user_id], onDelete: Cascade)
+
+  @@index([dispute_id])
+  @@map("dispute_evidence")
 }
 
 model Message {
