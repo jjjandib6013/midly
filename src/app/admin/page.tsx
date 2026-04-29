@@ -1,11 +1,15 @@
 "use client";
 import { useSession } from 'next-auth/react';
 import { useEffect, useState } from "react";
-import { ShieldAlert, Activity, CheckCircle, Search, FileText, Users, Settings, Server, Clock, Lock, Globe, Power, Key, ChevronRight, Ban, Check, ExternalLink, RefreshCw } from "lucide-react";
+import { ShieldAlert, Activity, CheckCircle, Search, FileText, Users, Settings, Server, Clock, Lock, Globe, Power, Key, ChevronRight, Ban, Check, ExternalLink, RefreshCw, Download, PieChart, BarChart as BarChartIcon, Filter } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "@/lib/api";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
-type TabState = "OVERVIEW" | "DISPUTES" | "KYC" | "USERS" | "SETTINGS";
+type TabState = "OVERVIEW" | "REPORTS" | "DISPUTES" | "KYC" | "USERS" | "SETTINGS";
 
 export default function AdminDashboard() {
    const { data: session } = useSession();
@@ -25,6 +29,14 @@ export default function AdminDashboard() {
   const [biometricThreshold, setBiometricThreshold] = useState("0.55");
   const [reviewThreshold, setReviewThreshold] = useState("0.45");
   const [isLoading, setIsLoading] = useState(true);
+
+  // Reports Data
+  const [chartData, setChartData] = useState<any[]>([]);
+  const [reportTransactions, setReportTransactions] = useState<any[]>([]);
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [reportStartDate, setReportStartDate] = useState("");
+  const [reportEndDate, setReportEndDate] = useState("");
+  const [reportStatus, setReportStatus] = useState("all");
   
   const loadData = async () => {
     if (!token) return;
@@ -58,6 +70,17 @@ export default function AdminDashboard() {
            const d = await usrRes.json();
            if(d.users) setUsers(d.users);
         }
+
+        // Fetch reports
+        const [chartRes, txRepRes, logRes] = await Promise.all([
+           fetch(`${API_URL}/api/admin/reports/charts`, { headers: { "Authorization": `Bearer ${token}` } }),
+           fetch(`${API_URL}/api/admin/reports/transactions?status=${reportStatus}&startDate=${reportStartDate}&endDate=${reportEndDate}`, { headers: { "Authorization": `Bearer ${token}` } }),
+           fetch(`${API_URL}/api/admin/reports/audit-logs`, { headers: { "Authorization": `Bearer ${token}` } })
+        ]);
+
+        if (chartRes.ok) { const d = await chartRes.json(); setChartData(d.timelineData); }
+        if (txRepRes.ok) { const d = await txRepRes.json(); setReportTransactions(d.transactions); }
+        if (logRes.ok) { const d = await logRes.json(); setAuditLogs(d.logs); }
     } catch (e) {
         console.error("Error loading admin data", e);
         toast.error("Failed to sync dashboard data.");
@@ -162,6 +185,64 @@ export default function AdminDashboard() {
       } catch (e) { toast.error("Server API Error"); }
    }
 
+  const fetchFilteredReports = async () => {
+      try {
+         const res = await fetch(`${API_URL}/api/admin/reports/transactions?status=${reportStatus}&startDate=${reportStartDate}&endDate=${reportEndDate}`, { headers: { "Authorization": `Bearer ${token}` } });
+         if (res.ok) {
+            const d = await res.json();
+            setReportTransactions(d.transactions);
+            toast.success("Report data refreshed.");
+         }
+      } catch (e) { toast.error("Failed to filter reports."); }
+  };
+
+  const handleExportCSV = () => {
+     if (reportTransactions.length === 0) return toast.error("No data to export");
+     const worksheet = XLSX.utils.json_to_sheet(reportTransactions.map(tx => ({
+        ID: tx.transaction_id,
+        Date: new Date(tx.created_at).toLocaleString(),
+        Status: tx.status,
+        Amount: tx.total_amount,
+        Buyer: tx.buyer?.email,
+        Seller: tx.seller?.email
+     })));
+     const workbook = XLSX.utils.book_new();
+     XLSX.utils.book_append_sheet(workbook, worksheet, "Transactions");
+     XLSX.writeFile(workbook, "Midly_Transactions_Report.csv");
+     toast.success("CSV Export Generated");
+  };
+
+  const handleExportPDF = () => {
+     if (reportTransactions.length === 0) return toast.error("No data to export");
+     const doc = new jsPDF();
+     doc.setFontSize(18);
+     doc.text("Midly Admin - Secured Transaction Report", 14, 22);
+     doc.setFontSize(11);
+     doc.setTextColor(100);
+     doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 30);
+     
+     const tableColumn = ["TxID", "Date", "Status", "Amount", "Buyer", "Seller"];
+     const tableRows = reportTransactions.map(tx => [
+        tx.transaction_id.toString(),
+        new Date(tx.created_at).toLocaleDateString(),
+        tx.status,
+        `PHP ${tx.total_amount}`,
+        tx.buyer?.email || 'N/A',
+        tx.seller?.email || 'N/A'
+     ]);
+     
+     (doc as any).autoTable({
+        head: [tableColumn],
+        body: tableRows,
+        startY: 40,
+        theme: 'grid',
+        headStyles: { fillColor: [24, 24, 27] } // zinc-900 match
+     });
+     
+     doc.save("Midly_Transactions_Report.pdf");
+     toast.success("PDF Export Generated");
+  };
+
 
   if (!isAdmin) return (
      <div className="flex-1 flex items-center justify-center min-h-[60vh] bg-zinc-950">
@@ -191,6 +272,7 @@ export default function AdminDashboard() {
         <nav className="flex-1 px-3 space-y-1">
            {[
               { id: "OVERVIEW", icon: Activity, label: "Overview" },
+              { id: "REPORTS", icon: BarChartIcon, label: "Analytics & Reports" },
               { id: "DISPUTES", icon: ShieldAlert, label: "Disputes", badge: disputes.length > 0 ? disputes.length : null },
               { id: "KYC", icon: FileText, label: "Identity Verification", badge: kycs.length > 0 ? kycs.length : null },
               { id: "USERS", icon: Users, label: "Users" },
@@ -273,6 +355,175 @@ export default function AdminDashboard() {
                            <CheckCircle className="w-4 h-4 text-emerald-500" />
                            <span>API Responding properly</span>
                         </div>
+                     </div>
+                  </div>
+               </div>
+            )}
+
+            {/* TAB: REPORTS */}
+            {activeTab === "REPORTS" && (
+               <div className="animate-in fade-in duration-300">
+                  <header className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+                     <div>
+                        <h1 className="text-2xl font-semibold text-zinc-100 mb-1">Analytics & Reporting</h1>
+                        <p className="text-sm text-zinc-400">Data-driven insights, time-series aggregations, and secured file exports.</p>
+                     </div>
+                     <div className="flex gap-2">
+                        <button onClick={handleExportCSV} className="flex items-center gap-2 bg-zinc-900 border border-zinc-700 hover:border-zinc-500 text-zinc-300 px-4 py-2 rounded-lg text-sm transition-colors shadow-sm">
+                           <Download className="w-4 h-4" /> Export CSV
+                        </button>
+                        <button onClick={handleExportPDF} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm transition-colors shadow-sm">
+                           <FileText className="w-4 h-4" /> Export PDF
+                        </button>
+                     </div>
+                  </header>
+
+                  {/* Charts Section */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                     <div className="p-6 rounded-xl bg-zinc-900/50 border border-zinc-800">
+                        <h3 className="text-zinc-100 font-medium text-sm mb-6 flex items-center gap-2"><Activity className="w-4 h-4 text-emerald-500"/> Platform Growth (30 Days)</h3>
+                        <div className="h-64">
+                           <ResponsiveContainer width="100%" height="100%">
+                              <AreaChart data={chartData}>
+                                 <defs>
+                                    <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
+                                       <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                                       <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                                    </linearGradient>
+                                 </defs>
+                                 <XAxis dataKey="date" stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} />
+                                 <YAxis stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} />
+                                 <RechartsTooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }} itemStyle={{ color: '#e4e4e7' }} />
+                                 <Area type="monotone" dataKey="users" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorUsers)" />
+                              </AreaChart>
+                           </ResponsiveContainer>
+                        </div>
+                     </div>
+                     <div className="p-6 rounded-xl bg-zinc-900/50 border border-zinc-800">
+                        <h3 className="text-zinc-100 font-medium text-sm mb-6 flex items-center gap-2"><BarChartIcon className="w-4 h-4 text-blue-500"/> Transaction Volume (30 Days)</h3>
+                        <div className="h-64">
+                           <ResponsiveContainer width="100%" height="100%">
+                              <AreaChart data={chartData}>
+                                 <defs>
+                                    <linearGradient id="colorTxs" x1="0" y1="0" x2="0" y2="1">
+                                       <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                                       <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                                    </linearGradient>
+                                 </defs>
+                                 <XAxis dataKey="date" stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} />
+                                 <YAxis stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} />
+                                 <RechartsTooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }} itemStyle={{ color: '#e4e4e7' }} />
+                                 <Area type="monotone" dataKey="transactions" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorTxs)" />
+                              </AreaChart>
+                           </ResponsiveContainer>
+                        </div>
+                     </div>
+                  </div>
+
+                  {/* Filters */}
+                  <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-4 mb-6 flex flex-col md:flex-row items-end gap-4 shadow-sm">
+                     <div className="w-full md:w-auto">
+                        <label className="block text-xs font-medium text-zinc-500 mb-1">Status</label>
+                        <select value={reportStatus} onChange={(e) => setReportStatus(e.target.value)} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:border-zinc-600 focus:outline-none">
+                           <option value="all">All Statuses</option>
+                           <option value="completed">Completed</option>
+                           <option value="pending">Pending</option>
+                           <option value="refunded">Refunded</option>
+                           <option value="disputed">Disputed</option>
+                        </select>
+                     </div>
+                     <div className="w-full md:w-auto">
+                        <label className="block text-xs font-medium text-zinc-500 mb-1">Start Date</label>
+                        <input type="date" value={reportStartDate} onChange={(e) => setReportStartDate(e.target.value)} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:border-zinc-600 focus:outline-none" />
+                     </div>
+                     <div className="w-full md:w-auto">
+                        <label className="block text-xs font-medium text-zinc-500 mb-1">End Date</label>
+                        <input type="date" value={reportEndDate} onChange={(e) => setReportEndDate(e.target.value)} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:border-zinc-600 focus:outline-none" />
+                     </div>
+                     <button onClick={fetchFilteredReports} className="w-full md:w-auto bg-zinc-800 hover:bg-zinc-700 text-zinc-100 px-6 py-2 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
+                        <Filter className="w-4 h-4"/> Apply Filters
+                     </button>
+                  </div>
+
+                  {/* Transactions Table */}
+                  <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl overflow-hidden shadow-xl mb-8">
+                     <div className="px-6 py-4 border-b border-zinc-800 bg-zinc-900">
+                        <h3 className="font-semibold text-zinc-100">Filtered Transactions List</h3>
+                     </div>
+                     <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm text-zinc-400">
+                           <thead className="bg-zinc-950/50 text-xs uppercase font-semibold text-zinc-500 border-b border-zinc-800">
+                              <tr>
+                                 <th className="px-6 py-4">ID / Date</th>
+                                 <th className="px-6 py-4">Entities</th>
+                                 <th className="px-6 py-4">Status</th>
+                                 <th className="px-6 py-4 text-right">Value</th>
+                              </tr>
+                           </thead>
+                           <tbody className="divide-y divide-zinc-800/50">
+                              {reportTransactions.map(tx => (
+                                 <tr key={tx.transaction_id} className="hover:bg-zinc-800/20 transition-colors">
+                                    <td className="px-6 py-4">
+                                       <div className="font-mono text-zinc-300">#{tx.transaction_id}</div>
+                                       <div className="text-xs mt-1">{new Date(tx.created_at).toLocaleDateString()}</div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                       <div className="text-xs text-zinc-300"><span className="text-zinc-500">B:</span> {tx.buyer?.email || 'N/A'}</div>
+                                       <div className="text-xs mt-1 text-zinc-300"><span className="text-zinc-500">S:</span> {tx.seller?.email || 'N/A'}</div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                       <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${
+                                          tx.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400' :
+                                          tx.status === 'disputed' ? 'bg-red-500/10 text-red-400' :
+                                          'bg-zinc-800 text-zinc-400'
+                                       }`}>
+                                          {tx.status}
+                                       </span>
+                                    </td>
+                                    <td className="px-6 py-4 text-right font-semibold text-zinc-200">
+                                       ₱{Number(tx.total_amount).toLocaleString()}
+                                    </td>
+                                 </tr>
+                              ))}
+                              {reportTransactions.length === 0 && (
+                                 <tr>
+                                    <td colSpan={4} className="px-6 py-12 text-center text-zinc-500 italic">No transactions match the current filters.</td>
+                                 </tr>
+                              )}
+                           </tbody>
+                        </table>
+                     </div>
+                  </div>
+                  
+                  {/* Immutable Audit Log Preview */}
+                  <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl overflow-hidden shadow-xl">
+                     <div className="px-6 py-4 border-b border-zinc-800 bg-zinc-900 flex justify-between items-center">
+                        <h3 className="font-semibold text-zinc-100 flex items-center gap-2"><Clock className="w-4 h-4 text-zinc-400"/> System Action Ledger</h3>
+                        <span className="text-xs text-zinc-500">Last 1000 events</span>
+                     </div>
+                     <div className="overflow-x-auto max-h-96 custom-scrollbar">
+                        <table className="w-full text-left text-xs text-zinc-400">
+                           <thead className="bg-zinc-950/50 uppercase font-semibold text-zinc-500 border-b border-zinc-800 sticky top-0 backdrop-blur-md">
+                              <tr>
+                                 <th className="px-6 py-3">Timestamp</th>
+                                 <th className="px-6 py-3">Action</th>
+                                 <th className="px-6 py-3">User Node</th>
+                                 <th className="px-6 py-3">Description</th>
+                              </tr>
+                           </thead>
+                           <tbody className="divide-y divide-zinc-800/50">
+                              {auditLogs.map(log => (
+                                 <tr key={log.log_id} className="hover:bg-zinc-800/20">
+                                    <td className="px-6 py-3 font-mono text-zinc-500 whitespace-nowrap">{new Date(log.timestamp).toLocaleString()}</td>
+                                    <td className="px-6 py-3">
+                                       <span className="bg-zinc-800/50 px-2 py-0.5 rounded text-zinc-300 font-mono">{log.action_type}</span>
+                                    </td>
+                                    <td className="px-6 py-3 text-zinc-300">{log.user?.email || 'System'} (ID:{log.user_id})</td>
+                                    <td className="px-6 py-3 text-zinc-500 truncate max-w-xs">{log.action_description}</td>
+                                 </tr>
+                              ))}
+                           </tbody>
+                        </table>
                      </div>
                   </div>
                </div>

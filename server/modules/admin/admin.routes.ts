@@ -183,6 +183,107 @@ router.get('/metrics', authenticateJWT, async (req: Request, res: Response): Pro
 });
 
 // ==========================================
+// REPORTING & DATA VISUALIZATION QUEUE (#5)
+// ==========================================
+
+router.get('/reports/charts', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
+   const dbUser = await prisma.user.findUnique({ where: { user_id: req.user.user_id } });
+   if (!dbUser || dbUser.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+   
+   try {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      // Fetch raw data
+      const users = await prisma.user.findMany({
+         where: { created_at: { gte: thirtyDaysAgo } },
+         select: { created_at: true }
+      });
+      const txs = await prisma.transaction.findMany({
+         where: { created_at: { gte: thirtyDaysAgo } },
+         select: { created_at: true, status: true, total_amount: true }
+      });
+
+      // Group dynamically by day string "MMM DD"
+      const chartMap = new Map<string, { date: string; users: number; transactions: number; volume: number }>();
+      
+      // Initialize last 30 days to ensure continuous graph
+      for(let i = 29; i >= 0; i--) {
+         const d = new Date();
+         d.setDate(d.getDate() - i);
+         const dateString = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+         chartMap.set(dateString, { date: dateString, users: 0, transactions: 0, volume: 0 });
+      }
+
+      users.forEach(u => {
+         const dateString = new Date(u.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+         if(chartMap.has(dateString)) chartMap.get(dateString)!.users += 1;
+      });
+
+      txs.forEach(t => {
+         const dateString = new Date(t.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+         if(chartMap.has(dateString)) {
+            const entry = chartMap.get(dateString)!;
+            entry.transactions += 1;
+            entry.volume += Number(t.total_amount || 0);
+         }
+      });
+
+      res.json({ timelineData: Array.from(chartMap.values()) });
+   } catch (e) {
+      res.status(500).json({ error: 'Failed to generate chart aggregations' });
+   }
+});
+
+router.get('/reports/transactions', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
+   const dbUser = await prisma.user.findUnique({ where: { user_id: req.user.user_id } });
+   if (!dbUser || dbUser.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+
+   try {
+      const { status, startDate, endDate } = req.query;
+      const where: any = {};
+      
+      if (status && status !== 'all') where.status = status;
+      if (startDate && endDate) {
+         where.created_at = { 
+            gte: new Date(startDate as string), 
+            lte: new Date(endDate as string) 
+         };
+      }
+
+      const transactions = await prisma.transaction.findMany({
+         where,
+         include: {
+            buyer: { select: { email: true, first_name: true } },
+            seller: { select: { email: true, first_name: true } },
+            payment: { select: { amount: true, payment_method: true } }
+         },
+         orderBy: { created_at: 'desc' }
+      });
+
+      res.json({ transactions });
+   } catch (e) {
+      res.status(500).json({ error: 'Failed to fetch transaction reports' });
+   }
+});
+
+router.get('/reports/audit-logs', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
+   const dbUser = await prisma.user.findUnique({ where: { user_id: req.user.user_id } });
+   if (!dbUser || dbUser.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+
+   try {
+      const logs = await prisma.auditLog.findMany({
+         include: { user: { select: { email: true } } },
+         orderBy: { timestamp: 'desc' },
+         take: 1000 // Cap to prevent massive payloads
+      });
+      res.json({ logs });
+   } catch (e) {
+      res.status(500).json({ error: 'Failed to fetch audit logs' });
+   }
+});
+
+// ==========================================
 // KYC ADMIN REVIEW QUEUE (#7)
 // ==========================================
 
