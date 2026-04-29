@@ -21,7 +21,7 @@ export default function TradeHub() {
    const tradeId = params.id as string;
 
    const [trade, setTrade] = useState<any>(null);
-   const [myRole, setMyRole] = useState<"BUY" | "SELL" | null>(null);
+   const [myRole, setMyRole] = useState<"BUY" | "SELL" | "ADMIN" | null>(null);
    const [isInitiator, setIsInitiator] = useState(false);
    const [counterparty, setCounterparty] = useState<any>(null);
    const [messages, setMessages] = useState<Message[]>([]);
