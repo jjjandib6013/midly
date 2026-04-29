@@ -497,6 +497,140 @@ export default function TradeHub() {
       );
    }
 
+   if (myRole === 'ADMIN') {
+      const handleAdminResolve = (action: 'REFUND_BUYER' | 'FORWARD_TO_SELLER') => {
+         if (!confirm(`Are you sure you want to FORCE ${action}? This is mathematically binding and irreversible.`)) return;
+         fetch(`${API_URL}/api/admin/disputes/${tradeId}/resolve`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action })
+         }).then(res => {
+            if (res.ok) {
+               toast.success("Dispute mathematically resolved.");
+               fetchTrade();
+            } else toast.error("Failed to resolve dispute.");
+         });
+      };
+
+      return (
+         <div className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 lg:py-8 flex flex-col gap-6 lg:h-[calc(100vh-64px)] overflow-y-auto custom-scrollbar">
+            <header className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-dark-border pb-6 gap-4">
+               <div>
+                  <h1 className="text-2xl font-bold text-red-500 mb-2 flex items-center gap-3"><ShieldAlert className="w-6 h-6" /> SECURED ADMIN AUDIT VIEW</h1>
+                  <p className="text-sm text-text-muted max-w-xl leading-relaxed">You are viewing Hub #{tradeId} as a Platform Administrator. All logs, actions, and timestamps shown are mathematical truths pulled directly from the system ledger. You are observing this trade, not participating in it.</p>
+               </div>
+               <div className="flex items-center gap-4 shrink-0">
+                  <div className="px-5 py-3 bg-dark-panel border border-dark-border rounded-xl shadow-lg">
+                     <span className="text-text-muted text-xs uppercase tracking-widest font-bold">System State:</span> 
+                     <span className={`font-bold uppercase tracking-widest ml-3 px-3 py-1 rounded text-xs ${
+                        trade.status === 'completed' ? 'bg-emerald-500/10 text-emerald-500' :
+                        trade.status === 'disputed' ? 'bg-red-500/10 text-red-500' :
+                        'bg-zinc-800 text-zinc-300'
+                     }`}>{trade.status}</span>
+                  </div>
+               </div>
+            </header>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+               {/* Timeline Panel */}
+               <div className="col-span-1 bg-dark-panel border border-dark-border rounded-xl p-6 shadow-xl">
+                  <h3 className="font-bold text-white mb-6 uppercase tracking-wider flex items-center gap-2 text-sm"><Clock className="w-4 h-4 text-primary"/> Event Timeline</h3>
+                  <div className="space-y-6 relative before:absolute before:inset-0 before:ml-2.5 before:-translate-x-px before:h-full before:w-0.5 before:bg-dark-border">
+                     
+                     <div className="relative flex items-start gap-4">
+                        <div className="flex items-center justify-center w-5 h-5 rounded-full border-2 border-primary bg-dark-bg text-primary shrink-0 z-10 mt-0.5"></div>
+                        <div className="flex-1 pb-4">
+                           <p className="font-bold text-sm text-white">Hub Provisioned</p>
+                           <time className="block mt-1 text-[11px] font-mono text-text-muted bg-dark-bg border border-dark-border px-2 py-1 rounded inline-block">{new Date(trade.created_at).toLocaleString()}</time>
+                        </div>
+                     </div>
+
+                     {trade.item_delivered_at && (
+                        <div className="relative flex items-start gap-4">
+                           <div className="flex items-center justify-center w-5 h-5 rounded-full border-2 border-yellow-500 bg-dark-bg text-yellow-500 shrink-0 z-10 mt-0.5"></div>
+                           <div className="flex-1 pb-4">
+                              <p className="font-bold text-sm text-white">Item Handover Action</p>
+                              <time className="block mt-1 text-[11px] font-mono text-text-muted bg-dark-bg border border-dark-border px-2 py-1 rounded inline-block">{new Date(trade.item_delivered_at).toLocaleString()}</time>
+                           </div>
+                        </div>
+                     )}
+
+                     {trade.buyer_approved_at && (
+                        <div className="relative flex items-start gap-4">
+                           <div className="flex items-center justify-center w-5 h-5 rounded-full border-2 border-emerald-500 bg-dark-bg text-emerald-500 shrink-0 z-10 mt-0.5"></div>
+                           <div className="flex-1 pb-4">
+                              <p className="font-bold text-sm text-white">Buyer Acceptance</p>
+                              <time className="block mt-1 text-[11px] font-mono text-text-muted bg-dark-bg border border-dark-border px-2 py-1 rounded inline-block">{new Date(trade.buyer_approved_at).toLocaleString()}</time>
+                           </div>
+                        </div>
+                     )}
+
+                     {trade.status === 'refunded' && (
+                        <div className="relative flex items-start gap-4">
+                           <div className="flex items-center justify-center w-5 h-5 rounded-full border-2 border-red-500 bg-dark-bg text-red-500 shrink-0 z-10 mt-0.5"></div>
+                           <div className="flex-1 pb-4">
+                              <p className="font-bold text-sm text-white">Vault Refunded</p>
+                           </div>
+                        </div>
+                     )}
+                  </div>
+
+                  <div className="mt-8 pt-6 border-t border-dark-border space-y-3">
+                     <div className="flex justify-between items-center text-xs">
+                        <span className="text-text-muted font-bold uppercase">Buyer</span>
+                        <span className="text-white font-mono">{trade.buyer?.email}</span>
+                     </div>
+                     <div className="flex justify-between items-center text-xs">
+                        <span className="text-text-muted font-bold uppercase">Seller</span>
+                        <span className="text-white font-mono">{trade.seller?.email}</span>
+                     </div>
+                     <div className="flex justify-between items-center text-xs">
+                        <span className="text-text-muted font-bold uppercase">Escrow Locked</span>
+                        <span className="text-primary font-bold">₱{Number(trade.total_amount).toLocaleString()}</span>
+                     </div>
+                  </div>
+               </div>
+
+               {/* Logs Panel */}
+               <div className="col-span-1 lg:col-span-2 bg-dark-panel border border-dark-border rounded-xl p-6 flex flex-col h-[700px] shadow-xl">
+                  <h3 className="font-bold text-white mb-6 uppercase tracking-wider flex items-center gap-2 text-sm"><Server className="w-4 h-4 text-primary"/> Immutable System Logs</h3>
+                  
+                  <div className="flex-1 overflow-y-auto pr-3 custom-scrollbar space-y-4 bg-dark-bg rounded-lg border border-dark-border p-4">
+                     {messages.map((m: any) => (
+                        <div key={m.id} className={`p-4 rounded-xl border text-sm transition-colors ${m.sender === 'ai' ? 'bg-red-500/5 border-red-500/30 shadow-[0_0_15px_rgba(239,68,68,0.05)]' : 'bg-dark-panel border-dark-border'}`}>
+                           <div className="flex justify-between items-center mb-2">
+                              <span className={`font-bold text-[10px] uppercase tracking-widest px-2 py-0.5 rounded ${m.sender === 'ai' ? 'bg-red-500 text-white' : 'bg-zinc-800 text-zinc-300'}`}>
+                                 {m.sender === 'ai' ? 'SYSTEM TRIGGER' : 'PARTICIPANT'}
+                              </span>
+                              <span className="font-mono text-xs text-text-muted">{m.timestamp}</span>
+                           </div>
+                           <p className={`whitespace-pre-wrap leading-relaxed ${m.sender === 'ai' ? 'text-red-400 font-mono text-xs' : 'text-zinc-200'}`}>{m.text}</p>
+                        </div>
+                     ))}
+                  </div>
+
+                  {trade.status === 'disputed' && (
+                     <div className="mt-6 p-5 rounded-xl border border-red-500/50 bg-[#1A0B0B] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div>
+                           <h4 className="text-red-500 font-bold text-sm uppercase tracking-widest mb-1 flex items-center gap-2"><Lock className="w-4 h-4" /> Root Override Controls</h4>
+                           <p className="text-xs text-red-400/80">Use these commands to forcefully resolve the frozen smart vault. This is mathematically irreversible.</p>
+                        </div>
+                        <div className="flex gap-3 shrink-0">
+                           <button onClick={() => handleAdminResolve('FORWARD_TO_SELLER')} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold uppercase rounded-lg transition-colors shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                              Release to Seller
+                           </button>
+                           <button onClick={() => handleAdminResolve('REFUND_BUYER')} className="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white text-xs font-bold uppercase rounded-lg transition-colors shadow-[0_0_15px_rgba(239,68,68,0.3)]">
+                              Refund to Buyer
+                           </button>
+                        </div>
+                     </div>
+                  )}
+               </div>
+            </div>
+         </div>
+      );
+   }
+
    return (
       <div className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 lg:py-8 flex flex-col lg:grid lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 lg:h-[calc(100vh-64px)] lg:max-h-[calc(100vh-64px)] lg:overflow-hidden">
 
