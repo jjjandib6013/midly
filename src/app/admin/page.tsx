@@ -37,6 +37,10 @@ export default function AdminDashboard() {
   const [reportStartDate, setReportStartDate] = useState("");
   const [reportEndDate, setReportEndDate] = useState("");
   const [reportStatus, setReportStatus] = useState("all");
+
+  const [resolveModalState, setResolveModalState] = useState<{isOpen: boolean, txId: number | null, action: 'REFUND_BUYER' | 'FORWARD_TO_SELLER' | null}>({isOpen: false, txId: null, action: null});
+  const [resolveConfirmText, setResolveConfirmText] = useState("");
+  const [isResolving, setIsResolving] = useState(false);
   
   const loadData = async () => {
     if (!token) return;
@@ -105,21 +109,28 @@ export default function AdminDashboard() {
      }
   }, [token, session]);
 
-  const handleResolve = async (txId: number, action: 'REFUND_BUYER' | 'FORWARD_TO_SELLER') => {
-      if (!confirm(`Are you sure you want to resolve this dispute? This action will immediately transfer the vault funds and cannot be undone.`)) return;
+  const confirmResolve = async () => {
+      if (resolveConfirmText !== 'CONFIRM') return toast.error("Please type CONFIRM to execute.");
+      if (!resolveModalState.txId || !resolveModalState.action) return;
+      
+      setIsResolving(true);
       try {
-         const res = await fetch(`${API_URL}/api/admin/disputes/${txId}/resolve`, {
+         const res = await fetch(`${API_URL}/api/admin/disputes/${resolveModalState.txId}/resolve`, {
             method: "POST",
             headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ action })
+            body: JSON.stringify({ action: resolveModalState.action })
          });
          if (res.ok) {
             toast.success("Dispute resolved successfully.");
+            setResolveModalState({ isOpen: false, txId: null, action: null });
+            setResolveConfirmText("");
             loadData();
          } else {
             toast.error("Failed to resolve dispute.");
          }
-      } catch(e) { toast.error("Server API Error"); }
+      } catch(e) { toast.error("Server API Error"); } finally {
+         setIsResolving(false);
+      }
   };
 
   const handleResolveKyc = async (kycId: number, status: 'verified' | 'rejected') => {
@@ -586,8 +597,8 @@ export default function AdminDashboard() {
                                     <p className="text-xs text-zinc-400 mb-4">Review the activity logs. Overriding the vault relies on human discretion and cannot be reversed.</p>
                                     
                                     <button 
-                                       onClick={() => handleResolve(d.transaction_id, 'FORWARD_TO_SELLER')} 
-                                       className="w-full bg-zinc-100 text-zinc-950 hover:bg-zinc-200 font-medium text-sm px-4 py-2.5 rounded-md transition-colors"
+                                       onClick={() => setResolveModalState({ isOpen: true, txId: d.transaction_id, action: 'FORWARD_TO_SELLER'})} 
+                                       className="w-full bg-emerald-600/10 border border-emerald-600/30 text-emerald-500 hover:bg-emerald-600/20 font-bold tracking-wider uppercase text-xs px-4 py-3 rounded-md transition-colors shadow-[0_0_15px_rgba(16,185,129,0.1)]"
                                     >
                                        Release to Seller
                                     </button>
@@ -599,8 +610,8 @@ export default function AdminDashboard() {
                                     </div>
                                     
                                     <button 
-                                       onClick={() => handleResolve(d.transaction_id, 'REFUND_BUYER')} 
-                                       className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 hover:bg-zinc-800 font-medium text-sm px-4 py-2.5 rounded-md transition-colors"
+                                       onClick={() => setResolveModalState({ isOpen: true, txId: d.transaction_id, action: 'REFUND_BUYER'})} 
+                                       className="w-full bg-red-600/10 border border-red-600/30 text-red-500 hover:bg-red-600/20 font-bold tracking-wider uppercase text-xs px-4 py-3 rounded-md transition-colors shadow-[0_0_15px_rgba(239,68,68,0.1)]"
                                     >
                                        Refund to Buyer
                                     </button>
@@ -849,6 +860,65 @@ export default function AdminDashboard() {
 
          </div>
       </div>
+
+      {/* ADMIN HIGH-FRICTION RESOLVE MODAL */}
+      {resolveModalState.isOpen && (
+         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <div className="bg-zinc-950 border border-red-500/30 rounded-2xl w-full max-w-md overflow-hidden shadow-[0_0_40px_rgba(239,68,68,0.15)]">
+               <div className="p-6 border-b border-zinc-800 bg-red-500/5">
+                  <h3 className="text-xl font-bold text-red-500 flex items-center gap-2">
+                     <ShieldAlert className="w-6 h-6" /> Root Execution Authority
+                  </h3>
+                  <p className="text-zinc-400 text-sm mt-2">You are bypassing the Smart Vault logic to forcefully route funds.</p>
+               </div>
+               
+               <div className="p-6 space-y-4">
+                  <div className="p-4 bg-zinc-900 rounded-lg border border-zinc-800">
+                     <p className="text-xs text-zinc-500 uppercase tracking-widest font-bold mb-1">Target Action</p>
+                     <p className="text-white font-medium">
+                        {resolveModalState.action === 'REFUND_BUYER' ? (
+                           <span className="text-red-400">Forcefully REFUND funds to the BUYER.</span>
+                        ) : (
+                           <span className="text-emerald-400">Forcefully RELEASE funds to the SELLER.</span>
+                        )}
+                     </p>
+                  </div>
+
+                  <div>
+                     <label className="block text-xs font-bold uppercase tracking-widest text-zinc-400 mb-2">
+                        Type <span className="text-red-500 select-none">CONFIRM</span> to execute
+                     </label>
+                     <input 
+                        type="text" 
+                        value={resolveConfirmText}
+                        onChange={(e) => setResolveConfirmText(e.target.value)}
+                        placeholder="CONFIRM"
+                        className="w-full bg-zinc-900 border border-zinc-700 text-white p-3 rounded-lg focus:outline-none focus:border-red-500 font-mono tracking-widest uppercase"
+                        disabled={isResolving}
+                     />
+                  </div>
+               </div>
+
+               <div className="p-4 border-t border-zinc-800 bg-zinc-900/50 flex gap-3">
+                  <button 
+                     onClick={() => { setResolveModalState({isOpen: false, txId: null, action: null}); setResolveConfirmText(""); }}
+                     className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50"
+                     disabled={isResolving}
+                  >
+                     Cancel
+                  </button>
+                  <button 
+                     onClick={confirmResolve}
+                     disabled={resolveConfirmText !== 'CONFIRM' || isResolving}
+                     className="flex-1 py-3 bg-red-600 hover:bg-red-500 disabled:bg-red-600/30 disabled:text-white/30 text-white font-bold rounded-lg transition-colors flex justify-center items-center gap-2 uppercase tracking-widest text-xs"
+                  >
+                     {isResolving ? <RefreshCw className="w-4 h-4 animate-spin" /> : "Execute Override"}
+                  </button>
+               </div>
+            </div>
+         </div>
+      )}
+
     </div>
   );
 }

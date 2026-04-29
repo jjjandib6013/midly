@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../../config/db';
 import { authenticateJWT } from '../../shared/middlewares/auth.middleware';
-import { io } from '../../../server'; // Note: io export needs to be accessed if we need to emit, or we decouple. Wait, I will just import io from server.ts. Let's assume we decouple or import correctly later.
+import { io, logAudit } from '../../../server';
 
 const router = Router();
 
@@ -35,6 +35,7 @@ router.post('/disputes/:txId/resolve', authenticateJWT, async (req: Request, res
 
       const trade = await prisma.transaction.findUnique({ where: { transaction_id: txId }, include: { payment: true } });
       if (!trade || !trade.payment) return res.status(404).json({ error: 'Trade not found' });
+      if (trade.status !== 'disputed') return res.status(400).json({ error: 'Trade is not actively disputed' });
 
       await prisma.$transaction(async (tx) => {
          await tx.dispute.update({
@@ -61,11 +62,13 @@ router.post('/disputes/:txId/resolve', authenticateJWT, async (req: Request, res
             data: {
                transaction_id: txId,
                sender_id: req.user.user_id,
-               message_text: `[ADMIN MEDIATION FINALIZED]\nThe Admin team has reviewed the evidence and executed a ${action.replace('_', ' ')} command. The vault has been unlocked and funds distributed mathematically.`,
+               message_text: `[SYSTEM TRIGGER: DISPUTE RESOLVED]\nAdministrator forcibly dissolved the Smart Vault. Result: ${action === 'REFUND_BUYER' ? 'Refunded to Buyer' : 'Released to Seller'}. This action is absolute.`,
                is_system_generated: true,
-               risk_level: 'Safe'
+               risk_level: 'Critical'
             }
          });
+
+         await logAudit(tx, txId, req.user.user_id, 'RESOLVE_DISPUTE', `Admin ${dbUser.email} forced dispute resolution: ${action}`, req.ip);
       });
 
       // io is handled in server, if we can't import io easily, we can skip it or import it.

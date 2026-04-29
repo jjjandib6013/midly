@@ -50,6 +50,10 @@ export default function TradeHub() {
    const [pendingUpload, setPendingUpload] = useState<File | null>(null);
    const [showCredentials, setShowCredentials] = useState(false);
 
+   const [adminResolveModal, setAdminResolveModal] = useState<{isOpen: boolean, action: 'REFUND_BUYER' | 'FORWARD_TO_SELLER' | null}>({isOpen: false, action: null});
+   const [adminResolveConfirmText, setAdminResolveConfirmText] = useState("");
+   const [isAdminResolving, setIsAdminResolving] = useState(false);
+
    const [timeRemaining, setTimeRemaining] = useState({ hours: 24, minutes: 0, seconds: 0, isExpired: false });
 
    useEffect(() => {
@@ -498,18 +502,25 @@ export default function TradeHub() {
    }
 
    if (myRole === 'ADMIN') {
-      const handleAdminResolve = (action: 'REFUND_BUYER' | 'FORWARD_TO_SELLER') => {
-         if (!confirm(`Are you sure you want to FORCE ${action}? This is mathematically binding and irreversible.`)) return;
-         fetch(`${API_URL}/api/admin/disputes/${tradeId}/resolve`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action })
-         }).then(res => {
+      const confirmAdminResolve = async () => {
+         if (adminResolveConfirmText !== 'CONFIRM') return toast.error("Please type CONFIRM to execute.");
+         if (!adminResolveModal.action) return;
+         setIsAdminResolving(true);
+         try {
+            const res = await fetch(`${API_URL}/api/admin/disputes/${tradeId}/resolve`, {
+               method: 'POST',
+               headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+               body: JSON.stringify({ action: adminResolveModal.action })
+            });
             if (res.ok) {
                toast.success("Dispute mathematically resolved.");
+               setAdminResolveModal({ isOpen: false, action: null });
+               setAdminResolveConfirmText("");
                fetchTrade();
             } else toast.error("Failed to resolve dispute.");
-         });
+         } catch(e) { toast.error("Server API Error"); } finally {
+            setIsAdminResolving(false);
+         }
       };
 
       return (
@@ -616,10 +627,10 @@ export default function TradeHub() {
                            <p className="text-xs text-red-400/80">Use these commands to forcefully resolve the frozen smart vault. This is mathematically irreversible.</p>
                         </div>
                         <div className="flex gap-3 shrink-0">
-                           <button onClick={() => handleAdminResolve('FORWARD_TO_SELLER')} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold uppercase rounded-lg transition-colors shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                           <button onClick={() => setAdminResolveModal({isOpen: true, action: 'FORWARD_TO_SELLER'})} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold uppercase rounded-lg transition-colors shadow-[0_0_15px_rgba(16,185,129,0.3)]">
                               Release to Seller
                            </button>
-                           <button onClick={() => handleAdminResolve('REFUND_BUYER')} className="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white text-xs font-bold uppercase rounded-lg transition-colors shadow-[0_0_15px_rgba(239,68,68,0.3)]">
+                           <button onClick={() => setAdminResolveModal({isOpen: true, action: 'REFUND_BUYER'})} className="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white text-xs font-bold uppercase rounded-lg transition-colors shadow-[0_0_15px_rgba(239,68,68,0.3)]">
                               Refund to Buyer
                            </button>
                         </div>
@@ -627,6 +638,64 @@ export default function TradeHub() {
                   )}
                </div>
             </div>
+
+            {/* ADMIN HIGH-FRICTION RESOLVE MODAL */}
+            {adminResolveModal.isOpen && (
+               <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                  <div className="bg-zinc-950 border border-red-500/30 rounded-2xl w-full max-w-md overflow-hidden shadow-[0_0_40px_rgba(239,68,68,0.15)]">
+                     <div className="p-6 border-b border-zinc-800 bg-red-500/5">
+                        <h3 className="text-xl font-bold text-red-500 flex items-center gap-2">
+                           <ShieldAlert className="w-6 h-6" /> Root Execution Authority
+                        </h3>
+                        <p className="text-zinc-400 text-sm mt-2">You are bypassing the Smart Vault logic to forcefully route funds.</p>
+                     </div>
+                     
+                     <div className="p-6 space-y-4">
+                        <div className="p-4 bg-zinc-900 rounded-lg border border-zinc-800">
+                           <p className="text-xs text-zinc-500 uppercase tracking-widest font-bold mb-1">Target Action</p>
+                           <p className="text-white font-medium">
+                              {adminResolveModal.action === 'REFUND_BUYER' ? (
+                                 <span className="text-red-400">Forcefully REFUND funds to the BUYER.</span>
+                              ) : (
+                                 <span className="text-emerald-400">Forcefully RELEASE funds to the SELLER.</span>
+                              )}
+                           </p>
+                        </div>
+
+                        <div>
+                           <label className="block text-xs font-bold uppercase tracking-widest text-zinc-400 mb-2">
+                              Type <span className="text-red-500 select-none">CONFIRM</span> to execute
+                           </label>
+                           <input 
+                              type="text" 
+                              value={adminResolveConfirmText}
+                              onChange={(e) => setAdminResolveConfirmText(e.target.value)}
+                              placeholder="CONFIRM"
+                              className="w-full bg-zinc-900 border border-zinc-700 text-white p-3 rounded-lg focus:outline-none focus:border-red-500 font-mono tracking-widest uppercase"
+                              disabled={isAdminResolving}
+                           />
+                        </div>
+                     </div>
+
+                     <div className="p-4 border-t border-zinc-800 bg-zinc-900/50 flex gap-3">
+                        <button 
+                           onClick={() => { setAdminResolveModal({isOpen: false, action: null}); setAdminResolveConfirmText(""); }}
+                           className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50"
+                           disabled={isAdminResolving}
+                        >
+                           Cancel
+                        </button>
+                        <button 
+                           onClick={confirmAdminResolve}
+                           disabled={adminResolveConfirmText !== 'CONFIRM' || isAdminResolving}
+                           className="flex-1 py-3 bg-red-600 hover:bg-red-500 disabled:bg-red-600/30 disabled:text-white/30 text-white font-bold rounded-lg transition-colors flex justify-center items-center gap-2 uppercase tracking-widest text-xs"
+                        >
+                           {isAdminResolving ? <Timer className="w-4 h-4 animate-spin" /> : "Execute Override"}
+                        </button>
+                     </div>
+                  </div>
+               </div>
+            )}
          </div>
       );
    }
@@ -1243,6 +1312,9 @@ export default function TradeHub() {
                </DynamicCard>
             </div>
          )}
+
+
+
       </div>
    );
 }
