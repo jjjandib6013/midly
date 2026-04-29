@@ -814,7 +814,8 @@ router.get('/:id', authenticateJWT, async (req, res): Promise<any> => {
          include: {
             buyer: { select: { user_id: true, email: true, first_name: true, last_name: true, reputation_score: true } },
             seller: { select: { user_id: true, email: true, first_name: true, last_name: true, reputation_score: true } },
-            payment: true
+            payment: true,
+            dispute: { include: { evidence: true } }
          }
       });
 

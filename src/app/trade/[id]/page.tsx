@@ -402,6 +402,43 @@ export default function TradeHub() {
       }
    };
 
+   const submitCounterEvidence = async () => {
+      if (evidenceFiles.length === 0) return;
+      try {
+         setIsLoading(true);
+         setIsUploadingEvidence(true);
+         
+         for (const file of evidenceFiles) {
+            const urlRes = await fetch(`${API_URL}/api/transactions/${tradeId}/evidence/upload-url`, {
+               method: "POST",
+               headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+               body: JSON.stringify({ mime_type: file.type, file_name: file.name, size_bytes: file.size })
+            });
+            if (!urlRes.ok) throw new Error("Failed to get upload URL");
+            const { uploadUrl, storageKey } = await urlRes.json();
+
+            const uploadRes = await fetch(uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
+            if (!uploadRes.ok) throw new Error("Cloud Storage Upload Failed");
+
+            const hash = await computeSHA256(file);
+            await fetch(`${API_URL}/api/transactions/${tradeId}/evidence/confirm`, {
+               method: "POST",
+               headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+               body: JSON.stringify({ storage_key: storageKey, original_name: file.name, mime_type: file.type, size_bytes: file.size, sha256_hash: hash })
+            });
+         }
+
+         toast("Counter-Evidence secured.", { icon: "🔒" });
+         setEvidenceFiles([]);
+         fetchTrade();
+      } catch (e: any) {
+         toast.error(e.message || "Server error.");
+      } finally {
+         setIsLoading(false);
+         setIsUploadingEvidence(false);
+      }
+   };
+
    const handleCancelTrade = async () => {
       if (!trade || !['pending_invite', 'agreement', 'awaiting_payment'].includes(trade.status)) {
          toast.error("Cannot cancel at this stage."); return;
@@ -1025,12 +1062,61 @@ export default function TradeHub() {
                         <h4 className="text-white font-bold text-sm">Verification Phase</h4>
 
                         {trade.status === 'disputed' ? (
-                           <div className="p-4 rounded-xl border border-red-500/30 bg-red-500/10 flex items-start gap-4 animate-pulse">
-                              <ShieldAlert className="w-8 h-8 text-red-500 shrink-0" />
-                              <div>
-                                 <h4 className="text-red-500 font-bold">FUNDS FROZEN - Escrow Suspended</h4>
-                                 <p className="text-xs text-red-400 mt-1 leading-relaxed">A dispute was filed. The 24-hour Auto-Release timer has been completely dismantled. This vault is now legally frozen and awaits Admin Mediation.</p>
+                           <div className="flex flex-col gap-4">
+                              <div className="p-4 rounded-xl border border-red-500/30 bg-red-500/10 flex items-start gap-4">
+                                 <ShieldAlert className="w-8 h-8 text-red-500 shrink-0 animate-pulse" />
+                                 <div>
+                                    <h4 className="text-red-500 font-bold">FUNDS FROZEN - Escrow Suspended</h4>
+                                    <p className="text-xs text-red-400 mt-1 leading-relaxed">A dispute was filed. The 24-hour Auto-Release timer has been completely dismantled. This vault is now legally frozen and awaits Admin Mediation.</p>
+                                 </div>
                               </div>
+                              
+                              {trade.dispute?.raised_by !== undefined && trade.dispute.raised_by !== Number((session?.user as any)?.id) && (
+                                 <div className="mt-2 p-5 border border-dark-border bg-dark-bg rounded-xl">
+                                    <h4 className="text-white text-sm font-bold flex items-center gap-2 mb-2">
+                                       <UploadCloud className="w-4 h-4 text-primary" /> Defend Your Case
+                                    </h4>
+                                    <p className="text-xs text-text-muted mb-4">The other party has raised a dispute. You may upload counter-evidence (receipts, screenshots of delivery, etc.) to aid the Admin in deciding the outcome.</p>
+                                    
+                                    <div 
+                                       className={`border-2 border-dashed ${isUploadingEvidence ? 'border-primary/50 bg-primary/5' : 'border-dark-border hover:border-primary/50'} rounded-xl p-4 text-center transition-colors cursor-pointer relative mb-4`}
+                                       onClick={() => !isUploadingEvidence && evidenceInputRef.current?.click()}
+                                    >
+                                       <input 
+                                          type="file" 
+                                          multiple 
+                                          accept="image/jpeg,image/png,application/pdf"
+                                          className="hidden" 
+                                          ref={evidenceInputRef}
+                                          onChange={handleEvidenceSelect}
+                                          disabled={isUploadingEvidence}
+                                       />
+                                       <div className="flex flex-col items-center gap-1">
+                                          <p className="text-sm text-white/60">{isUploadingEvidence ? 'Uploading...' : 'Click to select Counter-Evidence'}</p>
+                                          <p className="text-xs text-white/30">{evidenceFiles.length}/5 Files attached</p>
+                                       </div>
+                                    </div>
+
+                                    {evidenceFiles.length > 0 && (
+                                       <div className="grid grid-cols-2 gap-2 mb-4">
+                                          {evidenceFiles.map((file, i) => (
+                                             <div key={i} className="relative bg-[#0a0d14] border border-dark-border rounded-lg p-2 flex items-center justify-between">
+                                                <span className="text-xs text-white truncate max-w-[80%]">{file.name}</span>
+                                                <button onClick={() => removeEvidence(i)} disabled={isUploadingEvidence} className="text-red-400 p-1">
+                                                   <X className="w-3 h-3" />
+                                                </button>
+                                             </div>
+                                          ))}
+                                       </div>
+                                    )}
+
+                                    {evidenceFiles.length > 0 && (
+                                       <NeonButton className="w-full justify-center" onClick={submitCounterEvidence} isLoading={isUploadingEvidence}>
+                                          Secure & Send Evidence
+                                       </NeonButton>
+                                    )}
+                                 </div>
+                              )}
                            </div>
                         ) : (
                            <>

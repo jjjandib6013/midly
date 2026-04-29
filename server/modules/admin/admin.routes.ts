@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../../config/db';
 import { authenticateJWT } from '../../shared/middlewares/auth.middleware';
+import { generateDownloadUrl } from '../../utils/s3';
 import { io, logAudit } from '../../../server';
 
 const router = Router();
@@ -9,9 +10,10 @@ router.get('/disputes', authenticateJWT, async (req: Request, res: Response): Pr
    const dbUser = await prisma.user.findUnique({ where: { user_id: req.user.user_id } });
    if (!dbUser || dbUser.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
    try {
-      const disputes = await prisma.dispute.findMany({
+      const disputesRaw = await prisma.dispute.findMany({
          where: { resolution: null },
          include: { 
+            evidence: true,
             transaction: { 
                include: { 
                   buyer: true, 
@@ -22,6 +24,17 @@ router.get('/disputes', authenticateJWT, async (req: Request, res: Response): Pr
             } 
          }
       });
+
+      const disputes = await Promise.all(disputesRaw.map(async (d) => {
+         const evidenceWithUrls = await Promise.all(d.evidence.map(async (ev) => {
+             return {
+                 ...ev,
+                 file_url: await generateDownloadUrl(`evidence/${d.dispute_id}/${ev.uploaded_by}/${ev.storage_key}`)
+             };
+         }));
+         return { ...d, evidence: evidenceWithUrls };
+      }));
+
       res.json({ disputes });
    } catch (e) { res.status(500).json({ error: 'Server error' }); }
 });

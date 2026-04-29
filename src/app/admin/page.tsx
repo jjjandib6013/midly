@@ -1,7 +1,7 @@
 "use client";
 import { useSession } from 'next-auth/react';
 import { useEffect, useState } from "react";
-import { ShieldAlert, Activity, CheckCircle, Search, FileText, Users, Settings, Server, Clock, Lock, Globe, Power, Key, ChevronRight, Ban, Check, ExternalLink, RefreshCw, Download, PieChart, BarChart as BarChartIcon, Filter } from "lucide-react";
+import { ShieldAlert, Activity, CheckCircle, Search, FileText, Users, Settings, Server, Clock, Lock, Globe, Power, Key, ChevronRight, Ban, Check, ExternalLink, RefreshCw, Download, PieChart, BarChart as BarChartIcon, Filter, ImageIcon } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "@/lib/api";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
@@ -616,6 +616,31 @@ export default function AdminDashboard() {
                                        Refund to Buyer
                                     </button>
                                  </div>
+                              </div>
+                              
+                              <div className="p-5 border-t border-zinc-800 bg-zinc-950/30">
+                                 <h4 className="text-zinc-400 text-xs font-semibold uppercase tracking-wider mb-3 flex items-center gap-2"><ImageIcon className="w-3 h-3"/> Submitted Evidence</h4>
+                                 {d.evidence && d.evidence.length > 0 ? (
+                                    <div className="flex gap-4 overflow-x-auto pb-2 custom-scrollbar">
+                                       {d.evidence.map((ev: any) => (
+                                          <a key={ev.id} href={ev.file_url} target="_blank" rel="noopener noreferrer" className="flex-shrink-0 group relative block w-40 h-28 rounded-lg overflow-hidden border border-zinc-800 hover:border-blue-500/50 transition-colors bg-zinc-900">
+                                             {ev.mime_type === 'application/pdf' ? (
+                                                <div className="w-full h-full flex flex-col items-center justify-center text-zinc-500 group-hover:text-blue-400">
+                                                   <FileText className="w-8 h-8 mb-2" />
+                                                   <span className="text-[10px] truncate max-w-[90%]">{ev.original_name}</span>
+                                                </div>
+                                             ) : (
+                                                <img src={ev.file_url} alt="Evidence" className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" />
+                                             )}
+                                             <div className="absolute top-1 left-1 bg-black/60 text-[9px] px-1.5 py-0.5 rounded text-zinc-300">
+                                                {ev.uploaded_by === d.transaction.buyer_id ? 'Buyer' : 'Seller'}
+                                             </div>
+                                          </a>
+                                       ))}
+                                    </div>
+                                 ) : (
+                                    <p className="text-xs text-zinc-600">No evidence files provided.</p>
+                                 )}
                               </div>
                            </div>
                         ))}
