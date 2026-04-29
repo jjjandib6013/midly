@@ -35,9 +35,14 @@ router.post('/disputes/:txId/resolve', authenticateJWT, async (req: Request, res
 
       const trade = await prisma.transaction.findUnique({ where: { transaction_id: txId }, include: { payment: true } });
       if (!trade || !trade.payment) return res.status(404).json({ error: 'Trade not found' });
-      if (trade.status !== 'disputed') return res.status(400).json({ error: 'Trade is not actively disputed' });
 
       await prisma.$transaction(async (tx) => {
+         // Double-action guard: ensure trade is still disputed inside the transaction
+         const currentTrade = await tx.transaction.findUnique({ where: { transaction_id: txId } });
+         if (!currentTrade || currentTrade.status !== 'disputed') {
+             throw new Error('Trade is no longer actively disputed');
+         }
+
          await tx.dispute.update({
             where: { transaction_id: txId },
             data: { resolution: action, resolved_at: new Date(), handled_by: req.user.user_id }
@@ -71,10 +76,15 @@ router.post('/disputes/:txId/resolve', authenticateJWT, async (req: Request, res
          await logAudit(tx, txId, req.user.user_id, 'RESOLVE_DISPUTE', `Admin ${dbUser.email} forced dispute resolution: ${action}`, req.ip);
       });
 
-      // io is handled in server, if we can't import io easily, we can skip it or import it.
-      // io.to(`trade_${txId}`).emit('trade_updated', action === 'REFUND_BUYER' ? 'refunded' : 'completed');
+      // Notify users in real-time
+      if (io) {
+          io.to(`trade_${txId}`).emit('trade_updated', action === 'REFUND_BUYER' ? 'refunded' : 'completed');
+      }
       res.json({ status: 'RESOLVED', action_taken: action === 'REFUND_BUYER' ? 'refunded' : 'completed' });
-   } catch (e) { res.status(500).json({ error: 'Server error' }); }
+   } catch (e: any) { 
+       if (e.message === 'Trade is no longer actively disputed') return res.status(409).json({ error: e.message });
+       res.status(500).json({ error: 'Server error' }); 
+   }
 });
 
 router.get('/users', authenticateJWT, async (req: Request, res: Response): Promise<any> => {

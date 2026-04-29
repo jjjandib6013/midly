@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../../config/db';
 import { authenticateJWT, requireKYC } from '../../shared/middlewares/auth.middleware';
+import { disputeLimiter } from '../../shared/middlewares/rateLimiter';
 import { io, logAudit } from '../../../server';
 import { encrypt, decrypt } from '../../../src/ai/cryptoUtils';
 import { createPaymentLink } from '../../utils/payments/paymongo';
@@ -486,7 +487,7 @@ router.put('/:id/progress', authenticateJWT, async (req, res): Promise<any> => {
 });
 
 // POST Initiate Dispute
-router.post('/:id/dispute', authenticateJWT, async (req, res): Promise<any> => {
+router.post('/:id/dispute', authenticateJWT, disputeLimiter, async (req, res): Promise<any> => {
    try {
       const tradeId = parseInt(req.params.id as string);
       const { reason } = req.body;
@@ -539,7 +540,8 @@ router.post('/:id/dispute', authenticateJWT, async (req, res): Promise<any> => {
 
       io.to(`trade_${tradeId}`).emit('trade_updated', 'disputed');
       res.json({ status: 'DISPUTED' });
-   } catch (e) {
+   } catch (e: any) {
+      if (e.code === 'P2002') return res.status(409).json({ error: 'A dispute is already active for this transaction.' });
       res.status(500).json({ error: 'Server error' });
    }
 });
@@ -568,6 +570,12 @@ router.post('/:id/auto-release', authenticateJWT, async (req, res): Promise<any>
       if (!trade.payment) return res.status(400).json({ error: 'Vault empty' });
 
       await prisma.$transaction(async (tx) => {
+         // Race condition guard: verify status hasn't changed to disputed milliseconds before execution
+         const currentTrade = await tx.transaction.findUnique({ where: { transaction_id: tradeId }, include: { payment: true } });
+         if (!currentTrade || currentTrade.status === 'disputed' || currentTrade.payment?.vault_status === 'frozen') {
+             throw new Error('Transaction is frozen or disputed. Auto-release aborted.');
+         }
+
          // Auto Approve trade status
          await tx.transaction.update({
             where: { transaction_id: tradeId },
@@ -604,7 +612,10 @@ router.post('/:id/auto-release', authenticateJWT, async (req, res): Promise<any>
 
       io.to(`trade_${tradeId}`).emit('trade_updated', 'completed');
       res.json({ status: 'AUTO_RELEASED' });
-   } catch (e) {
+   } catch (e: any) {
+      if (e.message === 'Transaction is frozen or disputed. Auto-release aborted.') {
+          return res.status(409).json({ error: e.message });
+      }
       res.status(500).json({ error: 'Server error' });
    }
 });

@@ -15,3 +15,13 @@ export const aiKycLimiter = rateLimit({
    },
    message: { error: 'KYC submission limit exceeded. Please try again after 15 minutes.' }
 });
+
+export const disputeLimiter = rateLimit({
+   windowMs: 24 * 60 * 60 * 1000, // 24 hours
+   limit: 3,
+   keyGenerator: (req, res) => {
+      if ((req as any).user?.user_id) return String((req as any).user.user_id);
+      return ipKeyGenerator(req.ip || 'unknown');
+   },
+   message: { error: 'You have reached the maximum number of disputes allowed per 24 hours (3).' }
+});
