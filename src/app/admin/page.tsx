@@ -7,7 +7,7 @@ import { API_URL } from "@/lib/api";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 type TabState = "OVERVIEW" | "REPORTS" | "DISPUTES" | "KYC" | "USERS" | "SETTINGS";
 
@@ -242,7 +242,7 @@ export default function AdminDashboard() {
         tx.seller?.email || 'N/A'
      ]);
      
-     (doc as any).autoTable({
+     autoTable(doc, {
         head: [tableColumn],
         body: tableRows,
         startY: 40,
