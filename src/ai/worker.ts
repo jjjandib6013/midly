@@ -404,8 +404,7 @@ export async function processKycPhase3(jobData: any) {
         for (let i = 0; i < frames.length; i++) {
             const base64Data = frames[i].replace(/^data:image\/\w+;base64,/, '');
             const frameBuffer = Buffer.from(base64Data, 'base64');
-            // Resize to 320px (down from 640) to cut memory usage by ~75%
-            const resizedBuffer = await sharp(frameBuffer).resize(320).jpeg({ quality: 80 }).toBuffer();
+            const resizedBuffer = await sharp(frameBuffer).resize(640).toBuffer();
             const img = new Image();
             img.src = resizedBuffer;
 
@@ -415,17 +414,8 @@ export async function processKycPhase3(jobData: any) {
                 .withFaceExpressions();
 
             if (detection) {
-                // Extract only the lightweight data we need, discard the heavy detection object
-                detections.push({
-                    detection: { box: detection.detection.box },
-                    landmarks: { positions: detection.landmarks.positions },
-                    descriptor: detection.descriptor,
-                    expressions: detection.expressions
-                });
+                detections.push(detection);
             }
-
-            // Explicitly dereference heavy objects to help GC
-            (img as any).src = null;
         }
 
         if (detections.length < 2) {
