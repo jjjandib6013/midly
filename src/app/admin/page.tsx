@@ -707,7 +707,11 @@ export default function AdminDashboard() {
                                           <div className="absolute top-1 left-1 z-10">
                                              <span className="bg-zinc-900/80 text-zinc-400 text-[9px] px-1.5 py-0.5 rounded uppercase">{img.image_type}</span>
                                           </div>
-                                          <img src={img.file_path?.startsWith('/') ? `${API_URL}${img.file_path}` : img.file_path} className="w-full h-full object-cover opacity-90" alt={img.image_type}/>
+                                          <img src={(() => {
+                                             const fp = img.file_path || '';
+                                             const filename = fp.split('/').pop();
+                                             return `${API_URL}/api/kyc/files/${filename}?token=${token}`;
+                                          })()} className="w-full h-full object-cover opacity-90" alt={img.image_type}/>
                                        </div>
                                     ))}
                                  </div>

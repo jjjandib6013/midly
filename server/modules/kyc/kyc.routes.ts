@@ -42,14 +42,32 @@ async function uploadToS3(localPath: string, s3Key: string): Promise<void> {
 // ==========================================
 // SECURE KYC FILE ACCESS
 // ==========================================
-router.get('/files/:filename', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
+router.get('/files/:filename', async (req: Request, res: Response): Promise<any> => {
+   // Accept auth from header OR query param (needed for <img> tags which can't send headers)
+   const authHeader = req.headers.authorization;
+   const queryToken = req.query.token as string;
+   const token = authHeader?.split(' ')[1] || queryToken;
+
+   if (!token) return res.status(401).json({ error: 'Unauthorized' });
+
+   let decoded: any;
+   try {
+      const jwt = require('jsonwebtoken');
+      decoded = jwt.verify(token, process.env.JWT_SECRET!);
+   } catch {
+      return res.status(401).json({ error: 'Invalid token' });
+   }
+
    const filename = path.basename(req.params.filename as string);
    if (!filename || filename.includes('..')) return res.status(400).json({ error: 'Invalid filename' });
 
-   const kycImage = await prisma.kycImage.findFirst({
-      where: { file_path: { endsWith: filename }, kyc: { user_id: req.user.user_id } }
-   });
-   if (!kycImage && req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+   // Non-admin users can only see their own files
+   if (decoded.role !== 'admin') {
+      const kycImage = await prisma.kycImage.findFirst({
+         where: { file_path: { endsWith: filename }, kyc: { user_id: decoded.user_id } }
+      });
+      if (!kycImage) return res.status(403).json({ error: 'Forbidden' });
+   }
 
    const filePath = path.join(__dirname, '../../../uploads/kyc', filename);
    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Not found' });
@@ -245,6 +263,11 @@ router.post('/phase2', authenticateJWT, aiKycLimiter, async (req: Request, res: 
          }
       }
 
+      // Clear any previous attempts so we don't spam the Admin UI with broken/duplicate images
+      await prisma.kycImage.deleteMany({
+         where: { kyc_id: kyc.kyc_id, image_type: 'Front' }
+      });
+
       await prisma.kycImage.create({
          data: {
             kyc_id: kyc.kyc_id,
@@ -304,6 +327,11 @@ router.post('/phase3', authenticateJWT, aiKycLimiter, async (req: Request, res: 
       if (s3Client) {
          await uploadToS3(livenessDomainPath, s3Key);
       }
+
+      // Clear any previous attempts so we don't spam the Admin UI with broken/duplicate images
+      await prisma.kycImage.deleteMany({
+         where: { kyc_id: kyc.kyc_id, image_type: 'Selfie' }
+      });
 
       await prisma.kycImage.create({
          data: {
