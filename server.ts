@@ -81,7 +81,13 @@ app.use(cors({
    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
    allowedHeaders: ['Content-Type', 'Authorization']
 }));
+// Tightened 50MB limit: Only allow massive payloads on the specific Phase 3 liveness route
+app.use('/api/kyc/phase3', express.json({ limit: '50mb' }));
+app.use('/api/kyc/phase3', express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Global parser with default safe limits (100kb-1mb) to prevent DoS attacks on other routes
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', (req, res, next) => {
    if (req.path.startsWith('/kyc/') || req.path.startsWith('/private/')) {
        return res.status(403).json({ error: 'Direct access to protected folders is strictly prohibited due to AML compliance.' });

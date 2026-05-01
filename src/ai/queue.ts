@@ -3,8 +3,8 @@ import { Queue } from 'bullmq';
 const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
 const REDIS_PORT = parseInt(process.env.REDIS_PORT || '6379');
 
-// Toggle via environment: set KYC_QUEUE_FALLBACK=false in production to use Redis+BullMQ
-const USE_FALLBACK = process.env.KYC_QUEUE_FALLBACK !== 'false';
+// Toggle via environment: use Redis if REDIS_URL or REDIS_HOST is provided, otherwise fallback to in-memory setTimeout
+const USE_FALLBACK = !(process.env.REDIS_URL || process.env.REDIS_HOST) || process.env.KYC_QUEUE_FALLBACK === 'true';
 
 export const kycQueue = USE_FALLBACK
   ? { add: async (name: string, data: any, opts: any = {}) => {

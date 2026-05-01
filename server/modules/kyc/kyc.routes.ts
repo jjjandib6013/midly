@@ -141,6 +141,18 @@ router.post('/phase1', authenticateJWT, aiKycLimiter, async (req: Request, res: 
       const idNumberEncrypted = encrypt(idNumber);
       const idNameEncrypted = encrypt(idName);
 
+      // Duplicate ID Guard: Check if another user already has this ID
+      const duplicateId = await prisma.kycVerification.findFirst({
+         where: {
+            id_number: idNumberEncrypted,
+            user_id: { not: req.user.user_id },
+            status: { in: ['verified', 'pending_review'] }
+         }
+      });
+      if (duplicateId) {
+         return res.status(400).json({ error: 'This ID document is already registered to another verified user.' });
+      }
+
       // Upsert record
       const existingKyc = await prisma.kycVerification.findUnique({ where: { user_id: req.user.user_id } });
       if (existingKyc) {
@@ -281,6 +293,10 @@ router.post('/phase3', authenticateJWT, aiKycLimiter, async (req: Request, res: 
       const base64Data = livenessFrames[0].replace(/^data:image\/\w+;base64,/, '');
       const livenessFilename = `liveness-${req.user.user_id}-${Date.now()}.jpg`;
       const livenessDomainPath = path.join(__dirname, '../../../uploads/kyc', livenessFilename);
+      
+      const dir = path.dirname(livenessDomainPath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      
       fs.writeFileSync(livenessDomainPath, base64Data, 'base64');
 
       // Upload primary frame to S3 (#6)
@@ -310,7 +326,10 @@ router.post('/phase3', authenticateJWT, aiKycLimiter, async (req: Request, res: 
       });
 
       res.json({ message: 'Verifying Phase 3 Liveness Matrix' });
-   } catch (e: any) { res.status(500).json({ error: 'Server error' }); }
+   } catch (e: any) { 
+      console.error('Phase 3 API Error:', e);
+      res.status(500).json({ error: 'Server error: ' + e.message }); 
+   }
 });
 
 export default router;

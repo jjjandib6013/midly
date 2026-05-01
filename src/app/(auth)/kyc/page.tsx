@@ -95,12 +95,29 @@ export default function KYCVerification() {
   ];
 
   const startLivenessCapture = useCallback(async () => {
+     // Virtual Camera & Deepfake Injection Prevention (#11)
+     try {
+         const stream = webcamRef.current?.stream;
+         if (stream) {
+             const activeTrack = stream.getVideoTracks()[0];
+             if (activeTrack) {
+                 const label = activeTrack.label.toLowerCase();
+                 if (label.includes('virtual') || label.includes('obs') || label.includes('manycam')) {
+                     setError("Security Alert: Virtual camera software detected. Please disable OBS/ManyCam and use a physical hardware webcam.");
+                     return;
+                 }
+             }
+         }
+     } catch (err) {
+         console.warn("Could not read active media stream track for virtual camera check.");
+     }
+
      setIsCapturing(true);
      setLivenessFrames([]);
      setCaptureProgress(0);
      const frames: string[] = [];
      const totalFrames = 5;
-     const delayBetweenFrames = 700; // 700ms between frames
+     const delayBetweenFrames = 2000; // 2 seconds between frames to give user time to react
 
      for (let i = 0; i < totalFrames; i++) {
         setChallengeText(challenges[i]);

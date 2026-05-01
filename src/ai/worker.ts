@@ -28,17 +28,17 @@ const REDIS_PORT = parseInt(process.env.REDIS_PORT || '6379');
 // S3 CLIENT (reuse config from server/config/s3.ts)
 // ==========================================
 const s3Client = (process.env.AWS_BUCKET_NAME && process.env.AWS_ACCESS_KEY_ID) ? new S3Client({
-   region: process.env.AWS_REGION || 'auto',
-   endpoint: process.env.AWS_ENDPOINT,
-   credentials: {
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-   },
-   forcePathStyle: true,
+    region: process.env.AWS_REGION || 'auto',
+    endpoint: process.env.AWS_ENDPOINT,
+    credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+    },
+    forcePathStyle: true,
 }) : null;
 
 // Name stop-words to filter from Philippine ID name matching
-const NAME_STOP_WORDS = ['jr', 'sr', 'iii', 'ii', 'iv', 'v', 'the', 'de', 'del', 'dela', 'delos', 'las', 'los', 'san'];
+const NAME_STOP_WORDS = ['jr', 'sr', 'iii', 'ii', 'iv', 'v', 'the', 'de', 'del', 'dela', 'delos', 'las', 'los', 'san', 'ng', 'mga'];
 
 // Monkey patch node canvas for face-api
 const { Canvas, Image, ImageData } = canvas;
@@ -183,6 +183,16 @@ export async function processKycPhase2(jobData: any) {
 
         // 1. Prepare Image
         const buffer = await sharp(actualPath).resize(1200).toBuffer();
+
+        // Image Quality Pre-check: Don't waste compute on black or blown-out images
+        const stats = await sharp(buffer).stats();
+        const luminance = stats.channels[0].mean;
+        if (luminance < 30) {
+            throw new Error("Rejected: Image is too dark. Please use better lighting and try again.");
+        }
+        if (luminance > 220) {
+            throw new Error("Rejected: Image is washed out or glaring. Please remove flash and try again.");
+        }
         const rawImg = await sharp(buffer)
             .ensureAlpha()
             .raw()
@@ -215,32 +225,30 @@ export async function processKycPhase2(jobData: any) {
         if (!foundData) {
             console.log(`[AI Worker] Falling back to enhanced OCR pipeline...`);
 
-            // Enhanced preprocessing: threshold + sharpen + light blur for noise reduction (#3)
+            // Enhanced preprocessing: grayscale and normalize contrast.
+            // Removed aggressive thresholding which was breaking Tesseract (Image too small to scale error).
             const optimizedBuffer = await sharp(buffer)
                 .grayscale()
                 .normalize()
-                .threshold(180)
-                .sharpen()
-                .blur(0.5)
                 .toBuffer();
 
             // Use eng+fil for Philippine IDs with mixed Filipino/English text (#3)
             const { data: { text } } = await Tesseract.recognize(optimizedBuffer, 'eng+fil');
             rawOcrText = text;
 
-            // Clean text by replacing non-alphanumeric (except spaces) with spaces, and normalizing whitespace
-            const cleanText = text.replace(/[^a-zA-Z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+            // Clean text by replacing non-alphanumeric (except spaces and Ñ) with spaces, and normalizing whitespace
+            const cleanText = text.replace(/[^a-zA-Z0-9\sñÑ]/g, ' ').replace(/\s+/g, ' ').trim();
             const rawWords = cleanText.split(' ').map((w: string) => w.toLowerCase());
 
             // Filter stop words from name parts (#3)
             const nameParts = textLowerIdName.split(' ').filter((p: string) => p.length >= 3 && !NAME_STOP_WORDS.includes(p));
             let nameHits = 0;
 
-            // Strict Levenshtein based Word Matching (Looking for 85% similarity on Names)
+            // Strict Levenshtein based Word Matching (Looking for 80% similarity on Names)
             for (const part of nameParts) {
                 let matched = false;
                 for (const word of rawWords) {
-                    if (word.length >= 3 && stringSimilarity(word, part) > 0.85) {
+                    if (word.length >= 3 && stringSimilarity(word, part) > 0.80) {
                         matched = true;
                         break;
                     }
@@ -248,10 +256,28 @@ export async function processKycPhase2(jobData: any) {
                 if (matched) nameHits++;
             }
 
-            // Exact ID Match using Regex Boundary (Ensures no substring false-positives)
-            const idEscaped = idNumber.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // Sanitize
-            const exactIdRegex = new RegExp(`\\b${idEscaped}\\b`, 'i');
-            const hasExactIdMatch = exactIdRegex.test(cleanText) || rawWords.includes(idNumber.toLowerCase());
+            // Robust ID Match: Strip all spaces and punctuation from both input and OCR text
+            const normalizedInputId = idNumber.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+            const normalizedOcrText = cleanText.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+            
+            // Sliding-window fuzzy search for the ID within the full OCR text (allows 20% error margin)
+            let hasExactIdMatch = false;
+            if (normalizedInputId.length >= 5) {
+                const maxErrors = Math.floor(normalizedInputId.length * 0.2);
+                for (let i = 0; i <= normalizedOcrText.length - normalizedInputId.length; i++) {
+                    let errors = 0;
+                    for (let j = 0; j < normalizedInputId.length; j++) {
+                        if (normalizedOcrText[i + j] !== normalizedInputId[j]) {
+                            errors++;
+                            if (errors > maxErrors) break;
+                        }
+                    }
+                    if (errors <= maxErrors) {
+                        hasExactIdMatch = true;
+                        break;
+                    }
+                }
+            }
 
             // Dynamic threshold: require 60% of name parts to match instead of hardcoded >= 2 (#3)
             const requiredHits = Math.max(1, Math.floor(nameParts.length * 0.6));
@@ -264,11 +290,12 @@ export async function processKycPhase2(jobData: any) {
         }
 
         // 4. Face Detection on Document
-        const idImg = new Image();
-        idImg.src = buffer;
+        // Use canvas.loadImage to properly await the image decoding so width/height are set
+        const idImg = await canvas.loadImage(buffer);
 
-        // Lower confidence to handle glare/print, extract ALL faces to handle ghost holograms
-        const detectOptions = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.35 });
+        // Lower confidence heavily to handle glare, print artifacts, and watermarks on physical IDs
+        // Phase 3 biometric matching will catch false positives anyway
+        const detectOptions = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.15 });
         const allDetections = await faceapi.detectAllFaces(idImg as any, detectOptions)
             .withFaceLandmarks()
             .withFaceDescriptors();
@@ -480,6 +507,19 @@ export async function processKycPhase3(jobData: any) {
             where: { kyc_id: kycId },
             data: { status: 'rejected', rejection_reason: error.message || 'Unknown verification error' }
         });
+
+        // Disk-fill DoS Prevention: Clean up rejected selfie from local disk (#6)
+        try {
+            const selfieImage = await prisma.kycImage.findFirst({
+                where: { kyc_id: kycId, image_type: 'Selfie' }
+            });
+            if (selfieImage && selfieImage.file_path.startsWith('/uploads/kyc/')) {
+                const localFile = path.join(process.cwd(), selfieImage.file_path);
+                if (fs.existsSync(localFile)) fs.unlinkSync(localFile);
+            }
+        } catch (cleanupErr) {
+            console.error(`[AI Worker] Failed to cleanup rejected selfie:`, cleanupErr);
+        }
     } finally {
         // Cleanup any temp files
         for (const f of tempFiles) cleanupTempFile(f);
@@ -573,19 +613,19 @@ export async function processAutoRelease(data: { tradeId: number }) {
 
             if (freshTrade.payment) {
                 await tx.payment.update({
-                   where: { payment_id: freshTrade.payment.payment_id },
-                   data: { vault_status: 'released', release_date: new Date() }
+                    where: { payment_id: freshTrade.payment.payment_id },
+                    data: { vault_status: 'released', release_date: new Date() }
                 });
             }
 
             const amount = Number(freshTrade.total_amount);
-            
+
             // Release funds to seller
             await tx.user.update({
                 where: { user_id: freshTrade.seller_id },
-                data: { 
-                   wallet_balance: { increment: amount },
-                   reputation_score: { increment: 0.01 } // Issue #9: Increase reputation
+                data: {
+                    wallet_balance: { increment: amount },
+                    reputation_score: { increment: 0.01 } // Issue #9: Increase reputation
                 }
             });
 
