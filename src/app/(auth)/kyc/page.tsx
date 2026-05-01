@@ -77,7 +77,7 @@ export default function KYCVerification() {
       const formData = new FormData();
       formData.append("file", file);
       try {
-          const res = await fetch(`${API_URL}/api/upload`, { method: "POST", body: formData });
+          const res = await fetch(`${API_URL}/api/upload?type=kyc`, { method: "POST", headers: { "Authorization": `Bearer ${token}` }, body: formData });
           const data = await res.json();
           if (data.url) setImageUrl(data.url);
           else setError("Upload failed from server.");
