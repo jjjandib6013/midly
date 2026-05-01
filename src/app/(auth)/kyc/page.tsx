@@ -116,7 +116,7 @@ export default function KYCVerification() {
      setLivenessFrames([]);
      setCaptureProgress(0);
      const frames: string[] = [];
-     const totalFrames = 5;
+     const totalFrames = 3;
      const delayBetweenFrames = 2000; // 2 seconds between frames to give user time to react
 
      for (let i = 0; i < totalFrames; i++) {
@@ -124,7 +124,8 @@ export default function KYCVerification() {
         setCaptureProgress(((i) / totalFrames) * 100);
         await new Promise(r => setTimeout(r, delayBetweenFrames));
 
-        const imageSrc = webcamRef.current?.getScreenshot();
+        // Capture at reduced quality to minimize payload size and server memory
+        const imageSrc = webcamRef.current?.getScreenshot({ width: 480, height: 360 });
         if (imageSrc) frames.push(imageSrc);
      }
 
