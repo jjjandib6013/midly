@@ -1,11 +1,17 @@
 import { Queue } from 'bullmq';
 
+import IORedis from 'ioredis';
+
 const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
 const REDIS_PORT = parseInt(process.env.REDIS_PORT || '6379');
 
 // Toggle via environment: use fallback in local development by default, but use Redis in production
 const isDev = process.env.NODE_ENV !== 'production';
 const USE_FALLBACK = isDev ? process.env.KYC_QUEUE_FALLBACK !== 'false' : process.env.KYC_QUEUE_FALLBACK === 'true';
+
+const connection = process.env.REDIS_URL 
+    ? new IORedis(process.env.REDIS_URL, { maxRetriesPerRequest: null }) 
+    : { host: REDIS_HOST, port: REDIS_PORT };
 
 export const kycQueue = USE_FALLBACK
   ? { add: async (name: string, data: any, opts: any = {}) => {
@@ -18,9 +24,4 @@ export const kycQueue = USE_FALLBACK
         else if (name === 'crypto-shredder') setTimeout(() => worker.processCryptoShredder(data), delay);
         return { id: Math.random() };
      } }
-  : new Queue('kyc-processing', {
-      connection: {
-         host: REDIS_HOST,
-         port: REDIS_PORT
-      }
-   });
+  : new Queue('kyc-processing', { connection });

@@ -675,15 +675,22 @@ export async function processCryptoShredder(data: { tradeId: number }) {
 // ==========================================
 // BULLMQ WORKER INITIALIZATION (#1)
 // ==========================================
-const USE_FALLBACK = process.env.KYC_QUEUE_FALLBACK !== 'false';
+const isDev = process.env.NODE_ENV !== 'production';
+const USE_FALLBACK = isDev ? process.env.KYC_QUEUE_FALLBACK !== 'false' : process.env.KYC_QUEUE_FALLBACK === 'true';
+
 if (!USE_FALLBACK) {
+    const IORedis = require('ioredis');
+    const connection = process.env.REDIS_URL 
+        ? new IORedis(process.env.REDIS_URL, { maxRetriesPerRequest: null }) 
+        : { host: REDIS_HOST, port: REDIS_PORT };
+
     const worker = new Worker('kyc-processing', async job => {
         if (job.name === 'verify-kyc-phase2') await processKycPhase2(job.data);
         else if (job.name === 'verify-kyc-phase3') await processKycPhase3(job.data);
         else if (job.name === 'auto-release') await processAutoRelease(job.data);
         else if (job.name === 'crypto-shredder') await processCryptoShredder(job.data);
     }, {
-        connection: { host: REDIS_HOST, port: REDIS_PORT },
+        connection,
         concurrency: 2,
     });
 
