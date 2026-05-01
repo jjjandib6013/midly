@@ -680,17 +680,15 @@ const USE_FALLBACK = isDev ? process.env.KYC_QUEUE_FALLBACK !== 'false' : proces
 
 if (!USE_FALLBACK) {
     const IORedis = require('ioredis');
-    const connection = process.env.REDIS_URL 
-        ? new IORedis(process.env.REDIS_URL, { maxRetriesPerRequest: null }) 
-        : { host: REDIS_HOST, port: REDIS_PORT };
-
     const worker = new Worker('kyc-processing', async job => {
         if (job.name === 'verify-kyc-phase2') await processKycPhase2(job.data);
         else if (job.name === 'verify-kyc-phase3') await processKycPhase3(job.data);
         else if (job.name === 'auto-release') await processAutoRelease(job.data);
         else if (job.name === 'crypto-shredder') await processCryptoShredder(job.data);
     }, {
-        connection,
+        connection: process.env.REDIS_URL 
+            ? new IORedis(process.env.REDIS_URL.endsWith(':') ? process.env.REDIS_URL.slice(0, -1) : process.env.REDIS_URL, { maxRetriesPerRequest: null, password: process.env.REDIS_PASSWORD }) 
+            : { host: REDIS_HOST, port: REDIS_PORT, password: process.env.REDIS_PASSWORD },
         concurrency: 2,
     });
 
