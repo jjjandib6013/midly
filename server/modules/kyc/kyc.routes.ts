@@ -174,35 +174,59 @@ router.post('/phase2', authenticateJWT, aiKycLimiter, async (req: Request, res: 
       if (!kyc || kyc.phase < 1) return res.status(400).json({ error: 'Complete Phase 1 first.' });
 
       const filename = path.basename(imageUrl);
-      const rawPath = path.join(__dirname, '../../../uploads', filename);
-      const kycDomainPath = path.join(__dirname, '../../../uploads/kyc', filename);
 
-      const dir = path.dirname(kycDomainPath);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      // Determine if the file is on S3 or local disk
+      let workerFilePath: string;
+      let fileHash: string;
+      let s3Key = `kyc/${req.user.user_id}/${filename}`;
 
-      if (fs.existsSync(rawPath)) fs.renameSync(rawPath, kycDomainPath);
-      else if (!fs.existsSync(kycDomainPath)) return res.status(400).json({ error: 'Image not found.' });
+      const isS3Url = imageUrl.startsWith('http') && imageUrl.includes('storageapi');
 
-      // Validate minimum dimensions (#10)
-      try {
-         const metadata = await sharp(kycDomainPath).metadata();
-         if (!metadata.width || !metadata.height || metadata.width < 800 || metadata.height < 500) {
-            return res.status(400).json({ error: 'Image resolution is too low. Minimum 800×500 pixels required.' });
+      if (isS3Url || s3Client) {
+         // S3 path: extract the key from the URL or construct it
+         if (isS3Url) {
+            // URL looks like: https://storage-xxx.t3.storageapi.dev/uploads/kyc/<uuid>.ext
+            try {
+               const urlObj = new URL(imageUrl);
+               const rawKey = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
+               s3Key = rawKey; // e.g. "uploads/kyc/<uuid>.ext"
+            } catch {
+               s3Key = `uploads/kyc/${filename}`;
+            }
          }
-      } catch (imgErr) {
-         return res.status(400).json({ error: 'Could not read image metadata. Ensure the file is a valid image.' });
-      }
-
-      // Compute SHA-256 hash for integrity (#10)
-      const fileBuffer = fs.readFileSync(kycDomainPath);
-      const fileHash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
-
-      // Upload to S3 if configured (#6)
-      let workerFilePath = kycDomainPath;
-      const s3Key = `kyc/${req.user.user_id}/${filename}`;
-      if (s3Client) {
-         await uploadToS3(kycDomainPath, s3Key);
          workerFilePath = s3Key; // Worker will download from S3
+         fileHash = 'pending-s3'; // Hash computed by worker after download
+      } else {
+         // Local disk path
+         const rawPath = path.join(__dirname, '../../../uploads', filename);
+         const kycDomainPath = path.join(__dirname, '../../../uploads/kyc', filename);
+
+         const dir = path.dirname(kycDomainPath);
+         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+         if (fs.existsSync(rawPath)) fs.renameSync(rawPath, kycDomainPath);
+         else if (!fs.existsSync(kycDomainPath)) return res.status(400).json({ error: 'Image not found.' });
+
+         // Validate minimum dimensions (#10)
+         try {
+            const metadata = await sharp(kycDomainPath).metadata();
+            if (!metadata.width || !metadata.height || metadata.width < 800 || metadata.height < 500) {
+               return res.status(400).json({ error: 'Image resolution is too low. Minimum 800×500 pixels required.' });
+            }
+         } catch (imgErr) {
+            return res.status(400).json({ error: 'Could not read image metadata. Ensure the file is a valid image.' });
+         }
+
+         const fileBuffer = fs.readFileSync(kycDomainPath);
+         fileHash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+
+         // Upload to S3 if configured (#6)
+         if (s3Client) {
+            await uploadToS3(kycDomainPath, s3Key);
+            workerFilePath = s3Key;
+         } else {
+            workerFilePath = kycDomainPath;
+         }
       }
 
       await prisma.kycImage.create({
