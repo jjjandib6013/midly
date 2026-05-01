@@ -14,6 +14,7 @@ export const kycQueue = USE_FALLBACK
         if (name === 'verify-kyc-phase2') setTimeout(() => worker.processKycPhase2(data), delay);
         else if (name === 'verify-kyc-phase3') setTimeout(() => worker.processKycPhase3(data), delay);
         else if (name === 'auto-release') setTimeout(() => worker.processAutoRelease(data), delay);
+        else if (name === 'crypto-shredder') setTimeout(() => worker.processCryptoShredder(data), delay);
         return { id: Math.random() };
      } }
   : new Queue('kyc-processing', {

@@ -3,7 +3,7 @@ import { prisma } from '../../config/db';
 import { authenticateJWT, requireKYC } from '../../shared/middlewares/auth.middleware';
 import { disputeLimiter } from '../../shared/middlewares/rateLimiter';
 import { io, logAudit } from '../../../server';
-import { encrypt, decrypt } from '../../../src/ai/cryptoUtils';
+import { encryptForTrade, decryptForTrade } from '../../../src/ai/cryptoUtils';
 import { createPaymentLink } from '../../utils/payments/paymongo';
 import { kycQueue } from '../../../src/ai/queue';
 import { generateUploadUrl } from '../../utils/s3';
@@ -423,7 +423,7 @@ router.put('/:id/progress', authenticateJWT, async (req, res): Promise<any> => {
                data: {
                   status: 'verifying',
                   item_delivered_at: new Date(),
-                  ...(credentials ? { account_credentials: encrypt(credentials) } : {})
+                  ...(credentials ? { account_credentials: encryptForTrade(credentials, tradeId) } : {})
                }
             });
 
@@ -453,10 +453,12 @@ router.put('/:id/progress', authenticateJWT, async (req, res): Promise<any> => {
                where: { transaction_id: tradeId },
                data: {
                   status: 'completed',
-                  buyer_approved_at: new Date(),
-                  account_credentials: null
+                  buyer_approved_at: new Date()
                }
             });
+
+            // Queue crypto-shredder to run 72 hours from completion
+            await kycQueue.add('crypto-shredder', { tradeId }, { delay: 72 * 60 * 60 * 1000 });
 
             // 2. Update payment vault status
             await tx.payment.update({
@@ -803,6 +805,76 @@ router.post('/:id/accept-cancel', authenticateJWT, async (req, res): Promise<any
 });
 
 
+// POST Reveal Credentials (Secure Decryption Flow)
+router.post('/:id/reveal-credentials', authenticateJWT, async (req, res): Promise<any> => {
+   try {
+      const tradeId = parseInt(req.params.id as string);
+      if (isNaN(tradeId)) return res.status(400).json({ error: 'Invalid trade ID' });
+
+      const trade = await prisma.transaction.findUnique({
+         where: { transaction_id: tradeId },
+         select: { buyer_id: true, status: true, account_credentials: true }
+      });
+
+      if (!trade) return res.status(404).json({ error: 'Not found' });
+
+      // STRICT AUTH: Only the buyer of THIS trade
+      if (trade.buyer_id !== req.user.user_id) {
+         return res.status(403).json({ error: 'Forbidden. You are not the buyer.' });
+      }
+
+      // STRICT STATE: Only during active inspection or after completion
+      const ALLOWED = ['verifying', 'completed'];
+      if (!ALLOWED.includes(trade.status || '')) {
+         return res.status(403).json({ error: 'Credentials not available at this stage.' });
+      }
+
+      if (!trade.account_credentials) {
+         return res.status(404).json({ error: 'No credentials on file.' });
+      }
+
+      // Rate limit reveal access
+      const revealCount = await prisma.auditLog.count({
+         where: { transaction_id: tradeId, user_id: req.user.user_id, action_type: 'CREDENTIAL_REVEAL' }
+      });
+      if (revealCount >= 5) {
+         return res.status(429).json({ error: 'Reveal limit reached (5/5). Contact support.' });
+      }
+
+      // Audit every single access
+      await prisma.auditLog.create({
+         data: {
+            transaction_id: tradeId,
+            user_id: req.user.user_id,
+            action_type: 'CREDENTIAL_REVEAL',
+            action_description: `Buyer revealed credentials for trade #${tradeId}`,
+            ip_address: req.ip || '0.0.0.0',
+            risk_score: 0
+         }
+      });
+
+      // Decrypt securely in memory
+      let plaintext;
+      try {
+         plaintext = decryptForTrade(trade.account_credentials, tradeId);
+      } catch (err) {
+         console.error('[CRYPTO ERROR] Failed to decrypt credentials for trade', tradeId);
+         return res.status(500).json({ error: 'Failed to retrieve secure data.' });
+      }
+
+      // Security Headers
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+
+      return res.json({ credentials: plaintext });
+   } catch (error) {
+      console.error('POST /reveal-credentials error:', error);
+      res.status(500).json({ error: 'Server error' });
+   }
+});
+
 // GET Single Transaction by ID (must be LAST to avoid intercepting /listings, /notifications, etc.)
 router.get('/:id', authenticateJWT, async (req, res): Promise<any> => {
    try {
@@ -832,6 +904,11 @@ router.get('/:id', authenticateJWT, async (req, res): Promise<any> => {
 
       const my_role = isAdmin ? 'ADMIN' : (trade.buyer_id === userId ? 'BUY' : 'SELL');
       const is_initiator = isAdmin ? false : (trade.buyer_id === userId);
+
+      // SECURITY: Strip credentials from general response payload
+      if ((trade as any).account_credentials) {
+         delete (trade as any).account_credentials;
+      }
 
       res.json({ trade, my_role, is_initiator });
    } catch (e) {

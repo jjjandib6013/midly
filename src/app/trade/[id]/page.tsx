@@ -59,6 +59,45 @@ export default function TradeHub() {
 
    const [timeRemaining, setTimeRemaining] = useState({ hours: 24, minutes: 0, seconds: 0, isExpired: false });
 
+   const [revealedCredentials, setRevealedCredentials] = useState<string | null>(null);
+   const [isRevealing, setIsRevealing] = useState(false);
+   const [revealTimeLeft, setRevealTimeLeft] = useState(300);
+
+   useEffect(() => {
+      if (!revealedCredentials) return;
+      const timer = setInterval(() => {
+         setRevealTimeLeft(prev => {
+            if (prev <= 1) {
+               setRevealedCredentials(null);
+               return 0;
+            }
+            return prev - 1;
+         });
+      }, 1000);
+      return () => clearInterval(timer);
+   }, [revealedCredentials]);
+
+   const handleRevealCredentials = async () => {
+      setIsRevealing(true);
+      try {
+         const res = await fetch(`${API_URL}/api/transactions/${tradeId}/reveal-credentials`, {
+            method: 'POST',
+            headers: { "Authorization": `Bearer ${token}` }
+         });
+         const data = await res.json();
+         if (!res.ok) throw new Error(data.error || 'Access denied');
+         
+         setRevealedCredentials(data.credentials);
+         setShowCredentials(true);
+         setRevealTimeLeft(300); // 5 minutes
+         toast.success("Credentials decrypted securely.");
+      } catch (err: any) {
+         toast.error(err.message);
+      } finally {
+         setIsRevealing(false);
+      }
+   };
+
    const computeSHA256 = async (file: File) => {
        const buffer = await file.arrayBuffer();
        const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
@@ -1029,7 +1068,7 @@ export default function TradeHub() {
                                        </div>
                                        <div className="text-xs text-text-muted bg-dark-panel p-3 rounded border border-dark-border relative z-10">
                                           <span className="text-yellow-500 font-bold uppercase mr-2 flex items-center gap-1 inline-flex mb-1"><ShieldAlert className="w-3 h-3" /> Warning</span>
-                                          <p>These credentials are end-to-end encrypted. Upon submission, they are permanently locked into the Smart Escrow and revealed to the Buyer. Any false credentials will result in an immediate permanent ban.</p>
+                                          <p>These credentials are encrypted at rest via AES-256. Upon submission, they are permanently locked into the Secured Vault. Any false credentials will result in an immediate permanent ban.</p>
                                        </div>
                                        <div className="flex gap-2 relative z-10 mt-2">
                                           <NeonButton variant="ghost" className="flex-1 border border-dark-border hover:bg-white/5" onClick={() => setIsVaultOpen(false)}>
@@ -1135,28 +1174,49 @@ export default function TradeHub() {
                                  <div className="flex flex-col gap-4">
                                     <p className="text-sm text-text-muted">You have 24 hours to inspect the item. If you don't respond, funds release automatically.</p>
 
-                                    {trade.account_credentials && (
+                                    {(trade.status === 'verifying' || trade.status === 'completed') && trade.trade_category === 'Game Account' && (
                                        <div className="p-4 bg-dark-bg border border-primary/30 rounded-xl w-full relative overflow-hidden group">
                                           <div className="absolute inset-0 bg-primary/5 backdrop-blur-[2px]" />
                                           <div className="relative z-10">
                                              <div className="flex items-center justify-between mb-3">
                                                 <div className="flex items-center gap-2">
                                                    <Unlock className="w-5 h-5 text-primary" />
-                                                   <p className="text-sm text-primary font-black uppercase tracking-widest leading-none">Vault Unlocked</p>
+                                                   <p className="text-sm text-primary font-black uppercase tracking-widest leading-none">Secured Vault Storage</p>
                                                 </div>
-                                                <button onClick={() => { setShowCredentials(!showCredentials); if (!showCredentials) toast("Credentials Revealed", { icon: "👁️" }); }} className="text-text-muted hover:text-white transition-colors">
-                                                   {showCredentials ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                                </button>
                                              </div>
-                                             <div className="bg-[#050608] border border-primary/20 p-4 rounded-lg relative overflow-hidden">
-                                                <div className="absolute top-0 right-0 h-full w-24 bg-gradient-to-l from-[#050608] to-transparent pointer-events-none" />
-                                                <p className="text-primary/90 font-mono text-sm break-all font-bold tracking-tight">
-                                                   {showCredentials ? trade.account_credentials : "••••••••••••••••"}
-                                                </p>
-                                             </div>
-                                             <NeonButton onClick={() => { navigator.clipboard.writeText(trade.account_credentials); toast.success("Credentials Copied to Clipboard"); }} className="w-full mt-3 !py-2.5 text-xs">
-                                                Copy Credentials <Copy className="w-3 h-3 ml-2" />
-                                             </NeonButton>
+                                             
+                                             {!revealedCredentials ? (
+                                                <div className="text-center py-4">
+                                                   <p className="text-xs text-text-muted mb-4">Account credentials are encrypted at rest using AES-256. Only you (the verified buyer) can reveal them.</p>
+                                                   <NeonButton isLoading={isRevealing} onClick={handleRevealCredentials} className="w-full justify-center text-xs">
+                                                      🔓 Reveal Credentials
+                                                   </NeonButton>
+                                                </div>
+                                             ) : (
+                                                <>
+                                                   <div className="flex justify-between items-center text-xs text-red-400 mb-2 font-bold animate-pulse">
+                                                      <span>⚠️ Hiding in {revealTimeLeft}s. Copy now.</span>
+                                                   </div>
+                                                   <div className="bg-[#050608] border border-primary/20 p-4 rounded-lg relative overflow-hidden">
+                                                      <div className="absolute top-0 right-0 h-full w-24 bg-gradient-to-l from-[#050608] to-transparent pointer-events-none" />
+                                                      <p className="text-primary/90 font-mono text-sm break-all font-bold tracking-tight">
+                                                         {showCredentials ? revealedCredentials : "••••••••••••••••"}
+                                                      </p>
+                                                   </div>
+                                                   <div className="flex gap-2 mt-3">
+                                                      <NeonButton variant="ghost" onClick={() => setShowCredentials(!showCredentials)} className="flex-1 text-xs !py-2.5">
+                                                         {showCredentials ? "Hide" : "Show"}
+                                                      </NeonButton>
+                                                      <NeonButton onClick={() => { 
+                                                         navigator.clipboard.writeText(revealedCredentials); 
+                                                         toast.success("Copied. Clipboard will clear in 30s."); 
+                                                         setTimeout(() => navigator.clipboard.writeText(''), 30000); 
+                                                      }} className="flex-[2] justify-center text-xs !py-2.5">
+                                                         Copy Credentials <Copy className="w-3 h-3 ml-2" />
+                                                      </NeonButton>
+                                                   </div>
+                                                </>
+                                             )}
                                           </div>
                                        </div>
                                     )}
@@ -1234,7 +1294,7 @@ export default function TradeHub() {
                      <Copy className="w-3 h-3 text-text-muted" /> <span className="hidden sm:inline">Copy Invite Link</span><span className="sm:hidden">Copy</span>
                   </button>
                   <div className="hidden sm:flex px-3 py-1 bg-dark-panel rounded-full border border-dark-border text-xs text-text-muted items-center gap-2">
-                     End-to-End Encrypted <ShieldCheck className="w-3 h-3 text-primary" />
+                     Secured Vault Storage <ShieldCheck className="w-3 h-3 text-primary" />
                   </div>
                </div>
             </div>

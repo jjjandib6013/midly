@@ -563,10 +563,13 @@ export async function processAutoRelease(data: { tradeId: number }) {
             await tx.transaction.update({
                 where: { transaction_id: tradeId },
                 data: {
-                    status: 'completed',
-                    account_credentials: null // Issue #3 & #9: Nullify credentials on completion
+                    status: 'completed'
                 }
             });
+
+            // Queue the crypto-shredder for 72 hours from now
+            const { kycQueue } = require('./queue');
+            await kycQueue.add('crypto-shredder', { tradeId }, { delay: 72 * 60 * 60 * 1000 });
 
             if (freshTrade.payment) {
                 await tx.payment.update({
@@ -613,6 +616,23 @@ export async function processAutoRelease(data: { tradeId: number }) {
 }
 
 // ==========================================
+// CRYPTO-SHREDDER HANDLER
+// ==========================================
+export async function processCryptoShredder(data: { tradeId: number }) {
+    const { tradeId } = data;
+    console.log(`[AI Worker] Executing Crypto-Shredding for Trade ID ${tradeId}`);
+    try {
+        await prisma.transaction.update({
+            where: { transaction_id: tradeId },
+            data: { account_credentials: null }
+        });
+        console.log(`[AI Worker] Successfully shredded credentials for Trade ID ${tradeId}`);
+    } catch (e) {
+        console.error(`[AI Worker] Crypto-shredding failed for Trade ID ${tradeId}:`, e);
+    }
+}
+
+// ==========================================
 // BULLMQ WORKER INITIALIZATION (#1)
 // ==========================================
 const USE_FALLBACK = process.env.KYC_QUEUE_FALLBACK !== 'false';
@@ -621,6 +641,7 @@ if (!USE_FALLBACK) {
         if (job.name === 'verify-kyc-phase2') await processKycPhase2(job.data);
         else if (job.name === 'verify-kyc-phase3') await processKycPhase3(job.data);
         else if (job.name === 'auto-release') await processAutoRelease(job.data);
+        else if (job.name === 'crypto-shredder') await processCryptoShredder(job.data);
     }, {
         connection: { host: REDIS_HOST, port: REDIS_PORT },
         concurrency: 2,
