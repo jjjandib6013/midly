@@ -185,11 +185,15 @@ router.post('/phase2', authenticateJWT, aiKycLimiter, async (req: Request, res: 
       if (isS3Url || s3Client) {
          // S3 path: extract the key from the URL or construct it
          if (isS3Url) {
-            // URL looks like: https://storage-xxx.t3.storageapi.dev/uploads/kyc/<uuid>.ext
+            // Path-style URL: https://endpoint/bucket-name/uploads/kyc/<uuid>.ext
+            // Virtual-hosted URL: https://bucket.endpoint/uploads/kyc/<uuid>.ext
+            // Either way, we need to extract just the "uploads/kyc/<uuid>.ext" part
             try {
                const urlObj = new URL(imageUrl);
-               const rawKey = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
-               s3Key = rawKey; // e.g. "uploads/kyc/<uuid>.ext"
+               const rawPath = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
+               // Find where "uploads/" starts in the path (skips bucket name if present)
+               const uploadsIdx = rawPath.indexOf('uploads/');
+               s3Key = uploadsIdx >= 0 ? rawPath.substring(uploadsIdx) : rawPath;
             } catch {
                s3Key = `uploads/kyc/${filename}`;
             }
