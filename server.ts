@@ -34,6 +34,9 @@ import messageRoutes from './server/modules/messages/message.routes';
 import walletRoutes from './server/modules/wallet/wallet.routes';
 import webhookRoutes from './server/modules/webhooks/webhook.routes';
 
+// Import AI worker to initialize BullMQ listener in production (processes KYC queue jobs)
+import './src/ai/worker';
+
 dotenv.config();
 
 const app = express();
