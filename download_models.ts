@@ -11,6 +11,8 @@ const MODELS = [
   'face_recognition_model-weights_manifest.json',
   'face_recognition_model-shard1',
   'face_recognition_model-shard2',
+  'face_expression_model-weights_manifest.json',
+  'face_expression_model-shard1',
 ];
 
 // Use jsDelivr CDN which reliably serves the weights from the original repo
