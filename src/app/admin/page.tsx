@@ -534,7 +534,7 @@ export default function AdminDashboard() {
                                  <XAxis dataKey="date" stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} />
                                  <YAxis stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} />
                                  <RechartsTooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }} itemStyle={{ color: '#e4e4e7' }} />
-                                 <Area type="monotone" dataKey="users" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorUsers)" name="New Users" />
+                                 <Area type="monotone" dataKey="users" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorUsers)" name="New Users" isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
                               </AreaChart>
                            </ResponsiveContainer>
                         </div>
@@ -556,7 +556,7 @@ export default function AdminDashboard() {
                                  <XAxis dataKey="date" stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} />
                                  <YAxis stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} />
                                  <RechartsTooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }} itemStyle={{ color: '#e4e4e7' }} />
-                                 <Area type="monotone" dataKey="transactions" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorTxs)" name="Transactions" />
+                                 <Area type="monotone" dataKey="transactions" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorTxs)" name="Transactions" isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
                               </AreaChart>
                            </ResponsiveContainer>
                         </div>
@@ -576,7 +576,7 @@ export default function AdminDashboard() {
                                  <XAxis dataKey="date" stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} />
                                  <YAxis stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} />
                                  <RechartsTooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }} itemStyle={{ color: '#e4e4e7' }} />
-                                 <Bar dataKey="disputes" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Disputes" />
+                                 <Bar dataKey="disputes" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Disputes" isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
                               </BarChart>
                            </ResponsiveContainer>
                         </div>
@@ -598,7 +598,7 @@ export default function AdminDashboard() {
                                  <XAxis dataKey="date" stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} />
                                  <YAxis stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} />
                                  <RechartsTooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }} itemStyle={{ color: '#e4e4e7' }} formatter={(value: any) => [`₱${Number(value).toLocaleString()}`, 'Volume']} />
-                                 <Area type="monotone" dataKey="volume" stroke="#a855f7" strokeWidth={2} fillOpacity={1} fill="url(#colorVolume)" name="Volume" />
+                                 <Area type="monotone" dataKey="volume" stroke="#a855f7" strokeWidth={2} fillOpacity={1} fill="url(#colorVolume)" name="Volume" isAnimationActive={true} animationDuration={1500} animationEasing="ease-out" />
                               </AreaChart>
                            </ResponsiveContainer>
                         </div>
