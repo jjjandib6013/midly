@@ -217,17 +217,24 @@ model Message {
 }
 
 model AuditLog {
-  log_id             Int         @id @default(autoincrement())
-  transaction_id     Int
+  log_id             Int          @id @default(autoincrement())
+  transaction_id     Int?
   user_id            Int
-  action_type        String?     @db.VarChar(100)
+  action_type        String?      @db.VarChar(100)
   action_description String?
-  ip_address         String?     @db.VarChar(45)
-  timestamp          DateTime?   @default(now()) @db.Timestamp(6)
-  risk_score         Decimal?    @db.Decimal(5, 2)
-  transaction        Transaction @relation(fields: [transaction_id], references: [transaction_id], onDelete: Cascade)
-  user               User        @relation(fields: [user_id], references: [user_id])
+  ip_address         String?      @db.VarChar(45)
+  timestamp          DateTime?    @default(now()) @db.Timestamp(6)
+  risk_score         Decimal?     @db.Decimal(5, 2)
+  entity_type        String?      @db.VarChar(50)
+  entity_id          Int?
+  metadata           Json?
+  transaction        Transaction? @relation(fields: [transaction_id], references: [transaction_id], onDelete: Cascade)
+  user               User         @relation(fields: [user_id], references: [user_id])
 
+  @@index([user_id])
+  @@index([action_type])
+  @@index([timestamp])
+  @@index([entity_type])
   @@map("audit_log")
 }
 

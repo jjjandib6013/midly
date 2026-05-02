@@ -121,19 +121,19 @@ declare global {
 // (Middlewares moved up for initialization)
 
 // ==========================================
-// AUDIT LOGGING UTILITY
+// AUDIT LOGGING UTILITY (backward-compatible wrapper)
 // ==========================================
+import { logAudit as _logAudit, ACTION_TYPES } from './server/utils/auditLogger';
+export { ACTION_TYPES };
 
 export const logAudit = async (tx: any, tradeId: number, userId: number, actionType: string, description: string, ip?: string) => {
-   await tx.auditLog.create({
-      data: {
-         transaction_id: tradeId,
-         user_id: userId,
-         action_type: actionType,
-         action_description: description,
-         ip_address: ip || 'system',
-         risk_score: 0
-      }
+   await _logAudit({
+      tx,
+      transactionId: tradeId,
+      userId,
+      actionType: actionType as any,
+      description,
+      ip,
    });
 };
 

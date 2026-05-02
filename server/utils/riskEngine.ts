@@ -109,15 +109,15 @@ export async function calculateTransactionRisk(transactionId: number): Promise<{
             flags.push("AUTO-FROZEN (Score >= 81)");
             
             // Generate audit log for auto-freeze
-            await prisma.auditLog.create({
-               data: {
-                  transaction_id: transactionId,
-                  user_id: tx.buyer_id, // System action, attribute to trade context
-                  action_type: 'SYSTEM_FREEZE',
-                  action_description: `System automatically frozen transaction due to high risk score (${score})`,
-                  ip_address: '127.0.0.1',
-                  risk_score: score
-               }
+            const { logAudit, ACTION_TYPES } = await import('./auditLogger');
+            await logAudit({
+               transactionId: transactionId,
+               userId: tx.buyer_id,
+               actionType: ACTION_TYPES.SYSTEM_FREEZE,
+               description: `System automatically frozen transaction due to high risk score (${score})`,
+               ip: 'system',
+               riskScore: score,
+               metadata: { risk_flags: flags, score, threshold: 81 }
             });
         }
 

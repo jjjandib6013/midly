@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../../config/db';
 import { authenticateJWT, requireKYC } from '../../shared/middlewares/auth.middleware';
 import { createPaymentLink, createPayout } from '../../utils/payments/paymongo';
+import { logAudit, ACTION_TYPES } from '../../utils/auditLogger';
 
 const router = Router();
 
@@ -94,6 +95,7 @@ router.post('/withdraw', authenticateJWT, requireKYC, async (req: Request, res: 
 
       // 1. Password Change Cooldown (24h)
       if (user.last_password_change && new Date(user.last_password_change).getTime() > oneDayAgo.getTime()) {
+         await logAudit({ userId: user.user_id, actionType: ACTION_TYPES.WITHDRAWAL_BLOCKED, description: `Withdrawal blocked: password changed within 24h`, ip: req.ip, entityType: 'WALLET', entityId: user.user_id, metadata: { attempted_amount: withdrawAmount, reason: 'password_cooldown' } });
          return res.status(403).json({ error: 'Withdrawals are locked for 24 hours after a password change for your security.' });
       }
 
@@ -110,6 +112,7 @@ router.post('/withdraw', authenticateJWT, requireKYC, async (req: Request, res: 
             where: { user_id: user.user_id, ip_address: latestIp, created_at: { lt: oneHourAgo } }
          });
          if (!priorLogin) {
+            await logAudit({ userId: user.user_id, actionType: ACTION_TYPES.WITHDRAWAL_BLOCKED, description: `Withdrawal blocked: unrecognized IP in last hour`, ip: req.ip, entityType: 'WALLET', entityId: user.user_id, metadata: { attempted_amount: withdrawAmount, reason: 'new_ip', suspicious_ip: latestIp } });
             return res.status(403).json({ error: 'Withdrawals are temporarily blocked due to a login from an unrecognized device in the last hour.' });
          }
       }
@@ -126,6 +129,7 @@ router.post('/withdraw', authenticateJWT, requireKYC, async (req: Request, res: 
       // amount is stored as negative for withdrawals
       const withdrawnToday = Math.abs(Number(dailyWithdrawals._sum.amount || 0));
       if (withdrawnToday + withdrawAmount > 50000) {
+         await logAudit({ userId: user.user_id, actionType: ACTION_TYPES.WITHDRAWAL_BLOCKED, description: `Withdrawal blocked: daily cap exceeded`, ip: req.ip, entityType: 'WALLET', entityId: user.user_id, metadata: { attempted_amount: withdrawAmount, reason: 'daily_cap', withdrawn_today: withdrawnToday } });
          return res.status(403).json({ error: `Daily withdrawal limit of ₱50,000 exceeded. You have already withdrawn ₱${withdrawnToday.toLocaleString()} in the last 24 hours.` });
       }
 
@@ -211,6 +215,9 @@ router.post('/withdraw', authenticateJWT, requireKYC, async (req: Request, res: 
          console.error('Payout failed to queue:', (payoutReq as any).error || 'Unknown error');
          return res.status(500).json({ error: 'Withdrawal failed at gateway. Please contact support.' });
       }
+
+      // AUDIT: Successful withdrawal
+      await logAudit({ userId: req.user.user_id, actionType: ACTION_TYPES.WITHDRAWAL_SUCCESS, description: `₱${withdrawAmount.toLocaleString()} withdrawn to ${bankCode}`, ip: req.ip, entityType: 'WALLET', entityId: req.user.user_id, metadata: { amount: withdrawAmount, fee: WITHDRAWAL_FEE, total_deducted: totalDeduction, bank_code: bankCode, new_balance: Number(result.wallet_balance) } });
 
       res.json({ 
          status: 'WITHDRAWAL_PROCESSING', 

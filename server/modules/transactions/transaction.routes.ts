@@ -2,7 +2,8 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../../config/db';
 import { authenticateJWT, requireKYC } from '../../shared/middlewares/auth.middleware';
 import { disputeLimiter } from '../../shared/middlewares/rateLimiter';
-import { io, logAudit } from '../../../server';
+import { io } from '../../../server';
+import { logAudit, ACTION_TYPES } from '../../utils/auditLogger';
 import { encryptForTrade, decryptForTrade } from '../../../src/ai/cryptoUtils';
 import { createPaymentLink } from '../../utils/payments/paymongo';
 import { kycQueue } from '../../../src/ai/queue';
@@ -110,6 +111,9 @@ router.post('/listings/buy/:id', authenticateJWT, requireKYC, async (req, res): 
             }
          });
 
+         // AUDIT: Trade created from listing
+         await logAudit({ tx, transactionId: trade.transaction_id, userId: req.user.user_id, actionType: ACTION_TYPES.TRADE_CREATED, description: `Trade #${trade.transaction_id} created from listing #${listingId}`, ip: req.ip, metadata: { item_name: listing.item_name, agreed_price: basePrice, total_amount: basePrice + serviceFee, game_type: listing.game_type, buyer_id: req.user.user_id, seller_id: listing.seller_id } });
+
          return trade.transaction_id;
       });
 
@@ -180,6 +184,9 @@ router.post('', authenticateJWT, requireKYC, async (req, res): Promise<any> => {
 
          const io = req.app.get('io');
          if (io) io.to(`user_${counterParty.user_id}`).emit('new_notification', notif);
+
+         // AUDIT: Escrow trade created
+         await logAudit({ tx, transactionId: trade.transaction_id, userId: req.user.user_id, actionType: ACTION_TYPES.TRADE_CREATED, description: `Escrow trade #${trade.transaction_id} created`, ip: req.ip, metadata: { item_name: itemDescription, agreed_price: basePrice, total_amount: totalAmount, game_type: itemCategory, trade_category: tradeCategory, buyer_id: buyerId, seller_id: sellerId, counterparty_email: sellerEmail } });
 
          return trade;
       });
@@ -280,8 +287,8 @@ router.put('/:id/accept-invite', authenticateJWT, async (req, res): Promise<any>
             }
          });
 
-         // Audit log
-         await logAudit(tx, tradeId, req.user.user_id, 'ACCEPT_INVITE', `User ${req.user.email} accepted escrow invite for trade #${tradeId}`, req.ip);
+         // AUDIT: Invite accepted
+         await logAudit({ tx, transactionId: tradeId, userId: req.user.user_id, actionType: ACTION_TYPES.INVITE_ACCEPTED, description: `User accepted escrow invite for trade #${tradeId}`, ip: req.ip, metadata: { accepted_by: req.user.user_id } });
       });
 
       io.to(`trade_${tradeId}`).emit('trade_updated', 'agreement');
@@ -330,6 +337,10 @@ router.put('/:id/progress', authenticateJWT, async (req, res): Promise<any> => {
                risk_level: 'Safe'
             }
          });
+         
+         // AUDIT: Payment requested
+         await logAudit({ transactionId: tradeId, userId: req.user.user_id, actionType: ACTION_TYPES.PAYMENT_REQUESTED, description: `Seller requested payment for trade #${tradeId}`, ip: req.ip, metadata: { total_amount: Number(trade.total_amount), seller_id: trade.seller_id } });
+
          io.to(`trade_${tradeId}`).emit('trade_updated', 'awaiting_payment');
          return res.json({ status: 'AWAITING_PAYMENT' });
       }
@@ -376,6 +387,10 @@ router.put('/:id/progress', authenticateJWT, async (req, res): Promise<any> => {
                      risk_level: 'Safe'
                   }
                });
+
+               // AUDIT: Funds deposited + Escrow locked
+               await logAudit({ tx, transactionId: tradeId, userId: trade.buyer_id, actionType: ACTION_TYPES.FUNDS_DEPOSITED, description: `Buyer deposited ₱${Number(trade.total_amount).toLocaleString()} via Midly Wallet`, ip: req.ip, metadata: { amount: Number(trade.total_amount), payment_method: 'midly_wallet', buyer_id: trade.buyer_id } });
+               await logAudit({ tx, transactionId: tradeId, userId: trade.buyer_id, actionType: ACTION_TYPES.ESCROW_LOCKED, description: `Smart Vault locked for trade #${tradeId}`, ip: req.ip, metadata: { vault_status: 'locked', amount: Number(trade.total_amount) } });
             });
          } else {
             // External Gateway Checkout via PayMongo
@@ -448,6 +463,9 @@ router.put('/:id/progress', authenticateJWT, async (req, res): Promise<any> => {
                   risk_level: 'Safe'
                }
             });
+
+            // AUDIT: Item delivered
+            await logAudit({ tx, transactionId: tradeId, userId: req.user.user_id, actionType: ACTION_TYPES.ITEM_DELIVERED, description: `Seller delivered item for trade #${tradeId}`, ip: req.ip, metadata: { has_credentials: !!credentials, delivered_at: new Date().toISOString() } });
          });
          io.to(`trade_${tradeId}`).emit('trade_updated', 'verifying');
          return res.json({ status: 'DELIVERED' });
@@ -488,6 +506,10 @@ router.put('/:id/progress', authenticateJWT, async (req, res): Promise<any> => {
             await tx.walletTransaction.create({
                data: { user_id: trade.seller_id, type: 'escrow_release', amount: amountToReceive, balance: updatedSeller.wallet_balance || 0, description: `Escrow Release - Trade #${tradeId}` }
             });
+
+            // AUDIT: Trade approved + Funds released
+            await logAudit({ tx, transactionId: tradeId, userId: req.user.user_id, actionType: ACTION_TYPES.TRADE_APPROVED, description: `Buyer approved delivery for trade #${tradeId}`, ip: req.ip, metadata: { buyer_id: trade.buyer_id } });
+            await logAudit({ tx, transactionId: tradeId, userId: trade.seller_id, actionType: ACTION_TYPES.FUNDS_RELEASED, description: `₱${amountToReceive.toLocaleString()} released to seller`, ip: req.ip, metadata: { amount: amountToReceive, recipient_id: trade.seller_id } });
          });
 
          io.to(`trade_${tradeId}`).emit('trade_updated', 'completed');
@@ -550,6 +572,9 @@ router.post('/:id/dispute', authenticateJWT, disputeLimiter, async (req, res): P
                risk_level: 'Critical'
             }
          });
+
+         // AUDIT: Dispute filed
+         await logAudit({ tx, transactionId: tradeId, userId: req.user.user_id, actionType: ACTION_TYPES.DISPUTE_FILED, description: `User filed a dispute on trade #${tradeId}`, ip: req.ip, metadata: { reason: reason || 'No reason provided', filed_by: req.user.user_id, vault_status: paymentCheck?.vault_status || 'unknown', previous_status: trade.status } });
       });
 
       io.to(`trade_${tradeId}`).emit('trade_updated', 'disputed');
@@ -676,6 +701,11 @@ router.post('/:id/auto-release', authenticateJWT, async (req, res): Promise<any>
                risk_level: 'Safe'
             }
          });
+
+         // AUDIT: Auto-release
+         const amtReleased = Number(trade.agreed_price);
+         await logAudit({ tx, transactionId: tradeId, userId: trade.seller_id, actionType: ACTION_TYPES.TRADE_AUTO_RELEASED, description: `24h auto-release executed for trade #${tradeId}`, ip: 'system', metadata: { released_amount: amtReleased, recipient_id: trade.seller_id, elapsed_hours: 24 } });
+         await logAudit({ tx, transactionId: tradeId, userId: trade.seller_id, actionType: ACTION_TYPES.FUNDS_RELEASED, description: `₱${amtReleased.toLocaleString()} auto-released to seller`, ip: 'system', metadata: { amount: amtReleased, trigger: 'auto_release', recipient_id: trade.seller_id } });
       });
 
       io.to(`trade_${tradeId}`).emit('trade_updated', 'completed');
@@ -851,16 +881,16 @@ router.post('/:id/reveal-credentials', authenticateJWT, async (req, res): Promis
          return res.status(429).json({ error: 'Reveal limit reached (5/5). Contact support.' });
       }
 
-      // Audit every single access
-      await prisma.auditLog.create({
-         data: {
-            transaction_id: tradeId,
-            user_id: req.user.user_id,
-            action_type: 'CREDENTIAL_REVEAL',
-            action_description: `Buyer revealed credentials for trade #${tradeId}`,
-            ip_address: req.ip || '0.0.0.0',
-            risk_score: 0
-         }
+      // Audit every single access — use real risk score from the transaction
+      const txForRisk = await prisma.transaction.findUnique({ where: { transaction_id: tradeId }, select: { risk_score: true } });
+      await logAudit({
+         transactionId: tradeId,
+         userId: req.user.user_id,
+         actionType: ACTION_TYPES.CREDENTIAL_REVEAL,
+         description: `Buyer revealed credentials for trade #${tradeId} (reveal ${revealCount + 1}/5)`,
+         ip: req.ip,
+         riskScore: txForRisk?.risk_score ?? 0,
+         metadata: { reveal_number: revealCount + 1, max_reveals: 5 }
       });
 
       // Decrypt securely in memory

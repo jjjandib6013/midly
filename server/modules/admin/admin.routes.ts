@@ -2,7 +2,8 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../../config/db';
 import { authenticateJWT } from '../../shared/middlewares/auth.middleware';
 import { generateDownloadUrl } from '../../utils/s3';
-import { io, logAudit } from '../../../server';
+import { io } from '../../../server';
+import { logAudit, ACTION_TYPES } from '../../utils/auditLogger';
 
 const router = Router();
 
@@ -86,6 +87,9 @@ router.post('/disputes/:txId/resolve', authenticateJWT, async (req: Request, res
          });
 
          await logAudit(tx, txId, req.user.user_id, 'RESOLVE_DISPUTE', `Admin ${dbUser.email} forced dispute resolution: ${action}`, req.ip);
+
+         // AUDIT: Enhanced metadata for dispute resolution
+         await logAudit({ tx, transactionId: txId, userId: req.user.user_id, actionType: action === 'REFUND_BUYER' ? ACTION_TYPES.BUYER_REFUNDED : ACTION_TYPES.FUNDS_RELEASED, description: `Dispute resolution: ${action === 'REFUND_BUYER' ? 'Buyer refunded' : 'Seller paid'}`, ip: req.ip, metadata: { decision: action, amount: action === 'REFUND_BUYER' ? amount : baseAmount, recipient_id: action === 'REFUND_BUYER' ? trade.buyer_id : trade.seller_id, admin_id: req.user.user_id, admin_email: dbUser.email } });
       });
 
       // Notify users in real-time
@@ -120,6 +124,10 @@ router.post('/users/:id/ban', authenticateJWT, async (req: Request, res: Respons
       const targetId = parseInt(req.params.id as string);
       const { is_banned } = req.body;
       await prisma.user.update({ where: { user_id: targetId }, data: { is_banned } });
+
+      // AUDIT: Ban/Unban
+      await logAudit({ userId: req.user.user_id, actionType: is_banned ? ACTION_TYPES.USER_BANNED : ACTION_TYPES.USER_UNBANNED, description: `Admin ${is_banned ? 'banned' : 'unbanned'} user #${targetId}`, ip: req.ip, entityType: 'USER', entityId: targetId, metadata: { target_user_id: targetId, admin_id: req.user.user_id } });
+
       res.json({ success: true, is_banned });
    } catch (e) {
       res.status(500).json({ error: 'Failed to toggle user ban state' });
@@ -181,6 +189,10 @@ router.post('/settings', authenticateJWT, async (req: Request, res: Response): P
          update: updateData,
          create: { id: 1, ...updateData }
       });
+
+      // AUDIT: Settings changed
+      await logAudit({ userId: req.user.user_id, actionType: ACTION_TYPES.SETTINGS_CHANGED, description: `Admin updated platform settings`, ip: req.ip, entityType: 'SETTINGS', entityId: 1, metadata: { changes: updateData } });
+
       res.json({ settings });
    } catch (e) {
       res.status(500).json({ error: 'Failed to save settings' });
@@ -327,12 +339,33 @@ router.get('/reports/audit-logs', authenticateJWT, async (req: Request, res: Res
    if (!dbUser || dbUser.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
 
    try {
-      const logs = await prisma.auditLog.findMany({
-         include: { user: { select: { email: true } } },
-         orderBy: { timestamp: 'desc' },
-         take: 1000 // Cap to prevent massive payloads
-      });
-      res.json({ logs });
+      const { userId, actionType, entityType, startDate, endDate, page } = req.query;
+      const pageNum = parseInt(page as string) || 1;
+      const pageSize = 50;
+
+      const where: any = {};
+
+      if (userId) where.user_id = parseInt(userId as string);
+      if (actionType) where.action_type = actionType as string;
+      if (entityType) where.entity_type = entityType as string;
+      if (startDate && endDate) {
+         const end = new Date(endDate as string);
+         end.setHours(23, 59, 59, 999);
+         where.timestamp = { gte: new Date(startDate as string), lte: end };
+      }
+
+      const [logs, total] = await Promise.all([
+         prisma.auditLog.findMany({
+            where,
+            include: { user: { select: { email: true, first_name: true, last_name: true } } },
+            orderBy: { timestamp: 'desc' },
+            skip: (pageNum - 1) * pageSize,
+            take: pageSize
+         }),
+         prisma.auditLog.count({ where })
+      ]);
+
+      res.json({ logs, total, page: pageNum, pageSize, totalPages: Math.ceil(total / pageSize) });
    } catch (e) {
       res.status(500).json({ error: 'Failed to fetch audit logs' });
    }
@@ -383,6 +416,10 @@ router.post('/kyc/:id/resolve', authenticateJWT, async (req: Request, res: Respo
          }
       });
 
+      // AUDIT: KYC approve/reject
+      const kycRecord = await prisma.kycVerification.findUnique({ where: { kyc_id: kycId } });
+      await logAudit({ userId: req.user.user_id, actionType: status === 'verified' ? ACTION_TYPES.KYC_APPROVED : ACTION_TYPES.KYC_REJECTED, description: `Admin ${status} KYC #${kycId}`, ip: req.ip, entityType: 'KYC', entityId: kycId, metadata: { target_user_id: kycRecord?.user_id, admin_id: req.user.user_id, rejection_reason: status === 'rejected' ? (reason || 'Rejected by admin review.') : null } });
+
       res.json({ success: true, status });
    } catch (e) {
       res.status(500).json({ error: 'Failed to resolve KYC application' });
@@ -429,15 +466,8 @@ router.post('/risk-transactions/:id/freeze', authenticateJWT, async (req: Reques
          data: { status: newStatus }
       });
 
-      await prisma.auditLog.create({
-         data: {
-            transaction_id: txId,
-            user_id: dbUser.user_id,
-            action_type: action === 'freeze' ? 'ADMIN_FREEZE' : 'ADMIN_UNFREEZE',
-            action_description: `Admin manually ${action}d the transaction.`,
-            ip_address: req.ip || '127.0.0.1'
-         }
-      });
+      // AUDIT: Freeze/Unfreeze (use new utility directly)
+      await logAudit({ transactionId: txId, userId: dbUser.user_id, actionType: action === 'freeze' ? ACTION_TYPES.ADMIN_FREEZE : ACTION_TYPES.ADMIN_UNFREEZE, description: `Admin manually ${action}d transaction #${txId}`, ip: req.ip, metadata: { previous_status: tx?.status, new_status: newStatus } });
 
       res.json({ success: true, status: newStatus });
    } catch (e) {
@@ -471,6 +501,23 @@ router.get('/users/:id/timeline', authenticateJWT, async (req: Request, res: Res
       });
 
       res.json({ timeline: { logins, trades, withdrawals } });
+   } catch (e) {
+      res.status(500).json({ error: 'Server error' });
+   }
+});
+
+// GET trade audit timeline — all audit events for a specific transaction
+router.get('/trades/:id/audit-timeline', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
+   const dbUser = await prisma.user.findUnique({ where: { user_id: req.user.user_id } });
+   if (!dbUser || dbUser.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+   try {
+      const txId = parseInt(req.params.id as string);
+      const logs = await prisma.auditLog.findMany({
+         where: { transaction_id: txId },
+         include: { user: { select: { email: true, first_name: true, last_name: true } } },
+         orderBy: { timestamp: 'asc' }
+      });
+      res.json({ logs });
    } catch (e) {
       res.status(500).json({ error: 'Server error' });
    }
