@@ -89,7 +89,7 @@ export default function Home() {
             </h1>
 
             <p className="hero-desc text-lg md:text-xl text-[#8892b0] max-w-xl mb-12 leading-relaxed font-medium">
-              Eliminate digital asset fraud permanently. Midly leverages strict hardware-enforced KYC and algorithmic vault locking to secure peer-to-peer exchanges.
+              Eliminate digital asset fraud permanently. Midly leverages strict hardware-enforced KYC and secure escrow to guarantee safe peer-to-peer exchanges.
             </p>
 
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 sm:gap-6 w-full sm:w-auto border-l-4 border-primary/50 pl-4 sm:pl-6">
@@ -139,7 +139,7 @@ export default function Home() {
                 <Lock className="w-6 h-6 text-primary" />
               </div>
               <h4 className="text-3xl font-black text-white tracking-tight uppercase mb-4">Phase 1: Secure</h4>
-              <p className="text-[#8892b0] font-medium leading-relaxed">Buyer deposits funds directly into the Midly Smart Vault. Funds are verified and instantly frozen in the global ledger.</p>
+              <p className="text-[#8892b0] font-medium leading-relaxed">Buyer deposits funds directly into the Midly Escrow. Funds are verified and instantly held securely during the transaction.</p>
             </div>
             <div className="text-8xl font-black text-white/5 absolute bottom-4 right-8 tracking-tighter">01</div>
           </DynamicCard>

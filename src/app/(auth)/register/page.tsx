@@ -56,7 +56,7 @@ export default function Register() {
        
        if (!res.ok) throw new Error(data.error || "Registration Failed");
        
-       toast.success("Account securely created! Redirecting to Identity Vault...");
+       toast.success("Account securely created! Redirecting to Account Verification...");
        
        router.push(`/verify-email?email=${encodeURIComponent(formData.email)}`);
     } catch (err: any) {

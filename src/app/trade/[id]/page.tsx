@@ -228,8 +228,8 @@ export default function TradeHub() {
       // Listen for immediate state updates
       socket.on("trade_updated", (newStatus: string) => {
          if (newStatus === 'awaiting_payment') toast.success("Seller requested payment. Awaiting Buyer deposit.");
-         if (newStatus === 'active') toast.success("Payment Secured in Vault! Handover phase started.");
-         if (newStatus === 'verifying') toast.success("Items Delivered. Retrieval Lock & Verification started.");
+         if (newStatus === 'active') toast.success("Payment secured in Escrow! Handover phase started.");
+         if (newStatus === 'verifying') toast.success("Items Delivered. Verification started.");
          if (newStatus === 'completed') toast.success("Funds successfully Released!");
          if (newStatus === 'disputed') toast.error("Trade has been officially Disputed. Funds are frozen.");
          if (newStatus === 'cancel_requested') toast.error("A participant requested to mutually cancel the trade.");
@@ -656,7 +656,7 @@ export default function TradeHub() {
                body: JSON.stringify({ action: adminResolveModal.action })
             });
             if (res.ok) {
-               toast.success("Dispute mathematically resolved.");
+               toast.success("Dispute officially resolved.");
                setAdminResolveModal({ isOpen: false, action: null });
                setAdminResolveConfirmText("");
                fetchTrade();
@@ -670,8 +670,8 @@ export default function TradeHub() {
          <div className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 lg:py-8 flex flex-col gap-6 lg:h-[calc(100vh-64px)] overflow-y-auto custom-scrollbar">
             <header className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-dark-border pb-6 gap-4">
                <div>
-                  <h1 className="text-2xl font-bold text-red-500 mb-2 flex items-center gap-3"><ShieldAlert className="w-6 h-6" /> SECURED ADMIN AUDIT VIEW</h1>
-                  <p className="text-sm text-text-muted max-w-xl leading-relaxed">You are viewing Hub #{tradeId} as a Platform Administrator. All logs, actions, and timestamps shown are mathematical truths pulled directly from the system ledger. You are observing this trade, not participating in it.</p>
+                  <h1 className="text-2xl font-bold text-zinc-100 mb-2 flex items-center gap-3"><ShieldCheck className="w-6 h-6 text-primary" /> Admin Trade Overview</h1>
+                  <p className="text-sm text-text-muted max-w-xl leading-relaxed">You are viewing Trade #{tradeId} as a Platform Administrator. The activity timeline below represents the verified system logs for this transaction. You are observing this trade in read-only mode.</p>
                </div>
                <div className="flex items-center gap-4 shrink-0">
                   <div className="px-5 py-3 bg-dark-panel border border-dark-border rounded-xl shadow-lg">
@@ -694,7 +694,7 @@ export default function TradeHub() {
                      <div className="relative flex items-start gap-4">
                         <div className="flex items-center justify-center w-5 h-5 rounded-full border-2 border-primary bg-dark-bg text-primary shrink-0 z-10 mt-0.5"></div>
                         <div className="flex-1 pb-4">
-                           <p className="font-bold text-sm text-white">Hub Provisioned</p>
+                           <p className="font-bold text-sm text-white">Trade Created</p>
                            <time className="block mt-1 text-[11px] font-mono text-text-muted bg-dark-bg border border-dark-border px-2 py-1 rounded inline-block">{new Date(trade.created_at).toLocaleString()}</time>
                         </div>
                      </div>
@@ -723,7 +723,7 @@ export default function TradeHub() {
                         <div className="relative flex items-start gap-4">
                            <div className="flex items-center justify-center w-5 h-5 rounded-full border-2 border-red-500 bg-dark-bg text-red-500 shrink-0 z-10 mt-0.5"></div>
                            <div className="flex-1 pb-4">
-                              <p className="font-bold text-sm text-white">Vault Refunded</p>
+                              <p className="font-bold text-sm text-white">Trade Refunded</p>
                            </div>
                         </div>
                      )}
@@ -764,16 +764,16 @@ export default function TradeHub() {
                   </div>
 
                   {trade.status === 'disputed' && (
-                     <div className="mt-6 p-5 rounded-xl border border-red-500/50 bg-[#1A0B0B] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                     <div className="mt-6 p-5 rounded-xl border border-zinc-800 bg-zinc-900/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <div>
-                           <h4 className="text-red-500 font-bold text-sm uppercase tracking-widest mb-1 flex items-center gap-2"><Lock className="w-4 h-4" /> Root Override Controls</h4>
-                           <p className="text-xs text-red-400/80">Use these commands to forcefully resolve the frozen smart vault. This is mathematically irreversible.</p>
+                           <h4 className="text-zinc-100 font-semibold text-sm mb-1 flex items-center gap-2"><ShieldAlert className="w-4 h-4 text-amber-500" /> Dispute Resolution Actions</h4>
+                           <p className="text-xs text-zinc-400">Use these commands to resolve the dispute and route the escrowed funds. This action is final and cannot be undone.</p>
                         </div>
                         <div className="flex gap-3 shrink-0">
-                           <button onClick={() => setAdminResolveModal({isOpen: true, action: 'FORWARD_TO_SELLER'})} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold uppercase rounded-lg transition-colors shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                           <button onClick={() => setAdminResolveModal({isOpen: true, action: 'FORWARD_TO_SELLER'})} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold uppercase rounded-lg transition-colors">
                               Release to Seller
                            </button>
-                           <button onClick={() => setAdminResolveModal({isOpen: true, action: 'REFUND_BUYER'})} className="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white text-xs font-bold uppercase rounded-lg transition-colors shadow-[0_0_15px_rgba(239,68,68,0.3)]">
+                           <button onClick={() => setAdminResolveModal({isOpen: true, action: 'REFUND_BUYER'})} className="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white text-xs font-bold uppercase rounded-lg transition-colors">
                               Refund to Buyer
                            </button>
                         </div>
@@ -782,25 +782,25 @@ export default function TradeHub() {
                </div>
             </div>
 
-            {/* ADMIN HIGH-FRICTION RESOLVE MODAL */}
+            {/* ADMIN RESOLVE MODAL */}
             {adminResolveModal.isOpen && (
                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-                  <div className="bg-zinc-950 border border-red-500/30 rounded-2xl w-full max-w-md overflow-hidden shadow-[0_0_40px_rgba(239,68,68,0.15)]">
-                     <div className="p-6 border-b border-zinc-800 bg-red-500/5">
-                        <h3 className="text-xl font-bold text-red-500 flex items-center gap-2">
-                           <ShieldAlert className="w-6 h-6" /> Root Execution Authority
+                  <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+                     <div className="p-6 border-b border-zinc-800 bg-zinc-950/50">
+                        <h3 className="text-xl font-semibold text-zinc-100 flex items-center gap-2">
+                           <ShieldAlert className="w-5 h-5 text-amber-500" /> Confirm Resolution
                         </h3>
-                        <p className="text-zinc-400 text-sm mt-2">You are bypassing the Smart Vault logic to forcefully route funds.</p>
+                        <p className="text-zinc-400 text-sm mt-2">You are about to manually resolve this dispute and release the escrowed funds.</p>
                      </div>
                      
                      <div className="p-6 space-y-4">
-                        <div className="p-4 bg-zinc-900 rounded-lg border border-zinc-800">
+                        <div className="p-4 bg-zinc-950/50 rounded-lg border border-zinc-800">
                            <p className="text-xs text-zinc-500 uppercase tracking-widest font-bold mb-1">Target Action</p>
                            <p className="text-white font-medium">
                               {adminResolveModal.action === 'REFUND_BUYER' ? (
-                                 <span className="text-red-400">Forcefully REFUND funds to the BUYER.</span>
+                                 <span className="text-red-400">Refund funds to the BUYER.</span>
                               ) : (
-                                 <span className="text-emerald-400">Forcefully RELEASE funds to the SELLER.</span>
+                                 <span className="text-emerald-400">Release funds to the SELLER.</span>
                               )}
                            </p>
                         </div>
@@ -941,7 +941,7 @@ export default function TradeHub() {
                         <h4 className="text-white font-bold text-sm">Agreement Phase</h4>
                         {myRole === 'SELL' ? (
                            <>
-                              <p className="text-sm text-text-muted">Verify terms with the buyer. When ready, lock the terms to request funds into the Vault.</p>
+                              <p className="text-sm text-text-muted">Verify terms with the buyer. When ready, lock the terms to request funds into Escrow.</p>
                               <div className="flex gap-2">
                                  <NeonButton className="flex-[2] justify-center !py-3 bg-dark-bg" onClick={() => handleTradeProgress('REQUEST_PAYMENT')}>
                                     Lock Terms & Request Payment <ArrowRight className="w-4 h-4 ml-2" />
@@ -965,7 +965,7 @@ export default function TradeHub() {
                         <h4 className="text-white font-bold text-sm">Payment Secured Phase</h4>
                         {myRole === 'BUY' ? (
                            <>
-                              <p className="text-sm text-text-muted mb-4">The Seller has locked the terms. Please secure the funds into the Vault.</p>
+                              <p className="text-sm text-text-muted mb-4">The Seller has locked the terms. Please secure the funds into Escrow.</p>
 
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
                                  <div
@@ -1026,7 +1026,7 @@ export default function TradeHub() {
                            </>
                         ) : (
                            <>
-                              <p className="text-sm text-text-muted pb-2">Waiting for the Buyer to deposit funds into the Midly Smart Vault.</p>
+                              <p className="text-sm text-text-muted pb-2">Waiting for the Buyer to deposit funds into Escrow.</p>
                               <button className="w-full text-red-500 hover:text-red-400 text-xs font-bold uppercase tracking-widest transition-colors mt-4" onClick={handleCancelTrade}>
                                  Cancel Trade
                               </button>
@@ -1039,12 +1039,12 @@ export default function TradeHub() {
                         <h4 className="text-white font-bold text-sm">Item Handover</h4>
                         {myRole === 'SELL' ? (
                            <div className="flex flex-col gap-4">
-                              <p className="text-sm text-text-muted">The Midly Vault has secured the funds. {trade?.trade_category === 'Game Account' ? 'Please input the account details into the Secure Credential Vault below to process Handover automatically.' : 'Please deliver the item in-game, upload screenshot proof in the chat, and click confirm.'}</p>
+                              <p className="text-sm text-text-muted">Midly Escrow has secured the funds. {trade?.trade_category === 'Game Account' ? 'Please input the account details into Secure Credential Storage below to process Handover automatically.' : 'Please deliver the item in-game, upload screenshot proof in the chat, and click confirm.'}</p>
 
                               {trade?.trade_category === 'Game Account' ? (
                                  !isVaultOpen ? (
                                     <NeonButton className="w-full justify-center !py-3 mt-2" onClick={() => setIsVaultOpen(true)}>
-                                       <Key className="w-4 h-4 mr-2" /> Open Secure Credential Vault
+                                       <Key className="w-4 h-4 mr-2" /> Open Secure Credential Storage
                                     </NeonButton>
                                  ) : (
                                     <div className="p-5 bg-dark-bg/80 backdrop-blur-md border border-primary/50 rounded-xl space-y-4 relative overflow-hidden shadow-[0_0_20px_rgba(var(--primary-rgb),0.15)] transition-all animate-in fade-in zoom-in-95 duration-200">
@@ -1077,7 +1077,7 @@ export default function TradeHub() {
                                        </div>
                                        <div className="text-xs text-text-muted bg-dark-panel p-3 rounded border border-dark-border relative z-10">
                                           <span className="text-yellow-500 font-bold uppercase mr-2 flex items-center gap-1 inline-flex mb-1"><ShieldAlert className="w-3 h-3" /> Warning</span>
-                                          <p>These credentials are encrypted at rest via AES-256. Upon submission, they are permanently locked into the Secured Vault. Any false credentials will result in an immediate permanent ban.</p>
+                                          <p>These credentials are encrypted at rest via AES-256. Upon submission, they are permanently locked into Secure Storage. Any false credentials will result in an immediate permanent ban.</p>
                                        </div>
                                        <div className="flex gap-2 relative z-10 mt-2">
                                           <NeonButton variant="ghost" className="flex-1 border border-dark-border hover:bg-white/5" onClick={() => setIsVaultOpen(false)}>
@@ -1097,7 +1097,7 @@ export default function TradeHub() {
                            </div>
                         ) : (
                            <div className="flex flex-col gap-3">
-                              <p className="text-sm text-text-muted">Funds securely locked in Vault. Waiting for Seller to deliver the {trade?.trade_category === 'Game Account' ? 'credentials' : 'item'}.</p>
+                              <p className="text-sm text-text-muted">Funds securely locked in Escrow. Waiting for Seller to deliver the {trade?.trade_category === 'Game Account' ? 'credentials' : 'item'}.</p>
                               <NeonButton variant="ghost" className="w-full mt-2 text-yellow-500 hover:bg-yellow-500/10 border border-yellow-500/50 group" onClick={() => setIsCancelRequestModalOpen(true)}>
                                  <XCircle className="w-4 h-4 mr-2" /> Request Mutual Cancellation
                               </NeonButton>
@@ -1190,7 +1190,7 @@ export default function TradeHub() {
                                              <div className="flex items-center justify-between mb-3">
                                                 <div className="flex items-center gap-2">
                                                    <Unlock className="w-5 h-5 text-primary" />
-                                                   <p className="text-sm text-primary font-black uppercase tracking-widest leading-none">Secured Vault Storage</p>
+                                                   <p className="text-sm text-primary font-black uppercase tracking-widest leading-none">Secure Credential Storage</p>
                                                 </div>
                                              </div>
                                              
@@ -1303,7 +1303,7 @@ export default function TradeHub() {
                      <Copy className="w-3 h-3 text-text-muted" /> <span className="hidden sm:inline">Copy Invite Link</span><span className="sm:hidden">Copy</span>
                   </button>
                   <div className="hidden sm:flex px-3 py-1 bg-dark-panel rounded-full border border-dark-border text-xs text-text-muted items-center gap-2">
-                     Secured Vault Storage <ShieldCheck className="w-3 h-3 text-primary" />
+                     Secure Credential Storage <ShieldCheck className="w-3 h-3 text-primary" />
                   </div>
                </div>
             </div>
@@ -1428,13 +1428,13 @@ export default function TradeHub() {
                      </div>
                      <div>
                         <h2 className="text-xl font-bold text-white tracking-tight">Initiate Dispute</h2>
-                        <p className="text-xs text-red-400 mt-1">This will permanently lock the Smart Vault.</p>
+                        <p className="text-xs text-red-400 mt-1">This will pause the escrow process.</p>
                      </div>
                   </div>
 
                   <div className="space-y-4 text-sm font-medium">
                      <p className="text-text-muted">
-                        Midly administrators will be pulled into the chat to review evidence and determine a refund or funds release mathematically. 
+                        Midly administrators will be pulled into the chat to review evidence and determine a refund or funds release. 
                      </p>
 
                      <div className="space-y-2">
@@ -1467,7 +1467,7 @@ export default function TradeHub() {
                            />
                            <div className="flex flex-col items-center gap-2">
                               <UploadCloud className={`w-8 h-8 ${isUploadingEvidence ? 'text-primary animate-bounce' : 'text-white/30'}`} />
-                              <p className="text-sm text-white/60">{isUploadingEvidence ? 'Encrypting & Uploading to Secure Vault...' : 'Click to upload Screenshots or PDFs'}</p>
+                              <p className="text-sm text-white/60">{isUploadingEvidence ? 'Encrypting & Uploading to Secure Storage...' : 'Click to upload Screenshots or PDFs'}</p>
                               <p className="text-xs text-white/30">Max 5MB per file</p>
                            </div>
                         </div>
@@ -1497,7 +1497,7 @@ export default function TradeHub() {
                         Cancel
                      </NeonButton>
                      <NeonButton className="flex-1 bg-red-500/10 text-red-500 border-red-500 hover:bg-red-500 hover:text-white disabled:opacity-50" onClick={submitDispute} isLoading={isLoading || isUploadingEvidence}>
-                        {isUploadingEvidence ? 'Securing Evidence...' : 'Freeze Vault & Dispute'}
+                        {isUploadingEvidence ? 'Securing Evidence...' : 'Freeze Escrow & Dispute'}
                      </NeonButton>
                   </div>
                </DynamicCard>
@@ -1520,7 +1520,7 @@ export default function TradeHub() {
 
                   <div className="space-y-4 text-sm font-medium">
                      <p className="text-text-muted">
-                        Your funds are securely locked in the Midly Vault. By submitting this request, the counterparty will be asked to accept the cancellation. If accepted, the Smart Escrow will dissolve and your funds will instantly route back to your wallet.
+                        Your funds are held securely in Escrow. By submitting this request, the counterparty will be asked to accept the cancellation. If accepted, the escrow contract will be cancelled and your funds will instantly route back to your wallet.
                      </p>
                   </div>
 
@@ -1552,7 +1552,7 @@ export default function TradeHub() {
 
                   <div className="space-y-4 text-sm font-medium">
                      <p className="text-text-muted">
-                        Are you sure you want to completely cancel this trade? This is permanent. No funds will be transferred and the Smart Escrow will be dissolved.
+                        Are you sure you want to completely cancel this trade? This is permanent. No funds will be transferred and the escrow contract will be cancelled.
                      </p>
                   </div>
 

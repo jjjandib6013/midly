@@ -900,7 +900,7 @@ export default function AdminDashboard() {
                                  {disputeSubTab === "ACTIVE" && (
                                     <div className="lg:w-1/3 flex flex-col justify-center gap-3">
                                        <h4 className="text-zinc-100 text-sm font-medium mb-1">Resolution Action</h4>
-                                       <p className="text-xs text-zinc-400 mb-4">Review the activity logs. Overriding the vault relies on human discretion and cannot be reversed.</p>
+                                       <p className="text-xs text-zinc-400 mb-4">Review the activity logs. Resolving the dispute relies on human discretion and cannot be reversed.</p>
                                        
                                        <button 
                                           onClick={() => setResolveModalState({ isOpen: true, txId: d.transaction_id, action: 'FORWARD_TO_SELLER'})} 
@@ -1365,25 +1365,25 @@ export default function AdminDashboard() {
          </div>
       </div>
 
-      {/* ADMIN HIGH-FRICTION RESOLVE MODAL */}
+      {/* ADMIN RESOLVE MODAL */}
       {resolveModalState.isOpen && (
          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-            <div className="bg-zinc-950 border border-red-500/30 rounded-2xl w-full max-w-md overflow-hidden shadow-[0_0_40px_rgba(239,68,68,0.15)]">
-               <div className="p-6 border-b border-zinc-800 bg-red-500/5">
-                  <h3 className="text-xl font-bold text-red-500 flex items-center gap-2">
-                     <ShieldAlert className="w-6 h-6" /> Root Execution Authority
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+               <div className="p-6 border-b border-zinc-800 bg-zinc-950/50">
+                  <h3 className="text-xl font-semibold text-zinc-100 flex items-center gap-2">
+                     <ShieldAlert className="w-5 h-5 text-amber-500" /> Confirm Resolution
                   </h3>
-                  <p className="text-zinc-400 text-sm mt-2">You are bypassing the Smart Vault logic to forcefully route funds.</p>
+                  <p className="text-zinc-400 text-sm mt-2">You are about to manually resolve this dispute and release the escrowed funds.</p>
                </div>
                
                <div className="p-6 space-y-4">
-                  <div className="p-4 bg-zinc-900 rounded-lg border border-zinc-800">
+                  <div className="p-4 bg-zinc-950/50 rounded-lg border border-zinc-800">
                      <p className="text-xs text-zinc-500 uppercase tracking-widest font-bold mb-1">Target Action</p>
                      <p className="text-white font-medium">
                         {resolveModalState.action === 'REFUND_BUYER' ? (
-                           <span className="text-red-400">Forcefully REFUND funds to the BUYER.</span>
+                           <span className="text-red-400">Refund funds to the BUYER.</span>
                         ) : (
-                           <span className="text-emerald-400">Forcefully RELEASE funds to the SELLER.</span>
+                           <span className="text-emerald-400">Release funds to the SELLER.</span>
                         )}
                      </p>
                   </div>

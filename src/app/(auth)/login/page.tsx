@@ -58,7 +58,7 @@ function LoginForm() {
 
       if (res?.error) {
          if (res.error === "Please verify your email address first.") {
-            toast.error("Unverified Email. Redirecting to Identity Vault...");
+            toast.error("Unverified Email. Redirecting to Account Verification...");
             router.push(`/verify-email?email=${encodeURIComponent(email)}`);
             return;
          }

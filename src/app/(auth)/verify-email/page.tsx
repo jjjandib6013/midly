@@ -152,7 +152,7 @@ function VerifyEmailLogic() {
   return (
       <div ref={containerRef} className="w-full max-w-xl z-10 opacity-0">
          <div className="text-center mb-12">
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-white mb-3 sm:mb-4 tracking-tighter uppercase">Identity Vault</h1>
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-white mb-3 sm:mb-4 tracking-tighter uppercase">Account Verification</h1>
           <p className="text-[#8892b0] font-medium tracking-wide">Secure mandatory email verification checkpoint.</p>
         </div>
 
