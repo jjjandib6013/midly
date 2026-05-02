@@ -9,7 +9,7 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import sharp from 'sharp';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 
 const router = Router();
 
@@ -69,9 +69,44 @@ router.get('/files/:filename', async (req: Request, res: Response): Promise<any>
       if (!kycImage) return res.status(403).json({ error: 'Forbidden' });
    }
 
+   // Try local disk first
    const filePath = path.join(__dirname, '../../../uploads/kyc', filename);
-   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Not found' });
-   res.sendFile(filePath);
+   if (fs.existsSync(filePath)) {
+      return res.sendFile(filePath);
+   }
+
+   // Fallback: stream from S3
+   if (s3Client && process.env.AWS_BUCKET_NAME) {
+      try {
+         // Look up the S3 key from the database record
+         const imgRecord = await prisma.kycImage.findFirst({
+            where: { file_path: { endsWith: filename } }
+         });
+         const s3Key = imgRecord?.file_path || `uploads/kyc/${filename}`;
+         const command = new GetObjectCommand({ Bucket: process.env.AWS_BUCKET_NAME, Key: s3Key });
+         const s3Response = await s3Client.send(command);
+         res.setHeader('Content-Type', s3Response.ContentType || 'image/jpeg');
+         res.setHeader('Cache-Control', 'private, max-age=3600');
+         (s3Response.Body as any).pipe(res);
+         return;
+      } catch (s3Err: any) {
+         console.error('[KYC] S3 file fetch failed:', s3Err.message);
+         // Also try alternate key patterns
+         try {
+            const altKey = `kyc/${filename}`;
+            const command = new GetObjectCommand({ Bucket: process.env.AWS_BUCKET_NAME, Key: altKey });
+            const s3Response = await s3Client.send(command);
+            res.setHeader('Content-Type', s3Response.ContentType || 'image/jpeg');
+            res.setHeader('Cache-Control', 'private, max-age=3600');
+            (s3Response.Body as any).pipe(res);
+            return;
+         } catch {
+            // Fall through to 404
+         }
+      }
+   }
+
+   return res.status(404).json({ error: 'Not found' });
 });
 
 // ==========================================
