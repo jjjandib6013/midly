@@ -252,4 +252,18 @@ router.post('/user/rate/:id', authenticateJWT, async (req: Request, res: Respons
    }
 });
 
+// GET User Security Activity (Audit Logs)
+router.get('/user/audit-logs', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
+   try {
+      const logs = await prisma.auditLog.findMany({
+         where: { user_id: req.user.user_id },
+         orderBy: { timestamp: 'desc' },
+         take: 50 // Recent 50 events for the user
+      });
+      res.json({ logs });
+   } catch (e) {
+      res.status(500).json({ error: 'Server error' });
+   }
+});
+
 export default router;

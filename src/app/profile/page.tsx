@@ -16,6 +16,7 @@ export default function Profile() {
   const [profile, setProfile] = useState<any>(null);
   const [methods, setMethods] = useState<any[]>([]);
   const [sessions, setSessions] = useState<any[]>([]);
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAddingMode, setIsAddingMode] = useState(false);
   const [newMethod, setNewMethod] = useState({ provider: 'Visa', account_mask: '' });
@@ -44,6 +45,13 @@ export default function Profile() {
     })
       .then(res => res.json())
       .then(data => { if(data.sessions) setSessions(data.sessions); })
+      .catch(()=>{});
+
+    fetch(`${API_URL}/api/user/audit-logs`, {
+       headers: { "Authorization": `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => { if(data.logs) setAuditLogs(data.logs); })
       .catch(()=>{});
   };
 
@@ -308,6 +316,52 @@ export default function Profile() {
                         </div>
                      ))
                   )}
+               </div>
+
+               <div className="pt-8 pb-6 border-b border-dark-border mt-8">
+                  <h3 className="text-xl font-bold text-white mb-1">Security Activity</h3>
+                  <p className="text-sm font-medium text-text-muted">Review recent actions and events on your account.</p>
+               </div>
+
+               <div className="bg-dark-panel border border-dark-border rounded-2xl overflow-hidden">
+                  <div className="overflow-x-auto">
+                     <table className="w-full text-left text-sm">
+                        <thead className="bg-dark-bg border-b border-dark-border">
+                           <tr>
+                              <th className="px-6 py-4 font-semibold text-text-muted whitespace-nowrap">Timestamp</th>
+                              <th className="px-6 py-4 font-semibold text-text-muted whitespace-nowrap">Action</th>
+                              <th className="px-6 py-4 font-semibold text-text-muted">Description</th>
+                              <th className="px-6 py-4 font-semibold text-text-muted whitespace-nowrap">IP Address</th>
+                           </tr>
+                        </thead>
+                        <tbody className="divide-y divide-dark-border">
+                           {auditLogs.length === 0 ? (
+                              <tr>
+                                 <td colSpan={4} className="px-6 py-8 text-center text-text-muted font-medium">No recent security activity found.</td>
+                              </tr>
+                           ) : (
+                              auditLogs.map((log) => (
+                                 <tr key={log.log_id} className="hover:bg-white/5 transition-colors group">
+                                    <td className="px-6 py-4 text-text-muted whitespace-nowrap">
+                                       {new Date(log.timestamp).toLocaleString()}
+                                    </td>
+                                    <td className="px-6 py-4">
+                                       <span className="px-2.5 py-1 rounded-md text-[10px] uppercase tracking-wider font-bold bg-dark-bg border border-dark-border text-white">
+                                          {log.action_type?.replace(/_/g, ' ') || 'SYSTEM EVENT'}
+                                       </span>
+                                    </td>
+                                    <td className="px-6 py-4 text-white font-medium">
+                                       {log.action_description}
+                                    </td>
+                                    <td className="px-6 py-4 text-text-muted font-mono text-xs">
+                                       {log.ip_address}
+                                    </td>
+                                 </tr>
+                              ))
+                           )}
+                        </tbody>
+                     </table>
+                  </div>
                </div>
             </div>
          )}

@@ -51,6 +51,7 @@ export default function AdminDashboard() {
   // Risk & Fraud
   const [riskTransactions, setRiskTransactions] = useState<any[]>([]);
   const [timelineModal, setTimelineModal] = useState<{isOpen: boolean, userId: number | null, data: any | null}>({isOpen: false, userId: null, data: null});
+  const [tradeTimelineModal, setTradeTimelineModal] = useState<{isOpen: boolean, txId: number | null, logs: any[]}>({isOpen: false, txId: null, logs: []});
   
   const loadData = async () => {
     if (!token) return;
@@ -179,7 +180,7 @@ export default function AdminDashboard() {
       } catch(e) { toast.error("Server API Error"); }
   };
 
-  const handleViewTimeline = async (userId: number) => {
+   const handleViewTimeline = async (userId: number) => {
       try {
          const res = await fetch(`${API_URL}/api/admin/users/${userId}/timeline`, {
             headers: { "Authorization": `Bearer ${token}` }
@@ -189,6 +190,20 @@ export default function AdminDashboard() {
             setTimelineModal({ isOpen: true, userId, data: data.timeline });
          } else {
             toast.error("Failed to load user timeline.");
+         }
+      } catch(e) { toast.error("Server API Error"); }
+  };
+
+   const handleViewTradeTimeline = async (txId: number) => {
+      try {
+         const res = await fetch(`${API_URL}/api/admin/trades/${txId}/audit-timeline`, {
+            headers: { "Authorization": `Bearer ${token}` }
+         });
+         if (res.ok) {
+            const data = await res.json();
+            setTradeTimelineModal({ isOpen: true, txId, logs: data.logs });
+         } else {
+            toast.error("Failed to load trade audit timeline.");
          }
       } catch(e) { toast.error("Server API Error"); }
   };
@@ -847,9 +862,12 @@ export default function AdminDashboard() {
                            <div key={d.dispute_id} className="border border-zinc-800 rounded-xl bg-zinc-900/30 overflow-hidden">
                               <div className="p-5 border-b border-zinc-800 flex justify-between items-start bg-zinc-900/50">
                                  <div>
-                                    <div className="flex items-center gap-3 mb-1">
+                                    <div className="flex flex-wrap items-center gap-3 mb-1">
                                        <span className="text-zinc-100 font-medium text-base">Transaction #{d.transaction_id}</span>
                                        <a href={`/trade/${d.transaction_id}`} target="_blank" rel="noreferrer" className="text-zinc-400 hover:text-zinc-200 flex items-center gap-1 text-xs">View Hub <ExternalLink className="w-3 h-3"/></a>
+                                       <button onClick={() => handleViewTradeTimeline(d.transaction_id)} className="text-blue-400 hover:text-blue-300 flex items-center gap-1 text-xs font-semibold bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
+                                          <Clock className="w-3 h-3"/> Forensic Timeline
+                                       </button>
                                     </div>
                                     <p className="text-sm text-zinc-400 mt-2">Reason: <span className="text-zinc-300 italic">"{d.description}"</span></p>
                                  </div>
@@ -1464,6 +1482,59 @@ export default function AdminDashboard() {
                            </li>
                         ))}
                      </ul>
+                  </div>
+               </div>
+            </div>
+         </div>
+      )}
+
+      {/* TRADE TIMELINE MODAL */}
+      {tradeTimelineModal.isOpen && (
+         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-zinc-900 border border-zinc-800 w-full max-w-4xl rounded-xl shadow-2xl flex flex-col overflow-hidden max-h-[85vh]">
+               <div className="flex justify-between items-center p-6 border-b border-zinc-800 bg-zinc-950/50">
+                  <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                     <Clock className="w-5 h-5 text-blue-500" />
+                     Forensic Trade Timeline #{tradeTimelineModal.txId}
+                  </h3>
+                  <button onClick={() => setTradeTimelineModal({isOpen: false, txId: null, logs: []})} className="text-zinc-400 hover:text-white transition-colors">
+                     <X className="w-5 h-5" />
+                  </button>
+               </div>
+               
+               <div className="p-6 overflow-y-auto">
+                  <div className="space-y-4">
+                     {tradeTimelineModal.logs.length === 0 ? (
+                        <p className="text-zinc-500 text-center py-8">No audit logs found for this transaction.</p>
+                     ) : (
+                        <div className="relative border-l border-zinc-800 ml-3 md:ml-6 space-y-6">
+                           {tradeTimelineModal.logs.map((log: any, idx: number) => (
+                              <div key={log.log_id} className="relative pl-6">
+                                 <div className="absolute -left-1.5 top-1.5 w-3 h-3 rounded-full bg-blue-500 border-2 border-zinc-900 shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>
+                                 <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-4 hover:border-zinc-700 transition-colors">
+                                    <div className="flex flex-col md:flex-row md:items-center justify-between mb-2 gap-2">
+                                       <div className="flex items-center gap-3">
+                                          <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider">
+                                             {log.action_type?.replace(/_/g, ' ') || 'SYSTEM EVENT'}
+                                          </span>
+                                          <span className="text-zinc-500 text-xs font-mono">{new Date(log.timestamp).toLocaleString()}</span>
+                                       </div>
+                                       <div className="text-xs text-zinc-400 flex items-center gap-2">
+                                          <span>IP: <span className="font-mono">{log.ip_address}</span></span>
+                                          {log.risk_score > 0 && <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${log.risk_score > 70 ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'}`}>Risk: {log.risk_score}</span>}
+                                       </div>
+                                    </div>
+                                    <p className="text-sm text-zinc-200 font-medium">{log.action_description}</p>
+                                    {log.metadata && Object.keys(log.metadata).length > 0 && (
+                                       <div className="mt-3 bg-zinc-900 rounded p-3 overflow-x-auto">
+                                          <pre className="text-[10px] text-zinc-400 font-mono m-0">{JSON.stringify(log.metadata, null, 2)}</pre>
+                                       </div>
+                                    )}
+                                 </div>
+                              </div>
+                           ))}
+                        </div>
+                     )}
                   </div>
                </div>
             </div>
