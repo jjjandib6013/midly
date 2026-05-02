@@ -217,28 +217,53 @@ router.get('/reports/charts', authenticateJWT, async (req: Request, res: Respons
    if (!dbUser || dbUser.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
    
    try {
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const { startDate, endDate, status } = req.query;
+
+      // Determine date range: use filter dates or default to last 30 days
+      let rangeStart: Date;
+      let rangeEnd: Date;
+
+      if (startDate && endDate) {
+         rangeStart = new Date(startDate as string);
+         rangeEnd = new Date(endDate as string);
+         // Ensure endDate includes the full day
+         rangeEnd.setHours(23, 59, 59, 999);
+      } else {
+         rangeEnd = new Date();
+         rangeStart = new Date();
+         rangeStart.setDate(rangeStart.getDate() - 30);
+      }
+
+      // Calculate day span for chart initialization
+      const daySpan = Math.ceil((rangeEnd.getTime() - rangeStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+      // Build transaction filter
+      const txWhere: any = { created_at: { gte: rangeStart, lte: rangeEnd } };
+      if (status && status !== 'all') txWhere.status = status;
 
       // Fetch raw data
       const users = await prisma.user.findMany({
-         where: { created_at: { gte: thirtyDaysAgo } },
+         where: { created_at: { gte: rangeStart, lte: rangeEnd } },
          select: { created_at: true }
       });
       const txs = await prisma.transaction.findMany({
-         where: { created_at: { gte: thirtyDaysAgo } },
+         where: txWhere,
          select: { created_at: true, status: true, total_amount: true }
+      });
+      const disputeRecords = await prisma.dispute.findMany({
+         where: { raised_at: { gte: rangeStart, lte: rangeEnd } },
+         select: { raised_at: true }
       });
 
       // Group dynamically by day string "MMM DD"
-      const chartMap = new Map<string, { date: string; users: number; transactions: number; volume: number }>();
+      const chartMap = new Map<string, { date: string; users: number; transactions: number; volume: number; disputes: number }>();
       
-      // Initialize last 30 days to ensure continuous graph
-      for(let i = 29; i >= 0; i--) {
-         const d = new Date();
+      // Initialize date range to ensure continuous graph
+      for(let i = daySpan - 1; i >= 0; i--) {
+         const d = new Date(rangeEnd);
          d.setDate(d.getDate() - i);
          const dateString = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-         chartMap.set(dateString, { date: dateString, users: 0, transactions: 0, volume: 0 });
+         chartMap.set(dateString, { date: dateString, users: 0, transactions: 0, volume: 0, disputes: 0 });
       }
 
       users.forEach(u => {
@@ -253,6 +278,11 @@ router.get('/reports/charts', authenticateJWT, async (req: Request, res: Respons
             entry.transactions += 1;
             entry.volume += Number(t.total_amount || 0);
          }
+      });
+
+      disputeRecords.forEach(d => {
+         const dateString = new Date(d.raised_at!).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+         if(chartMap.has(dateString)) chartMap.get(dateString)!.disputes += 1;
       });
 
       res.json({ timelineData: Array.from(chartMap.values()) });
@@ -320,7 +350,7 @@ router.get('/kyc', authenticateJWT, async (req: Request, res: Response): Promise
    try {
       const kycs = await prisma.kycVerification.findMany({
          where: {
-            status: { in: ['pending_review', 'verifying_phase2', 'verifying_phase3', 'rejected'] }
+            status: { in: ['pending_review', 'verifying_phase2', 'verifying_phase3', 'rejected', 'verified'] }
          },
          include: {
             user: { select: { user_id: true, first_name: true, last_name: true, email: true } },

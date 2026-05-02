@@ -1,10 +1,10 @@
 "use client";
 import { useSession } from 'next-auth/react';
 import { useEffect, useState } from "react";
-import { ShieldAlert, Activity, CheckCircle, Search, FileText, Users, Settings, Server, Clock, Lock, Globe, Power, Key, ChevronRight, Ban, Check, ExternalLink, RefreshCw, Download, PieChart, BarChart as BarChartIcon, Filter, ImageIcon } from "lucide-react";
+import { ShieldAlert, Activity, CheckCircle, Search, FileText, Users, Settings, Server, Clock, Lock, Globe, Power, Key, ChevronRight, Ban, Check, ExternalLink, RefreshCw, Download, PieChart, BarChart as BarChartIcon, Filter, ImageIcon, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "@/lib/api";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area, BarChart, Bar } from 'recharts';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -17,6 +17,9 @@ export default function AdminDashboard() {
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState<TabState>("OVERVIEW");
+  const [kycSubTab, setKycSubTab] = useState<"ACTIVE" | "HISTORY">("ACTIVE");
+  const [disputeSubTab, setDisputeSubTab] = useState<"ACTIVE" | "HISTORY">("ACTIVE");
+  const [hoveredImage, setHoveredImage] = useState<string | null>(null);
 
   // State
   const [metrics, setMetrics] = useState<any>({ lockedCapital: 0, tradesCount: 0, activeUsers: 0 });
@@ -198,13 +201,36 @@ export default function AdminDashboard() {
 
   const fetchFilteredReports = async () => {
       try {
-         const res = await fetch(`${API_URL}/api/admin/reports/transactions?status=${reportStatus}&startDate=${reportStartDate}&endDate=${reportEndDate}`, { headers: { "Authorization": `Bearer ${token}` } });
-         if (res.ok) {
-            const d = await res.json();
+         const filterParams = `status=${reportStatus}&startDate=${reportStartDate}&endDate=${reportEndDate}`;
+         const [txRes, chartRes] = await Promise.all([
+            fetch(`${API_URL}/api/admin/reports/transactions?${filterParams}`, { headers: { "Authorization": `Bearer ${token}` } }),
+            fetch(`${API_URL}/api/admin/reports/charts?${filterParams}`, { headers: { "Authorization": `Bearer ${token}` } }),
+         ]);
+         if (txRes.ok) {
+            const d = await txRes.json();
             setReportTransactions(d.transactions);
-            toast.success("Report data refreshed.");
          }
+         if (chartRes.ok) {
+            const d = await chartRes.json();
+            setChartData(d.timelineData);
+         }
+         toast.success("Report data refreshed.");
       } catch (e) { toast.error("Failed to filter reports."); }
+  };
+
+  const clearFilters = async () => {
+      setReportStatus("all");
+      setReportStartDate("");
+      setReportEndDate("");
+      try {
+         const [txRes, chartRes] = await Promise.all([
+            fetch(`${API_URL}/api/admin/reports/transactions?status=all&startDate=&endDate=`, { headers: { "Authorization": `Bearer ${token}` } }),
+            fetch(`${API_URL}/api/admin/reports/charts?startDate=&endDate=&status=all`, { headers: { "Authorization": `Bearer ${token}` } }),
+         ]);
+         if (txRes.ok) { const d = await txRes.json(); setReportTransactions(d.transactions); }
+         if (chartRes.ok) { const d = await chartRes.json(); setChartData(d.timelineData); }
+         toast.success("Filters cleared.");
+      } catch (e) { toast.error("Failed to reset filters."); }
   };
 
   const handleExportCSV = () => {
@@ -269,7 +295,7 @@ export default function AdminDashboard() {
   return (
     <div className="flex min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-zinc-800">
       {/* Sidebar Navigation */}
-      <div className="w-64 bg-zinc-950 border-r border-zinc-800 flex flex-col pt-6 shrink-0 z-10">
+      <div className="w-64 bg-zinc-950 border-r border-zinc-800 flex flex-col pt-6 shrink-0 z-10 sticky top-0 h-screen overflow-y-auto">
         <div className="px-6 mb-8 flex items-center gap-3">
            <div className="w-8 h-8 rounded-md bg-zinc-100 text-zinc-950 flex items-center justify-center font-bold">
               M
@@ -316,7 +342,20 @@ export default function AdminDashboard() {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto px-8 py-8 lg:px-12">
+      <div className="flex-1 overflow-y-auto px-8 py-8 lg:px-12 relative">
+         {/* Fullscreen Image Hover Modal */}
+         {hoveredImage && (
+            <div 
+               className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm transition-opacity"
+               onClick={() => setHoveredImage(null)}
+            >
+               <img src={hoveredImage} className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl border border-zinc-800" alt="Fullscreen preview" />
+               <div className="absolute top-6 right-6 bg-zinc-900 text-zinc-300 px-4 py-2 rounded-md font-medium text-sm border border-zinc-800">
+                  Click anywhere to close
+               </div>
+            </div>
+         )}
+
          <div className="max-w-5xl mx-auto space-y-8">
 
             {/* TAB: OVERVIEW */}
@@ -389,49 +428,7 @@ export default function AdminDashboard() {
                      </div>
                   </header>
 
-                  {/* Charts Section */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                     <div className="p-6 rounded-xl bg-zinc-900/50 border border-zinc-800">
-                        <h3 className="text-zinc-100 font-medium text-sm mb-6 flex items-center gap-2"><Activity className="w-4 h-4 text-emerald-500"/> Platform Growth (30 Days)</h3>
-                        <div className="h-64">
-                           <ResponsiveContainer width="100%" height="100%">
-                              <AreaChart data={chartData}>
-                                 <defs>
-                                    <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
-                                       <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                                       <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                                    </linearGradient>
-                                 </defs>
-                                 <XAxis dataKey="date" stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} />
-                                 <YAxis stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} />
-                                 <RechartsTooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }} itemStyle={{ color: '#e4e4e7' }} />
-                                 <Area type="monotone" dataKey="users" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorUsers)" />
-                              </AreaChart>
-                           </ResponsiveContainer>
-                        </div>
-                     </div>
-                     <div className="p-6 rounded-xl bg-zinc-900/50 border border-zinc-800">
-                        <h3 className="text-zinc-100 font-medium text-sm mb-6 flex items-center gap-2"><BarChartIcon className="w-4 h-4 text-blue-500"/> Transaction Volume (30 Days)</h3>
-                        <div className="h-64">
-                           <ResponsiveContainer width="100%" height="100%">
-                              <AreaChart data={chartData}>
-                                 <defs>
-                                    <linearGradient id="colorTxs" x1="0" y1="0" x2="0" y2="1">
-                                       <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                                       <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                                    </linearGradient>
-                                 </defs>
-                                 <XAxis dataKey="date" stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} />
-                                 <YAxis stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} />
-                                 <RechartsTooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }} itemStyle={{ color: '#e4e4e7' }} />
-                                 <Area type="monotone" dataKey="transactions" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorTxs)" />
-                              </AreaChart>
-                           </ResponsiveContainer>
-                        </div>
-                     </div>
-                  </div>
-
-                  {/* Filters */}
+                  {/* Filters — placed above charts so changes feel immediate */}
                   <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-4 mb-6 flex flex-col md:flex-row items-end gap-4 shadow-sm">
                      <div className="w-full md:w-auto">
                         <label className="block text-xs font-medium text-zinc-500 mb-1">Status</label>
@@ -454,6 +451,101 @@ export default function AdminDashboard() {
                      <button onClick={fetchFilteredReports} className="w-full md:w-auto bg-zinc-800 hover:bg-zinc-700 text-zinc-100 px-6 py-2 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
                         <Filter className="w-4 h-4"/> Apply Filters
                      </button>
+                     {(reportStatus !== 'all' || reportStartDate || reportEndDate) && (
+                        <button onClick={clearFilters} className="w-full md:w-auto bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 px-4 py-2 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
+                           <X className="w-4 h-4"/> Clear Filters
+                        </button>
+                     )}
+                  </div>
+
+                  {/* Charts Section */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                     <div className="p-6 rounded-xl bg-zinc-900/50 border border-zinc-800">
+                        <h3 className="text-zinc-100 font-medium text-sm mb-6 flex items-center gap-2">
+                           <Activity className="w-4 h-4 text-emerald-500"/>
+                           User Signups {reportStartDate && reportEndDate ? `(${reportStartDate} — ${reportEndDate})` : '(Last 30 Days)'}
+                        </h3>
+                        <div className="h-64">
+                           <ResponsiveContainer width="100%" height="100%">
+                              <AreaChart data={chartData}>
+                                 <defs>
+                                    <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
+                                       <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                                       <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                                    </linearGradient>
+                                 </defs>
+                                 <XAxis dataKey="date" stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} />
+                                 <YAxis stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} />
+                                 <RechartsTooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }} itemStyle={{ color: '#e4e4e7' }} />
+                                 <Area type="monotone" dataKey="users" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorUsers)" name="New Users" />
+                              </AreaChart>
+                           </ResponsiveContainer>
+                        </div>
+                     </div>
+                     <div className="p-6 rounded-xl bg-zinc-900/50 border border-zinc-800">
+                        <h3 className="text-zinc-100 font-medium text-sm mb-6 flex items-center gap-2">
+                           <BarChartIcon className="w-4 h-4 text-blue-500"/>
+                           Transactions {reportStatus !== 'all' ? `(${reportStatus})` : ''} {reportStartDate && reportEndDate ? `(${reportStartDate} — ${reportEndDate})` : '(Last 30 Days)'}
+                        </h3>
+                        <div className="h-64">
+                           <ResponsiveContainer width="100%" height="100%">
+                              <AreaChart data={chartData}>
+                                 <defs>
+                                    <linearGradient id="colorTxs" x1="0" y1="0" x2="0" y2="1">
+                                       <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                                       <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                                    </linearGradient>
+                                 </defs>
+                                 <XAxis dataKey="date" stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} />
+                                 <YAxis stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} />
+                                 <RechartsTooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }} itemStyle={{ color: '#e4e4e7' }} />
+                                 <Area type="monotone" dataKey="transactions" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorTxs)" name="Transactions" />
+                              </AreaChart>
+                           </ResponsiveContainer>
+                        </div>
+                     </div>
+                  </div>
+
+                  {/* Row 2: Disputes + Volume */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                     <div className="p-6 rounded-xl bg-zinc-900/50 border border-zinc-800">
+                        <h3 className="text-zinc-100 font-medium text-sm mb-6 flex items-center gap-2">
+                           <ShieldAlert className="w-4 h-4 text-amber-500"/>
+                           Disputes {reportStartDate && reportEndDate ? `(${reportStartDate} — ${reportEndDate})` : '(Last 30 Days)'}
+                        </h3>
+                        <div className="h-64">
+                           <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={chartData}>
+                                 <XAxis dataKey="date" stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} />
+                                 <YAxis stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} />
+                                 <RechartsTooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }} itemStyle={{ color: '#e4e4e7' }} />
+                                 <Bar dataKey="disputes" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Disputes" />
+                              </BarChart>
+                           </ResponsiveContainer>
+                        </div>
+                     </div>
+                     <div className="p-6 rounded-xl bg-zinc-900/50 border border-zinc-800">
+                        <h3 className="text-zinc-100 font-medium text-sm mb-6 flex items-center gap-2">
+                           <PieChart className="w-4 h-4 text-purple-500"/>
+                           Trade Volume (₱) {reportStartDate && reportEndDate ? `(${reportStartDate} — ${reportEndDate})` : '(Last 30 Days)'}
+                        </h3>
+                        <div className="h-64">
+                           <ResponsiveContainer width="100%" height="100%">
+                              <AreaChart data={chartData}>
+                                 <defs>
+                                    <linearGradient id="colorVolume" x1="0" y1="0" x2="0" y2="1">
+                                       <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3}/>
+                                       <stop offset="95%" stopColor="#a855f7" stopOpacity={0}/>
+                                    </linearGradient>
+                                 </defs>
+                                 <XAxis dataKey="date" stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} />
+                                 <YAxis stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} />
+                                 <RechartsTooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }} itemStyle={{ color: '#e4e4e7' }} formatter={(value: any) => [`₱${Number(value).toLocaleString()}`, 'Volume']} />
+                                 <Area type="monotone" dataKey="volume" stroke="#a855f7" strokeWidth={2} fillOpacity={1} fill="url(#colorVolume)" name="Volume" />
+                              </AreaChart>
+                           </ResponsiveContainer>
+                        </div>
+                     </div>
                   </div>
 
                   {/* Transactions Table */}
@@ -540,23 +632,37 @@ export default function AdminDashboard() {
                </div>
             )}
 
-            {/* TAB: DISPUTES */}
             {activeTab === "DISPUTES" && (
                <div className="animate-in fade-in duration-300">
-                  <header className="mb-8">
+                  <header className="mb-6">
                      <h1 className="text-2xl font-semibold text-zinc-100 mb-1">Disputes</h1>
                      <p className="text-sm text-zinc-400">Review mediation requests and distribute funds based on transaction evidence.</p>
                   </header>
 
-                  {disputes.length === 0 ? (
+                  <div className="flex items-center gap-2 mb-6 border-b border-zinc-800 pb-px">
+                     <button 
+                        onClick={() => setDisputeSubTab("ACTIVE")}
+                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${disputeSubTab === "ACTIVE" ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}
+                     >
+                        Active Disputes ({disputes.filter(d => !d.resolution).length})
+                     </button>
+                     <button 
+                        onClick={() => setDisputeSubTab("HISTORY")}
+                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${disputeSubTab === "HISTORY" ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}
+                     >
+                        History ({disputes.filter(d => d.resolution).length})
+                     </button>
+                  </div>
+
+                  {disputes.filter(d => disputeSubTab === "ACTIVE" ? !d.resolution : d.resolution).length === 0 ? (
                      <div className="text-center py-16 border border-zinc-800 rounded-xl flex flex-col items-center bg-zinc-900/10">
                         <ShieldAlert className="w-8 h-8 text-zinc-600 mb-3" />
-                        <h3 className="text-zinc-200 font-medium text-sm">No Active Disputes</h3>
-                        <p className="text-xs text-zinc-500 mt-1">All escrow transactions are resolving smoothly.</p>
+                        <h3 className="text-zinc-200 font-medium text-sm">{disputeSubTab === "ACTIVE" ? "No Active Disputes" : "No Dispute History"}</h3>
+                        <p className="text-xs text-zinc-500 mt-1">{disputeSubTab === "ACTIVE" ? "All escrow transactions are resolving smoothly." : "No disputes have been resolved yet."}</p>
                      </div>
                   ) : (
                      <div className="space-y-6">
-                        {disputes.map(d => (
+                        {disputes.filter(d => disputeSubTab === "ACTIVE" ? !d.resolution : d.resolution).map(d => (
                            <div key={d.dispute_id} className="border border-zinc-800 rounded-xl bg-zinc-900/30 overflow-hidden">
                               <div className="p-5 border-b border-zinc-800 flex justify-between items-start bg-zinc-900/50">
                                  <div>
@@ -592,30 +698,42 @@ export default function AdminDashboard() {
                                     </div>
                                  </div>
                                  
-                                 <div className="lg:w-1/3 flex flex-col justify-center gap-3">
-                                    <h4 className="text-zinc-100 text-sm font-medium mb-1">Resolution Action</h4>
-                                    <p className="text-xs text-zinc-400 mb-4">Review the activity logs. Overriding the vault relies on human discretion and cannot be reversed.</p>
-                                    
-                                    <button 
-                                       onClick={() => setResolveModalState({ isOpen: true, txId: d.transaction_id, action: 'FORWARD_TO_SELLER'})} 
-                                       className="w-full bg-emerald-600/10 border border-emerald-600/30 text-emerald-500 hover:bg-emerald-600/20 font-bold tracking-wider uppercase text-xs px-4 py-3 rounded-md transition-colors shadow-[0_0_15px_rgba(16,185,129,0.1)]"
-                                    >
-                                       Release to Seller
-                                    </button>
-                                    
-                                    <div className="relative flex items-center py-2">
-                                       <div className="flex-grow border-t border-zinc-800"></div>
-                                       <span className="flex-shrink-0 mx-3 text-zinc-600 text-[10px] uppercase font-bold">or</span>
-                                       <div className="flex-grow border-t border-zinc-800"></div>
+                                 {disputeSubTab === "ACTIVE" && (
+                                    <div className="lg:w-1/3 flex flex-col justify-center gap-3">
+                                       <h4 className="text-zinc-100 text-sm font-medium mb-1">Resolution Action</h4>
+                                       <p className="text-xs text-zinc-400 mb-4">Review the activity logs. Overriding the vault relies on human discretion and cannot be reversed.</p>
+                                       
+                                       <button 
+                                          onClick={() => setResolveModalState({ isOpen: true, txId: d.transaction_id, action: 'FORWARD_TO_SELLER'})} 
+                                          className="w-full bg-emerald-600/10 border border-emerald-600/30 text-emerald-500 hover:bg-emerald-600/20 font-bold tracking-wider uppercase text-xs px-4 py-3 rounded-md transition-colors shadow-[0_0_15px_rgba(16,185,129,0.1)]"
+                                       >
+                                          Release to Seller
+                                       </button>
+                                       
+                                       <div className="relative flex items-center py-2">
+                                          <div className="flex-grow border-t border-zinc-800"></div>
+                                          <span className="flex-shrink-0 mx-3 text-zinc-600 text-[10px] uppercase font-bold">or</span>
+                                          <div className="flex-grow border-t border-zinc-800"></div>
+                                       </div>
+                                       
+                                       <button 
+                                          onClick={() => setResolveModalState({ isOpen: true, txId: d.transaction_id, action: 'REFUND_BUYER'})} 
+                                          className="w-full bg-red-600/10 border border-red-600/30 text-red-500 hover:bg-red-600/20 font-bold tracking-wider uppercase text-xs px-4 py-3 rounded-md transition-colors shadow-[0_0_15px_rgba(239,68,68,0.1)]"
+                                       >
+                                          Refund to Buyer
+                                       </button>
                                     </div>
-                                    
-                                    <button 
-                                       onClick={() => setResolveModalState({ isOpen: true, txId: d.transaction_id, action: 'REFUND_BUYER'})} 
-                                       className="w-full bg-red-600/10 border border-red-600/30 text-red-500 hover:bg-red-600/20 font-bold tracking-wider uppercase text-xs px-4 py-3 rounded-md transition-colors shadow-[0_0_15px_rgba(239,68,68,0.1)]"
-                                    >
-                                       Refund to Buyer
-                                    </button>
-                                 </div>
+                                 )}
+                                 
+                                 {disputeSubTab === "HISTORY" && (
+                                    <div className="lg:w-1/3 flex flex-col justify-center gap-3">
+                                       <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 text-center">
+                                          <CheckCircle className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+                                          <h4 className="text-zinc-100 text-sm font-medium">Resolved</h4>
+                                          <p className="text-xs text-zinc-400 mt-1 capitalize">{d.resolution?.replace(/_/g, ' ')}</p>
+                                       </div>
+                                    </div>
+                                 )}
                               </div>
                               
                               <div className="p-5 border-t border-zinc-800 bg-zinc-950/30">
@@ -623,19 +741,31 @@ export default function AdminDashboard() {
                                  {d.evidence && d.evidence.length > 0 ? (
                                     <div className="flex gap-4 overflow-x-auto pb-2 custom-scrollbar">
                                        {d.evidence.map((ev: any) => (
-                                          <a key={ev.id} href={ev.file_url} target="_blank" rel="noopener noreferrer" className="flex-shrink-0 group relative block w-40 h-28 rounded-lg overflow-hidden border border-zinc-800 hover:border-blue-500/50 transition-colors bg-zinc-900">
+                                          <div 
+                                             key={ev.id} 
+                                             onClick={() => {
+                                                if (ev.mime_type === 'application/pdf') window.open(ev.file_url, '_blank');
+                                                else setHoveredImage(ev.file_url);
+                                             }}
+                                             className="flex-shrink-0 group relative block w-40 h-28 rounded-lg overflow-hidden border border-zinc-800 hover:border-blue-500/50 transition-colors bg-zinc-900 cursor-pointer"
+                                          >
                                              {ev.mime_type === 'application/pdf' ? (
                                                 <div className="w-full h-full flex flex-col items-center justify-center text-zinc-500 group-hover:text-blue-400">
                                                    <FileText className="w-8 h-8 mb-2" />
                                                    <span className="text-[10px] truncate max-w-[90%]">{ev.original_name}</span>
                                                 </div>
                                              ) : (
-                                                <img src={ev.file_url} alt="Evidence" className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" />
+                                                <>
+                                                   <img src={ev.file_url} alt="Evidence" className="w-full h-full object-cover opacity-60 group-hover:scale-105 group-hover:opacity-100 transition-all duration-300" />
+                                                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                      <span className="text-white text-xs font-medium">Click to expand</span>
+                                                   </div>
+                                                </>
                                              )}
                                              <div className="absolute top-1 left-1 bg-black/60 text-[9px] px-1.5 py-0.5 rounded text-zinc-300">
                                                 {ev.uploaded_by === d.transaction.buyer_id ? 'Buyer' : 'Seller'}
                                              </div>
-                                          </a>
+                                          </div>
                                        ))}
                                     </div>
                                  ) : (
@@ -651,20 +781,35 @@ export default function AdminDashboard() {
 
             {activeTab === "KYC" && (
                <div className="animate-in fade-in duration-300">
-                  <header className="mb-8">
+                  <header className="mb-6">
                      <h1 className="text-2xl font-semibold text-zinc-100 mb-1">Identity Verification</h1>
                      <p className="text-sm text-zinc-400">Manual review pipeline for users requiring human confirmation.</p>
                   </header>
 
-                  {kycs.length === 0 ? (
+                  <div className="flex items-center gap-2 mb-6 border-b border-zinc-800 pb-px">
+                     <button 
+                        onClick={() => setKycSubTab("ACTIVE")}
+                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${kycSubTab === "ACTIVE" ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}
+                     >
+                        Pending Review ({kycs.filter(k => k.status === 'pending_review').length})
+                     </button>
+                     <button 
+                        onClick={() => setKycSubTab("HISTORY")}
+                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${kycSubTab === "HISTORY" ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}
+                     >
+                        History ({kycs.filter(k => k.status !== 'pending_review').length})
+                     </button>
+                  </div>
+
+                  {kycs.filter(k => kycSubTab === "ACTIVE" ? k.status === 'pending_review' : k.status !== 'pending_review').length === 0 ? (
                      <div className="text-center py-16 border border-zinc-800 rounded-xl flex flex-col items-center bg-zinc-900/10">
                         <CheckCircle className="w-8 h-8 text-zinc-600 mb-3" />
-                        <h3 className="text-zinc-200 font-medium text-sm">Review Queue Empty</h3>
-                        <p className="text-xs text-zinc-500 mt-1">All identities are verified by the automated system.</p>
+                        <h3 className="text-zinc-200 font-medium text-sm">{kycSubTab === "ACTIVE" ? "Review Queue Empty" : "No History Found"}</h3>
+                        <p className="text-xs text-zinc-500 mt-1">{kycSubTab === "ACTIVE" ? "All identities are verified by the automated system." : "No processed records yet."}</p>
                      </div>
                   ) : (
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {kycs.map((k: any) => (
+                        {kycs.filter(k => kycSubTab === "ACTIVE" ? k.status === 'pending_review' : k.status !== 'pending_review').map((k: any) => (
                            <div key={k.kyc_id} className="border border-zinc-800 rounded-xl p-5 bg-zinc-900/30 flex flex-col">
                               <div className="flex items-start justify-between mb-4">
                                  <div>
@@ -699,38 +844,56 @@ export default function AdminDashboard() {
                                  </details>
                               )}
 
-                              <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-3 mb-5 group">
-                                 <h4 className="text-[10px] uppercase font-semibold text-zinc-500 mb-2 flex items-center gap-2"><Key className="w-3 h-3"/> Documents ({k.images?.length || 0})</h4>
+                              <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-3 mb-5">
+                                 <h4 className="text-[10px] uppercase font-semibold text-zinc-500 mb-2 flex items-center gap-2"><Key className="w-3 h-3"/> Documents</h4>
                                  <div className="grid grid-cols-2 gap-2">
-                                    {k.images?.map((img: any, idx: number) => (
-                                       <div key={idx} className="relative aspect-video bg-zinc-900 rounded border border-zinc-800 overflow-hidden">
-                                          <div className="absolute top-1 left-1 z-10">
-                                             <span className="bg-zinc-900/80 text-zinc-400 text-[9px] px-1.5 py-0.5 rounded uppercase">{img.image_type}</span>
+                                    {['Front', 'Selfie'].map((type) => {
+                                       const img = k.images?.find((i: any) => i.image_type === type);
+                                       const imgUrl = img ? (() => {
+                                          const fp = img.file_path || '';
+                                          return `${API_URL}/api/kyc/files/${fp.split('/').pop()}?token=${token}`;
+                                       })() : null;
+
+                                       return (
+                                          <div key={type} className="relative aspect-video bg-zinc-900 rounded border border-zinc-800 overflow-hidden group cursor-pointer" onClick={() => imgUrl && setHoveredImage(imgUrl)}>
+                                             <div className="absolute top-1 left-1 z-10">
+                                                <span className="bg-zinc-900/80 text-zinc-400 text-[9px] px-1.5 py-0.5 rounded uppercase">{type === 'Front' ? 'ID Document' : 'Live Selfie'}</span>
+                                             </div>
+                                             {imgUrl ? (
+                                                <img src={imgUrl} className="w-full h-full object-cover opacity-90 group-hover:scale-105 group-hover:opacity-100 transition-all duration-300" alt={type}/>
+                                             ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-zinc-600 text-xs flex-col gap-1">
+                                                   <ImageIcon className="w-4 h-4 opacity-50" />
+                                                   <span>Missing</span>
+                                                </div>
+                                             )}
+                                             {imgUrl && (
+                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                   <span className="text-white text-xs font-medium">Click to expand</span>
+                                                </div>
+                                             )}
                                           </div>
-                                          <img src={(() => {
-                                             const fp = img.file_path || '';
-                                             const filename = fp.split('/').pop();
-                                             return `${API_URL}/api/kyc/files/${filename}?token=${token}`;
-                                          })()} className="w-full h-full object-cover opacity-90" alt={img.image_type}/>
-                                       </div>
-                                    ))}
+                                       );
+                                    })}
                                  </div>
                               </div>
 
-                              <div className="flex gap-3 mt-auto">
-                                 <button 
-                                    onClick={() => handleResolveKyc(k.kyc_id, 'verified')} 
-                                    className="flex-1 bg-white text-black hover:bg-zinc-200 text-sm font-medium py-2 rounded-md transition-colors"
-                                 >
-                                    Approve
-                                 </button>
-                                 <button 
-                                    onClick={() => handleResolveKyc(k.kyc_id, 'rejected')} 
-                                    className="flex-1 bg-zinc-900 border border-zinc-800 text-zinc-100 hover:bg-zinc-800 text-sm font-medium py-2 rounded-md transition-colors"
-                                 >
-                                    Reject
-                                 </button>
-                              </div>
+                              {kycSubTab === "ACTIVE" && (
+                                 <div className="flex gap-3 mt-auto">
+                                    <button 
+                                       onClick={() => handleResolveKyc(k.kyc_id, 'verified')} 
+                                       className="flex-1 bg-white text-black hover:bg-zinc-200 text-sm font-medium py-2 rounded-md transition-colors"
+                                    >
+                                       Approve
+                                    </button>
+                                    <button 
+                                       onClick={() => handleResolveKyc(k.kyc_id, 'rejected')} 
+                                       className="flex-1 bg-zinc-900 border border-zinc-800 text-zinc-100 hover:bg-zinc-800 text-sm font-medium py-2 rounded-md transition-colors"
+                                    >
+                                       Reject
+                                    </button>
+                                 </div>
+                              )}
                            </div>
                         ))}
                      </div>
