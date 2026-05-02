@@ -86,7 +86,7 @@ router.post('/disputes/:txId/resolve', authenticateJWT, async (req: Request, res
             }
          });
 
-         await logAudit(tx, txId, req.user.user_id, 'RESOLVE_DISPUTE', `Admin ${dbUser.email} forced dispute resolution: ${action}`, req.ip);
+         // (Legacy logAudit call removed)
 
          // AUDIT: Enhanced metadata for dispute resolution
          await logAudit({ tx, transactionId: txId, userId: req.user.user_id, actionType: action === 'REFUND_BUYER' ? ACTION_TYPES.BUYER_REFUNDED : ACTION_TYPES.FUNDS_RELEASED, description: `Dispute resolution: ${action === 'REFUND_BUYER' ? 'Buyer refunded' : 'Seller paid'}`, ip: req.ip, metadata: { decision: action, amount: action === 'REFUND_BUYER' ? amount : baseAmount, recipient_id: action === 'REFUND_BUYER' ? trade.buyer_id : trade.seller_id, admin_id: req.user.user_id, admin_email: dbUser.email } });
