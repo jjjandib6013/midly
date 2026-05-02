@@ -12,6 +12,7 @@ import { useSession } from "next-auth/react";
 import { API_URL } from "@/lib/api";
 import { io } from "socket.io-client";
 import { getTransactionUIInfo, formatCurrency, groupTransactionsByDate } from "@/lib/walletFormatters";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function Wallet() {
   const { data: session } = useSession();
@@ -30,6 +31,7 @@ export default function Wallet() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
   const [filterType, setFilterType] = useState<'ALL' | 'IN' | 'OUT'>('ALL');
+  const [expandedTxId, setExpandedTxId] = useState<number | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const modalDepositRef = useRef<HTMLDivElement>(null);
@@ -333,23 +335,60 @@ export default function Wallet() {
                                         const uiInfo = getTransactionUIInfo(tx.type, tx.amount, tx.description);
                                         
                                         return (
-                                           <div key={tx.id} className="p-4 bg-dark-bg border border-dark-border rounded-xl flex items-center justify-between group hover:border-primary/30 transition-colors">
-                                              <div className="flex items-center gap-4">
-                                                 <div className={`w-10 h-10 rounded-full flex items-center justify-center border shrink-0 ${uiInfo.bgClass} ${uiInfo.colorClass}`}>
-                                                    <uiInfo.icon className="w-5 h-5" />
-                                                 </div>
-                                                 <div>
-                                                    <p className="text-white font-bold text-sm tracking-tight">{uiInfo.title}</p>
-                                                    <p className="text-[10px] text-text-muted mt-1 uppercase tracking-widest">{new Date(tx.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                                                 </div>
-                                              </div>
-                                              <div className="text-right shrink-0">
-                                                 <p className={`font-black tracking-tight ${uiInfo.colorClass}`}>
-                                                    {uiInfo.isPositive ? '+' : '-'}₱{formatCurrency(tx.amount)}
-                                                 </p>
-                                                 <p className="text-[10px] text-text-muted font-medium mt-1 uppercase tracking-widest">Bal: ₱{formatCurrency(tx.balance)}</p>
-                                              </div>
-                                           </div>
+                                           <div key={tx.id} className="bg-dark-bg border border-dark-border rounded-xl overflow-hidden transition-colors hover:border-primary/30 group">
+                                            <button 
+                                               onClick={() => setExpandedTxId(expandedTxId === tx.id ? null : tx.id)}
+                                               aria-expanded={expandedTxId === tx.id}
+                                               className="w-full p-4 flex items-center justify-between focus:outline-none focus:bg-primary/5 transition-colors text-left"
+                                            >
+                                               <div className="flex items-center gap-4">
+                                                  <div className={`w-10 h-10 rounded-full flex items-center justify-center border shrink-0 ${uiInfo.bgClass} ${uiInfo.colorClass}`}>
+                                                     <uiInfo.icon className="w-5 h-5" />
+                                                  </div>
+                                                  <div>
+                                                     <p className="text-white font-bold text-sm tracking-tight">{uiInfo.title}</p>
+                                                     <p className="text-[10px] text-text-muted mt-1 uppercase tracking-widest">{new Date(tx.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                                  </div>
+                                               </div>
+                                               <div className="text-right shrink-0">
+                                                  <p className={`font-black tracking-tight ${uiInfo.colorClass}`}>
+                                                     {uiInfo.isPositive ? '+' : '-'}₱{formatCurrency(tx.amount)}
+                                                  </p>
+                                               </div>
+                                            </button>
+                                            
+                                            <AnimatePresence>
+                                               {expandedTxId === tx.id && (
+                                                  <motion.div
+                                                     initial={{ height: 0, opacity: 0 }}
+                                                     animate={{ height: "auto", opacity: 1 }}
+                                                     exit={{ height: 0, opacity: 0 }}
+                                                     transition={{ duration: 0.3, ease: "easeInOut" }}
+                                                  >
+                                                     <div className="px-4 pb-4 pt-2 border-t border-dark-border/50 bg-white/[0.02]">
+                                                        <div className="grid grid-cols-2 gap-4">
+                                                           <div>
+                                                              <p className="text-[9px] text-text-muted uppercase tracking-widest font-bold mb-1">Transaction ID</p>
+                                                              <p className="text-xs text-white font-medium break-all">TX_{tx.id}</p>
+                                                           </div>
+                                                           <div>
+                                                              <p className="text-[9px] text-text-muted uppercase tracking-widest font-bold mb-1">Date & Time</p>
+                                                              <p className="text-xs text-white font-medium">{new Date(tx.created_at).toLocaleString()}</p>
+                                                           </div>
+                                                           <div className="col-span-2">
+                                                              <p className="text-[9px] text-text-muted uppercase tracking-widest font-bold mb-1">Details</p>
+                                                              <p className="text-xs text-white font-medium">{tx.description || uiInfo.title}</p>
+                                                           </div>
+                                                           <div className="col-span-2 border-t border-dark-border/50 pt-3 mt-1 flex justify-between items-center">
+                                                              <p className="text-[9px] text-text-muted uppercase tracking-widest font-bold">Closing Balance</p>
+                                                              <p className="text-sm text-white font-black">₱{formatCurrency(tx.balance)}</p>
+                                                           </div>
+                                                        </div>
+                                                     </div>
+                                                  </motion.div>
+                                               )}
+                                            </AnimatePresence>
+                                         </div>
                                         );
                                      })}
                                   </div>
