@@ -389,4 +389,91 @@ router.post('/kyc/:id/resolve', authenticateJWT, async (req: Request, res: Respo
    }
 });
 
+// ==========================================
+// FRAUD DETECTION: LAYER 4 ENDPOINTS
+// ==========================================
+
+router.get('/risk-transactions', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
+   const dbUser = await prisma.user.findUnique({ where: { user_id: req.user.user_id } });
+   if (!dbUser || dbUser.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+   try {
+      const txs = await prisma.transaction.findMany({
+         where: { risk_score: { gt: 0 } },
+         orderBy: { risk_score: 'desc' },
+         take: 50,
+         include: {
+            buyer: { select: { email: true, first_name: true, last_name: true } },
+            seller: { select: { email: true, first_name: true, last_name: true } }
+         }
+      });
+      res.json({ transactions: txs });
+   } catch (e) {
+      res.status(500).json({ error: 'Server error' });
+   }
+});
+
+router.post('/risk-transactions/:id/freeze', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
+   const dbUser = await prisma.user.findUnique({ where: { user_id: req.user.user_id } });
+   if (!dbUser || dbUser.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+   try {
+      const txId = parseInt(req.params.id);
+      const { action } = req.body; // 'freeze' or 'release'
+      
+      const tx = await prisma.transaction.findUnique({ where: { transaction_id: txId } });
+      if (!tx) return res.status(404).json({ error: 'Transaction not found' });
+
+      const newStatus = action === 'freeze' ? 'frozen' : 'in_progress'; // simplified release status
+      
+      await prisma.transaction.update({
+         where: { transaction_id: txId },
+         data: { status: newStatus }
+      });
+
+      await prisma.auditLog.create({
+         data: {
+            transaction_id: txId,
+            user_id: dbUser.user_id,
+            action_type: action === 'freeze' ? 'ADMIN_FREEZE' : 'ADMIN_UNFREEZE',
+            action_description: `Admin manually ${action}d the transaction.`,
+            ip_address: req.ip || '127.0.0.1'
+         }
+      });
+
+      res.json({ success: true, status: newStatus });
+   } catch (e) {
+      res.status(500).json({ error: 'Server error' });
+   }
+});
+
+router.get('/users/:id/timeline', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
+   const dbUser = await prisma.user.findUnique({ where: { user_id: req.user.user_id } });
+   if (!dbUser || dbUser.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+   try {
+      const targetUserId = parseInt(req.params.id);
+      
+      const logins = await prisma.loginHistory.findMany({
+         where: { user_id: targetUserId },
+         orderBy: { created_at: 'desc' },
+         take: 20
+      });
+
+      const trades = await prisma.transaction.findMany({
+         where: { OR: [{ buyer_id: targetUserId }, { seller_id: targetUserId }] },
+         orderBy: { created_at: 'desc' },
+         take: 20,
+         include: { payment: true }
+      });
+
+      const withdrawals = await prisma.walletTransaction.findMany({
+         where: { user_id: targetUserId, type: 'withdrawal' },
+         orderBy: { created_at: 'desc' },
+         take: 10
+      });
+
+      res.json({ timeline: { logins, trades, withdrawals } });
+   } catch (e) {
+      res.status(500).json({ error: 'Server error' });
+   }
+});
+
 export default router;

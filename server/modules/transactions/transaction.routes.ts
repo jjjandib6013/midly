@@ -113,6 +113,11 @@ router.post('/listings/buy/:id', authenticateJWT, requireKYC, async (req, res): 
          return trade.transaction_id;
       });
 
+      // --- Fraud Detection Layer 2: Initial Risk Score ---
+      import('../../utils/riskEngine').then(({ calculateTransactionRisk }) => {
+         calculateTransactionRisk(tradeIdRes).catch(console.error);
+      });
+
       res.json({ tradeId: tradeIdRes });
    } catch (e: any) {
       res.status(400).json({ error: e.message || 'Server error' });
@@ -177,6 +182,11 @@ router.post('', authenticateJWT, requireKYC, async (req, res): Promise<any> => {
          if (io) io.to(`user_${counterParty.user_id}`).emit('new_notification', notif);
 
          return trade;
+      });
+
+      // --- Fraud Detection Layer 2: Initial Risk Score ---
+      import('../../utils/riskEngine').then(({ calculateTransactionRisk }) => {
+         calculateTransactionRisk(tradeRes.transaction_id).catch(console.error);
       });
 
       res.json({ transaction: tradeRes });

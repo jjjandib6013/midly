@@ -1,7 +1,7 @@
 "use client";
 import { useSession } from 'next-auth/react';
 import { useEffect, useState } from "react";
-import { ShieldAlert, Activity, CheckCircle, Search, FileText, Users, Settings, Server, Clock, Lock, Globe, Power, Key, ChevronRight, Ban, Check, ExternalLink, RefreshCw, Download, PieChart, BarChart as BarChartIcon, Filter, ImageIcon, X } from "lucide-react";
+import { ShieldAlert, Activity, CheckCircle, Search, FileText, Users, Settings, Server, Clock, Lock, Globe, Power, Key, ChevronRight, Ban, Check, ExternalLink, RefreshCw, Download, PieChart, BarChart as BarChartIcon, Filter, ImageIcon, X, AlertTriangle } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "@/lib/api";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area, BarChart, Bar } from 'recharts';
@@ -9,7 +9,7 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-type TabState = "OVERVIEW" | "REPORTS" | "DISPUTES" | "KYC" | "USERS" | "SETTINGS";
+type TabState = "OVERVIEW" | "REPORTS" | "DISPUTES" | "KYC" | "USERS" | "SETTINGS" | "RISK";
 
 export default function AdminDashboard() {
    const { data: session } = useSession();
@@ -47,6 +47,10 @@ export default function AdminDashboard() {
   const [resolveModalState, setResolveModalState] = useState<{isOpen: boolean, txId: number | null, action: 'REFUND_BUYER' | 'FORWARD_TO_SELLER' | null}>({isOpen: false, txId: null, action: null});
   const [resolveConfirmText, setResolveConfirmText] = useState("");
   const [isResolving, setIsResolving] = useState(false);
+
+  // Risk & Fraud
+  const [riskTransactions, setRiskTransactions] = useState<any[]>([]);
+  const [timelineModal, setTimelineModal] = useState<{isOpen: boolean, userId: number | null, data: any | null}>({isOpen: false, userId: null, data: null});
   
   const loadData = async () => {
     if (!token) return;
@@ -91,6 +95,9 @@ export default function AdminDashboard() {
         if (chartRes.ok) { const d = await chartRes.json(); setChartData(d.timelineData); }
         if (txRepRes.ok) { const d = await txRepRes.json(); setReportTransactions(d.transactions); }
         if (logRes.ok) { const d = await logRes.json(); setAuditLogs(d.logs); }
+
+        const riskRes = await fetch(`${API_URL}/api/admin/risk-transactions`, { headers: { "Authorization": `Bearer ${token}` } });
+        if (riskRes.ok) { const d = await riskRes.json(); setRiskTransactions(d.transactions); }
     } catch (e) {
         console.error("Error loading admin data", e);
         toast.error("Failed to sync dashboard data.");
@@ -151,6 +158,37 @@ export default function AdminDashboard() {
             loadData();
          } else {
             toast.error("Failed to update KYC status.");
+         }
+      } catch(e) { toast.error("Server API Error"); }
+  };
+  const handleToggleFreeze = async (txId: number, currentStatus: string) => {
+      const isFrozen = currentStatus === 'frozen';
+      if (!confirm(`Are you sure you want to ${isFrozen ? 'release' : 'freeze'} this transaction?`)) return;
+      try {
+         const res = await fetch(`${API_URL}/api/admin/risk-transactions/${txId}/freeze`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ action: isFrozen ? 'release' : 'freeze' })
+         });
+         if (res.ok) {
+            toast.success(`Transaction successfully ${isFrozen ? 'released' : 'frozen'}.`);
+            loadData();
+         } else {
+            toast.error("Failed to update transaction status.");
+         }
+      } catch(e) { toast.error("Server API Error"); }
+  };
+
+  const handleViewTimeline = async (userId: number) => {
+      try {
+         const res = await fetch(`${API_URL}/api/admin/users/${userId}/timeline`, {
+            headers: { "Authorization": `Bearer ${token}` }
+         });
+         if (res.ok) {
+            const data = await res.json();
+            setTimelineModal({ isOpen: true, userId, data: data.timeline });
+         } else {
+            toast.error("Failed to load user timeline.");
          }
       } catch(e) { toast.error("Server API Error"); }
   };
@@ -315,6 +353,7 @@ export default function AdminDashboard() {
               { id: "REPORTS", icon: BarChartIcon, label: "Analytics & Reports" },
               { id: "DISPUTES", icon: ShieldAlert, label: "Disputes", badge: disputes.length > 0 ? disputes.length : null },
               { id: "KYC", icon: FileText, label: "Identity Verification", badge: kycs.length > 0 ? kycs.length : null },
+              { id: "RISK", icon: AlertTriangle, label: "Risk & Fraud", badge: riskTransactions.filter(t => t.risk_score >= 60).length > 0 ? riskTransactions.filter(t => t.risk_score >= 60).length : null },
               { id: "USERS", icon: Users, label: "Users" },
               { id: "SETTINGS", icon: Settings, label: "Settings" },
            ].map(tab => (
@@ -1073,6 +1112,89 @@ export default function AdminDashboard() {
                </div>
             );})()}
 
+            {/* TAB: RISK */}
+            {activeTab === "RISK" && (
+               <div className="animate-in fade-in duration-300">
+                  <header className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                     <div>
+                        <h1 className="text-2xl font-semibold text-zinc-100 mb-1">Risk & Fraud</h1>
+                        <p className="text-sm text-zinc-500">Monitor flagged transactions and suspicious behaviors across the platform.</p>
+                     </div>
+                  </header>
+
+                  <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
+                     <table className="w-full text-left border-collapse">
+                        <thead>
+                           <tr className="bg-zinc-950/50 border-b border-zinc-800 text-xs text-zinc-400 uppercase tracking-wider">
+                              <th className="px-6 py-4 font-medium">Tx ID</th>
+                              <th className="px-6 py-4 font-medium">Risk Score</th>
+                              <th className="px-6 py-4 font-medium">Status</th>
+                              <th className="px-6 py-4 font-medium">Buyer</th>
+                              <th className="px-6 py-4 font-medium">Seller</th>
+                              <th className="px-6 py-4 font-medium">Risk Flags</th>
+                              <th className="px-6 py-4 font-medium text-right">Actions</th>
+                           </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-800 text-sm">
+                           {riskTransactions.length === 0 ? (
+                              <tr>
+                                 <td colSpan={7} className="px-6 py-12 text-center text-zinc-500">
+                                    <AlertTriangle className="w-8 h-8 mx-auto mb-3 opacity-20" />
+                                    No high-risk transactions detected.
+                                 </td>
+                              </tr>
+                           ) : riskTransactions.map((tx, idx) => (
+                              <tr key={idx} className="hover:bg-zinc-800/30 transition-colors">
+                                 <td className="px-6 py-4 font-mono text-zinc-300">#{tx.transaction_id}</td>
+                                 <td className="px-6 py-4">
+                                    <span className={`px-2 py-1 rounded text-xs font-bold ${tx.risk_score >= 80 ? 'bg-red-500/10 text-red-500' : tx.risk_score >= 60 ? 'bg-orange-500/10 text-orange-500' : 'bg-yellow-500/10 text-yellow-500'}`}>
+                                       {tx.risk_score} / 100
+                                    </span>
+                                 </td>
+                                 <td className="px-6 py-4">
+                                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                       tx.status === 'frozen' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
+                                    }`}>
+                                       {tx.status}
+                                    </span>
+                                 </td>
+                                 <td className="px-6 py-4 text-zinc-300">
+                                    <div className="flex flex-col">
+                                       <span>{tx.buyer?.email}</span>
+                                       <button onClick={() => handleViewTimeline(tx.buyer_id)} className="text-xs text-green-500 hover:text-green-400 text-left mt-1">View Timeline</button>
+                                    </div>
+                                 </td>
+                                 <td className="px-6 py-4 text-zinc-300">
+                                    <div className="flex flex-col">
+                                       <span>{tx.seller?.email}</span>
+                                       <button onClick={() => handleViewTimeline(tx.seller_id)} className="text-xs text-green-500 hover:text-green-400 text-left mt-1">View Timeline</button>
+                                    </div>
+                                 </td>
+                                 <td className="px-6 py-4 text-zinc-400 text-xs">
+                                    <ul className="list-disc pl-4 space-y-1">
+                                       {tx.risk_flags?.map((f: string, i: number) => <li key={i}>{f}</li>)}
+                                    </ul>
+                                 </td>
+                                 <td className="px-6 py-4 text-right">
+                                    <button 
+                                       onClick={() => handleToggleFreeze(tx.transaction_id, tx.status)}
+                                       className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors ${
+                                          tx.status === 'frozen' 
+                                             ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700' 
+                                             : 'bg-red-500/10 text-red-500 hover:bg-red-500/20'
+                                       }`}
+                                    >
+                                       {tx.status === 'frozen' ? 'Unfreeze' : 'Freeze'}
+                                    </button>
+                                 </td>
+                              </tr>
+                           ))}
+                        </tbody>
+                     </table>
+                  </div>
+               </div>
+            )}
+
             {/* TAB: USERS */}
             {activeTab === "USERS" && (
                <div className="animate-in fade-in duration-300">
@@ -1278,6 +1400,71 @@ export default function AdminDashboard() {
                   >
                      {isResolving ? <RefreshCw className="w-4 h-4 animate-spin" /> : "Execute Override"}
                   </button>
+               </div>
+            </div>
+         </div>
+      )}
+
+      {/* TIMELINE MODAL */}
+      {timelineModal.isOpen && timelineModal.data && (
+         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-zinc-900 border border-zinc-800 w-full max-w-2xl rounded-xl shadow-2xl flex flex-col overflow-hidden max-h-[85vh]">
+               <div className="flex justify-between items-center p-6 border-b border-zinc-800 bg-zinc-950/50">
+                  <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                     <Clock className="w-5 h-5 text-green-500" />
+                     User Behavioral Timeline
+                  </h3>
+                  <button onClick={() => setTimelineModal({isOpen: false, userId: null, data: null})} className="text-zinc-400 hover:text-white transition-colors">
+                     <X className="w-5 h-5" />
+                  </button>
+               </div>
+               
+               <div className="p-6 overflow-y-auto space-y-6">
+                  {/* Logins */}
+                  <div>
+                     <h4 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">Recent Logins</h4>
+                     <ul className="space-y-2">
+                        {timelineModal.data.logins.map((l: any, i: number) => (
+                           <li key={i} className="text-xs text-zinc-300 flex justify-between bg-zinc-950 p-2 rounded border border-zinc-800">
+                              <span><strong className="text-zinc-100">{l.ip_address}</strong> ({l.user_agent})</span>
+                              <span className="text-zinc-500">{new Date(l.created_at).toLocaleString()}</span>
+                           </li>
+                        ))}
+                     </ul>
+                  </div>
+
+                  {/* Trades */}
+                  <div>
+                     <h4 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">Recent Trades</h4>
+                     <ul className="space-y-2">
+                        {timelineModal.data.trades.map((t: any, i: number) => (
+                           <li key={i} className="text-xs text-zinc-300 flex justify-between bg-zinc-950 p-2 rounded border border-zinc-800">
+                              <span>
+                                 <strong className={t.buyer_id === timelineModal.userId ? 'text-blue-400' : 'text-orange-400'}>
+                                    {t.buyer_id === timelineModal.userId ? 'BUY' : 'SELL'}
+                                 </strong> - ₱{t.total_amount} ({t.item_type})
+                              </span>
+                              <div className="text-right">
+                                 <span className="text-zinc-500 block">{new Date(t.created_at).toLocaleString()}</span>
+                                 <span className="text-zinc-400">Score: {t.risk_score} | Status: {t.status}</span>
+                              </div>
+                           </li>
+                        ))}
+                     </ul>
+                  </div>
+
+                  {/* Withdrawals */}
+                  <div>
+                     <h4 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">Recent Withdrawals</h4>
+                     <ul className="space-y-2">
+                        {timelineModal.data.withdrawals.map((w: any, i: number) => (
+                           <li key={i} className="text-xs text-zinc-300 flex justify-between bg-zinc-950 p-2 rounded border border-zinc-800">
+                              <span className="text-red-400 font-bold">₱{Math.abs(Number(w.amount))}</span>
+                              <span className="text-zinc-500">{new Date(w.created_at).toLocaleString()}</span>
+                           </li>
+                        ))}
+                     </ul>
+                  </div>
                </div>
             </div>
          </div>

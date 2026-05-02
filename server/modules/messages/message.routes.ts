@@ -127,6 +127,11 @@ router.post('/:txId', authenticateJWT, async (req: Request, res: Response): Prom
             }
          });
          io.to(`trade_${txId}`).emit('new_message', warningMsg);
+
+         // --- Fraud Detection Layer 2: Recalculate Risk Score ---
+         import('../../utils/riskEngine').then(({ calculateTransactionRisk }) => {
+            calculateTransactionRisk(txId).catch(console.error);
+         });
       }
 
       res.json({ message: newMsg });

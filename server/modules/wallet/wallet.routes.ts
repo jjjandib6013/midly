@@ -84,6 +84,96 @@ router.post('/withdraw', authenticateJWT, requireKYC, async (req: Request, res: 
       const WITHDRAWAL_FEE = 25; // Fixed payout fee
       const totalDeduction = withdrawAmount + WITHDRAWAL_FEE;
 
+      const user = await prisma.user.findUnique({ where: { user_id: req.user.user_id } });
+      if (!user) return res.status(404).json({ error: 'User not found' });
+
+      // --- FRAUD DETECTION LAYER 3 ---
+      const now = new Date();
+      const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+      const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+      // 1. Password Change Cooldown (24h)
+      if (user.last_password_change && new Date(user.last_password_change).getTime() > oneDayAgo.getTime()) {
+         return res.status(403).json({ error: 'Withdrawals are locked for 24 hours after a password change for your security.' });
+      }
+
+      // 2. New IP Detection in last hour
+      // Find logins in last hour
+      const recentLogins = await prisma.loginHistory.findMany({
+         where: { user_id: user.user_id, created_at: { gte: oneHourAgo } },
+         orderBy: { created_at: 'desc' }
+      });
+      if (recentLogins.length > 0) {
+         // Check if the most recent IP is completely new (never seen before 1 hour ago)
+         const latestIp = recentLogins[0].ip_address;
+         const priorLogin = await prisma.loginHistory.findFirst({
+            where: { user_id: user.user_id, ip_address: latestIp, created_at: { lt: oneHourAgo } }
+         });
+         if (!priorLogin) {
+            return res.status(403).json({ error: 'Withdrawals are temporarily blocked due to a login from an unrecognized device in the last hour.' });
+         }
+      }
+
+      // 3. Daily Withdrawal Cap (₱50,000)
+      const dailyWithdrawals = await prisma.walletTransaction.aggregate({
+         where: {
+            user_id: user.user_id,
+            type: 'withdrawal',
+            created_at: { gte: oneDayAgo }
+         },
+         _sum: { amount: true }
+      });
+      // amount is stored as negative for withdrawals
+      const withdrawnToday = Math.abs(Number(dailyWithdrawals._sum.amount || 0));
+      if (withdrawnToday + withdrawAmount > 50000) {
+         return res.status(403).json({ error: `Daily withdrawal limit of ₱50,000 exceeded. You have already withdrawn ₱${withdrawnToday.toLocaleString()} in the last 24 hours.` });
+      }
+
+      // 4. OTP Verification for > ₱5,000
+      if (withdrawAmount > 5000) {
+         const { otp_code } = req.body;
+         
+         if (!otp_code) {
+            // Generate and send OTP
+            const crypto = require('crypto');
+            const newOtp = crypto.randomInt(100000, 999999).toString();
+            const expires = new Date(now.getTime() + 10 * 60 * 1000); // 10 mins
+            
+            await prisma.user.update({
+               where: { user_id: user.user_id },
+               data: { withdrawal_otp: newOtp, withdrawal_otp_expires: expires }
+            });
+            
+            import('../../config/resend').then(({ resend }) => {
+               resend.emails.send({
+                  to: user.email,
+                  from: process.env.RESEND_FROM_EMAIL || 'security@midly.com',
+                  subject: 'Midly - Withdrawal Authorization Code',
+                  html: `
+                     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #0a0d14; padding: 40px; border-radius: 12px; color: #fff;">
+                        <h2 style="color: #fff; font-size: 20px;">Withdrawal Verification</h2>
+                        <p style="color: #8892b0;">You requested a withdrawal of ₱${withdrawAmount.toLocaleString()}. Use the code below to authorize this transaction. It expires in 10 minutes.</p>
+                        <div style="font-size: 32px; font-weight: bold; letter-spacing: 5px; text-align: center; margin: 30px 0; color: #3fe56c;">${newOtp}</div>
+                     </div>
+                  `
+               }).catch(console.error);
+            });
+            
+            return res.json({ require_otp: true, message: 'For security, an authorization code has been sent to your email.' });
+         } else {
+            // Verify OTP
+            if (user.withdrawal_otp !== otp_code || !user.withdrawal_otp_expires || new Date(user.withdrawal_otp_expires).getTime() < now.getTime()) {
+               return res.status(400).json({ error: 'Invalid or expired authorization code.' });
+            }
+            // Clear OTP
+            await prisma.user.update({
+               where: { user_id: user.user_id },
+               data: { withdrawal_otp: null, withdrawal_otp_expires: null }
+            });
+         }
+      }
+      // --- END FRAUD DETECTION LAYER 3 ---
+
       // 1. Verify Balance securely inside a transaction to prevent negative balance
       const result = await prisma.$transaction(async (tx) => {
          const user = await tx.user.findUnique({ where: { user_id: req.user.user_id } });

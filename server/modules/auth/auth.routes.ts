@@ -238,7 +238,8 @@ router.post('/reset-password', async (req: Request, res: Response): Promise<any>
             password_hash,
             reset_password_token: null,
             reset_password_expires: null,
-            is_email_verified: true
+            is_email_verified: true,
+            last_password_change: new Date()
          } as any
       });
 
