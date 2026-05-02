@@ -80,7 +80,7 @@ router.post('/paymongo', async (req: Request, res: Response): Promise<any> => {
                            type: 'deposit',
                            amount: depositAmount,
                            balance: user.wallet_balance || 0,
-                           description: `Top-Up via PayMongo (${eventType} → matched ${checkoutSessionId})`
+                           description: `Top-Up via PayMongo`
                         }
                      });
 
@@ -122,7 +122,7 @@ router.post('/paymongo', async (req: Request, res: Response): Promise<any> => {
                      type: 'deposit',
                      amount: amountPaid,
                      balance: user.wallet_balance || 0,
-                     description: `Top-Up via PayMongo (${eventType})`
+                     description: `Top-Up via PayMongo`
                   }
                });
             });
@@ -220,7 +220,7 @@ router.post('/simulate', async (req: Request, res: Response): Promise<any> => {
                   type: 'deposit',
                   amount: Number(amount),
                   balance: user.wallet_balance || 0,
-                  description: `Top-Up via PayMongo (DEV SIMULATION)`
+                  description: `Top-Up via PayMongo`
                }
             });
          });

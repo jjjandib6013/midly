@@ -14,13 +14,17 @@ router.get('/', authenticateJWT, async (req: Request, res: Response): Promise<an
          select: { wallet_balance: true }
       });
 
+      const page = parseInt(req.query.page as string) || 1;
+      const pageSize = 20;
+
       const transactions = await prisma.walletTransaction.findMany({
          where: { user_id: req.user.user_id },
          orderBy: { created_at: 'desc' },
-         take: 50 // Limit history for performance
+         skip: (page - 1) * pageSize,
+         take: pageSize
       });
 
-      res.json({ balance: user?.wallet_balance || 0, transactions });
+      res.json({ balance: user?.wallet_balance || 0, transactions, page, hasMore: transactions.length === pageSize });
    } catch (error: any) {
       res.status(500).json({ error: 'Server error' });
    }

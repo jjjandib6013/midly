@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { API_URL } from "@/lib/api";
 import { io } from "socket.io-client";
+import { getTransactionUIInfo, formatCurrency, groupTransactionsByDate } from "@/lib/walletFormatters";
 
 export default function Wallet() {
   const { data: session } = useSession();
@@ -28,25 +29,40 @@ export default function Wallet() {
   const [withdrawAccountName, setWithdrawAccountName] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
+  const [filterType, setFilterType] = useState<'ALL' | 'IN' | 'OUT'>('ALL');
 
   const containerRef = useRef<HTMLDivElement>(null);
   const modalDepositRef = useRef<HTMLDivElement>(null);
   const modalWithdrawRef = useRef<HTMLDivElement>(null);
 
-  const fetchWallet = async () => {
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  const fetchWallet = async (pageNum: number = 1, append: boolean = false) => {
     if (!token) return;
 
     try {
-      // Consolidated wallet endpoint returns balance + history
-      const walletRes = await fetch(`${API_URL}/api/wallet`, {
+      if (append) setIsLoadingMore(true);
+      const walletRes = await fetch(`${API_URL}/api/wallet?page=${pageNum}`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (walletRes.ok) {
         const data = await walletRes.json();
         setBalance(Number(data.balance || 0).toFixed(2));
-        setHistory(data.transactions || []);
+        
+        if (append) {
+           setHistory(prev => [...prev, ...(data.transactions || [])]);
+        } else {
+           setHistory(data.transactions || []);
+        }
+        
+        setHasMore(data.hasMore);
+        setPage(data.page);
       }
-    } catch (e) { console.error("Wallet fetch error:", e); }
+    } catch (e) { console.error("Wallet fetch error:", e); } finally {
+       if (append) setIsLoadingMore(false);
+    }
 
     try {
       const profileRes = await fetch(`${API_URL}/api/user/profile`, {
@@ -64,8 +80,7 @@ export default function Wallet() {
 
   useEffect(() => {
     if (!token) return;
-    fetchWallet();
-    fetchHistory();
+    fetchWallet(1, false);
 
     try {
       const payload = JSON.parse(atob(token.split('.')[1]));
@@ -75,7 +90,7 @@ export default function Wallet() {
       socket.emit("join_user", userId);
       
       socket.on("wallet_updated", () => {
-         fetchWallet();
+         fetchWallet(1, false);
       });
 
       return () => {
@@ -263,12 +278,24 @@ export default function Wallet() {
 
         <div className="xl:col-span-4 h-full flex flex-col">
           <DynamicCard delay={0.2} className="wallet-card h-full flex flex-col p-10">
-            <div className="flex items-center justify-between mb-10 pb-6 border-b border-dark-border">
-              <h3 className="text-sm font-black text-text-muted tracking-widest uppercase">Transaction History</h3>
-              <History className="w-4 h-4 text-text-muted" />
+            <div className="flex items-center justify-between mb-8 pb-6 border-b border-dark-border">
+              <h3 className="text-sm font-black text-text-muted tracking-widest uppercase flex items-center gap-2">
+                 <History className="w-4 h-4 text-text-muted" /> Transaction History
+              </h3>
+              <div className="flex bg-dark-bg border border-dark-border rounded-lg p-1">
+                 {['ALL', 'IN', 'OUT'].map((f) => (
+                    <button 
+                       key={f}
+                       onClick={() => setFilterType(f as any)}
+                       className={`px-3 py-1 text-xs font-bold tracking-widest rounded-md uppercase transition-colors ${filterType === f ? 'bg-primary/20 text-primary' : 'text-text-muted hover:text-white'}`}
+                    >
+                       {f}
+                    </button>
+                 ))}
+              </div>
             </div>
             
-            <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 mt-4 space-y-3" data-lenis-prevent>
+            <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 mt-4 space-y-8" data-lenis-prevent>
               {history.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 grayscale opacity-40 h-full">
                    <div className="w-20 h-20 rounded-full border border-dashed border-text-muted flex items-center justify-center mb-6">
@@ -278,28 +305,70 @@ export default function Wallet() {
                    <p className="text-xs text-text-muted/60 text-center uppercase tracking-wider font-semibold max-w-[200px]">Your transaction history will be displayed here.</p>
                 </div>
               ) : (
-                history.map((tx: any) => {
-                   const isPositive = Number(tx.amount) > 0;
+                (() => {
+                   const filteredHistory = history.filter(tx => {
+                      if (filterType === 'ALL') return true;
+                      if (filterType === 'IN') return Number(tx.amount) > 0;
+                      if (filterType === 'OUT') return Number(tx.amount) < 0;
+                      return true;
+                   });
+
+                   if (filteredHistory.length === 0) {
+                      return <div className="text-center text-text-muted py-10 text-xs font-bold tracking-widest uppercase">No matching transactions.</div>;
+                   }
+
+                   const grouped = groupTransactionsByDate(filteredHistory);
+
                    return (
-                      <div key={tx.id} className="p-4 bg-dark-bg border border-dark-border rounded-xl flex items-center justify-between group hover:border-primary/30 transition-colors">
-                         <div className="flex items-center gap-4">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center border ${isPositive ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-white/5 border-white/10 text-white'}`}>
-                               {isPositive ? <ArrowDownLeft className="w-5 h-5" /> : <ArrowUpRight className="w-5 h-5" />}
-                            </div>
-                            <div>
-                               <p className="text-white font-bold text-sm tracking-tight">{tx.description}</p>
-                               <p className="text-xs text-text-muted mt-1">{new Date(tx.created_at).toLocaleDateString()} • {new Date(tx.created_at).toLocaleTimeString()}</p>
-                            </div>
-                         </div>
-                         <div className="text-right">
-                            <p className={`font-black tracking-tight ${isPositive ? 'text-primary' : 'text-white'}`}>
-                               {isPositive ? '+' : ''}₱{Math.abs(tx.amount).toLocaleString()}
-                            </p>
-                            <p className="text-[10px] text-text-muted font-medium mt-1 uppercase tracking-widest">Bal: ₱{Number(tx.balance).toLocaleString()}</p>
-                         </div>
+                      <div key="history-list">
+                         {Object.keys(grouped).map(groupName => {
+                            const groupTxs = grouped[groupName];
+                            if (groupTxs.length === 0) return null;
+
+                            return (
+                               <div key={groupName} className="space-y-4 mb-8">
+                                  <h4 className="text-[10px] font-black text-text-muted tracking-widest uppercase border-b border-dark-border pb-2 sticky top-0 bg-dark-panel z-10">{groupName}</h4>
+                                  <div className="space-y-3">
+                                     {groupTxs.map((tx: any) => {
+                                        const uiInfo = getTransactionUIInfo(tx.type, tx.amount, tx.description);
+                                        
+                                        return (
+                                           <div key={tx.id} className="p-4 bg-dark-bg border border-dark-border rounded-xl flex items-center justify-between group hover:border-primary/30 transition-colors">
+                                              <div className="flex items-center gap-4">
+                                                 <div className={`w-10 h-10 rounded-full flex items-center justify-center border shrink-0 ${uiInfo.bgClass} ${uiInfo.colorClass}`}>
+                                                    <uiInfo.icon className="w-5 h-5" />
+                                                 </div>
+                                                 <div>
+                                                    <p className="text-white font-bold text-sm tracking-tight">{uiInfo.title}</p>
+                                                    <p className="text-[10px] text-text-muted mt-1 uppercase tracking-widest">{new Date(tx.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                                 </div>
+                                              </div>
+                                              <div className="text-right shrink-0">
+                                                 <p className={`font-black tracking-tight ${uiInfo.colorClass}`}>
+                                                    {uiInfo.isPositive ? '+' : '-'}₱{formatCurrency(tx.amount)}
+                                                 </p>
+                                                 <p className="text-[10px] text-text-muted font-medium mt-1 uppercase tracking-widest">Bal: ₱{formatCurrency(tx.balance)}</p>
+                                              </div>
+                                           </div>
+                                        );
+                                     })}
+                                  </div>
+                               </div>
+                            );
+                         })}
+                         
+                         {hasMore && (
+                            <button 
+                               onClick={() => fetchWallet(page + 1, true)}
+                               disabled={isLoadingMore}
+                               className="w-full py-4 rounded-xl border border-dashed border-dark-border text-xs font-bold tracking-widest text-text-muted hover:text-white hover:border-white/30 transition-colors uppercase disabled:opacity-50"
+                            >
+                               {isLoadingMore ? 'Loading...' : 'Load More Transactions'}
+                            </button>
+                         )}
                       </div>
                    );
-                })
+                })()
               )}
             </div>
           </DynamicCard>
@@ -314,7 +383,7 @@ export default function Wallet() {
                <button className="absolute top-8 right-8 text-text-muted hover:text-white transition-colors bg-white/5 p-2 rounded-full" onClick={() => setIsDepositModalOpen(false)} aria-label="Close deposit modal">
                   <X className="w-5 h-5" />
                </button>
-               <h2 className="text-4xl font-black text-white mb-2 tracking-tight uppercase flex items-center gap-4">Top Up <span className="text-[10px] bg-red-500/10 text-red-500 border border-red-500/20 px-2 py-1 rounded tracking-widest font-bold">[DEMO/SIMULATION]</span></h2>
+               <h2 className="text-4xl font-black text-white mb-2 tracking-tight uppercase flex items-center gap-4">Top Up</h2>
                <p className="text-text-muted mb-4 font-medium">Add funds via GCash, Maya, Card, or Online Banking.</p>
                <p className="text-xs text-text-muted/60 mb-10 font-medium">You will be redirected to PayMongo&apos;s secure checkout to complete payment.</p>
                <form onSubmit={handleDeposit} className="space-y-8">
@@ -347,7 +416,7 @@ export default function Wallet() {
                <button className="absolute top-8 right-8 text-text-muted hover:text-white transition-colors bg-white/5 p-2 rounded-full" onClick={() => setIsWithdrawModalOpen(false)} aria-label="Close withdraw modal">
                   <X className="w-5 h-5" />
                </button>
-               <h2 className="text-4xl font-black text-white mb-2 tracking-tight uppercase flex items-center gap-4">Withdraw Funds <span className="text-[10px] bg-red-500/10 text-red-500 border border-red-500/20 px-2 py-1 rounded tracking-widest font-bold">[DEMO/SIMULATION]</span></h2>
+               <h2 className="text-4xl font-black text-white mb-2 tracking-tight uppercase flex items-center gap-4">Withdraw Funds</h2>
                
                <div className="flex justify-between items-center mb-10 bg-dark-bg p-5 rounded-2xl border border-dark-border">
                   <span className="text-text-muted text-xs uppercase font-bold tracking-widest flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" /> Accessible Balance</span>
