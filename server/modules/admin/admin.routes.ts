@@ -416,7 +416,7 @@ router.post('/risk-transactions/:id/freeze', authenticateJWT, async (req: Reques
    const dbUser = await prisma.user.findUnique({ where: { user_id: req.user.user_id } });
    if (!dbUser || dbUser.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
    try {
-      const txId = parseInt(req.params.id);
+      const txId = parseInt(req.params.id as string);
       const { action } = req.body; // 'freeze' or 'release'
       
       const tx = await prisma.transaction.findUnique({ where: { transaction_id: txId } });
@@ -449,7 +449,7 @@ router.get('/users/:id/timeline', authenticateJWT, async (req: Request, res: Res
    const dbUser = await prisma.user.findUnique({ where: { user_id: req.user.user_id } });
    if (!dbUser || dbUser.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
    try {
-      const targetUserId = parseInt(req.params.id);
+      const targetUserId = parseInt(req.params.id as string);
       
       const logins = await prisma.loginHistory.findMany({
          where: { user_id: targetUserId },
