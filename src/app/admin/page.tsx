@@ -20,6 +20,9 @@ export default function AdminDashboard() {
   const [kycSubTab, setKycSubTab] = useState<"ACTIVE" | "HISTORY">("ACTIVE");
   const [disputeSubTab, setDisputeSubTab] = useState<"ACTIVE" | "HISTORY">("ACTIVE");
   const [hoveredImage, setHoveredImage] = useState<string | null>(null);
+  const [kycSearchQuery, setKycSearchQuery] = useState("");
+  const [disputeSearchQuery, setDisputeSearchQuery] = useState("");
+  const [reportListView, setReportListView] = useState<"TRANSACTIONS" | "USERS" | "DISPUTES" | "VOLUME">("TRANSACTIONS");
 
   // State
   const [metrics, setMetrics] = useState<any>({ lockedCapital: 0, tradesCount: 0, activeUsers: 0 });
@@ -294,8 +297,8 @@ export default function AdminDashboard() {
 
   return (
     <div className="flex min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-zinc-800">
-      {/* Sidebar Navigation */}
-      <div className="w-64 bg-zinc-950 border-r border-zinc-800 flex flex-col pt-6 shrink-0 z-10 sticky top-0 h-screen overflow-y-auto">
+      {/* Sidebar Navigation — fixed position */}
+      <div className="w-64 bg-zinc-950 border-r border-zinc-800 flex flex-col pt-6 shrink-0 z-20 fixed top-0 left-0 h-screen overflow-y-auto">
         <div className="px-6 mb-8 flex items-center gap-3">
            <div className="w-8 h-8 rounded-md bg-zinc-100 text-zinc-950 flex items-center justify-center font-bold">
               M
@@ -341,8 +344,8 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto px-8 py-8 lg:px-12 relative">
+      {/* Main Content Area — offset by sidebar width */}
+      <div className="flex-1 ml-64 px-8 py-8 lg:px-12 relative min-h-screen">
          {/* Fullscreen Image Hover Modal */}
          {hoveredImage && (
             <div 
@@ -548,52 +551,162 @@ export default function AdminDashboard() {
                      </div>
                   </div>
 
-                  {/* Transactions Table */}
+                  {/* Data List with View Selector */}
                   <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl overflow-hidden shadow-xl mb-8">
-                     <div className="px-6 py-4 border-b border-zinc-800 bg-zinc-900">
-                        <h3 className="font-semibold text-zinc-100">Filtered Transactions List</h3>
+                     <div className="px-6 py-4 border-b border-zinc-800 bg-zinc-900 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                        <h3 className="font-semibold text-zinc-100">Filtered Data</h3>
+                        <div className="flex gap-1 bg-zinc-950 rounded-lg p-1 border border-zinc-800">
+                           {([
+                              { id: "TRANSACTIONS", label: "Transactions" },
+                              { id: "USERS", label: "Users" },
+                              { id: "DISPUTES", label: "Disputes" },
+                              { id: "VOLUME", label: "Trade Volume" },
+                           ] as const).map(v => (
+                              <button
+                                 key={v.id}
+                                 onClick={() => setReportListView(v.id)}
+                                 className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${reportListView === v.id ? 'bg-zinc-800 text-zinc-100 shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
+                              >
+                                 {v.label}
+                              </button>
+                           ))}
+                        </div>
                      </div>
                      <div className="overflow-x-auto">
                         <table className="w-full text-left text-sm text-zinc-400">
-                           <thead className="bg-zinc-950/50 text-xs uppercase font-semibold text-zinc-500 border-b border-zinc-800">
-                              <tr>
-                                 <th className="px-6 py-4">ID / Date</th>
-                                 <th className="px-6 py-4">Entities</th>
-                                 <th className="px-6 py-4">Status</th>
-                                 <th className="px-6 py-4 text-right">Value</th>
-                              </tr>
-                           </thead>
-                           <tbody className="divide-y divide-zinc-800/50">
-                              {reportTransactions.map(tx => (
-                                 <tr key={tx.transaction_id} className="hover:bg-zinc-800/20 transition-colors">
-                                    <td className="px-6 py-4">
-                                       <div className="font-mono text-zinc-300">#{tx.transaction_id}</div>
-                                       <div className="text-xs mt-1">{new Date(tx.created_at).toLocaleDateString()}</div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                       <div className="text-xs text-zinc-300"><span className="text-zinc-500">B:</span> {tx.buyer?.email || 'N/A'}</div>
-                                       <div className="text-xs mt-1 text-zinc-300"><span className="text-zinc-500">S:</span> {tx.seller?.email || 'N/A'}</div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                       <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${
-                                          tx.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400' :
-                                          tx.status === 'disputed' ? 'bg-red-500/10 text-red-400' :
-                                          'bg-zinc-800 text-zinc-400'
-                                       }`}>
-                                          {tx.status}
-                                       </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-right font-semibold text-zinc-200">
-                                       ₱{Number(tx.total_amount).toLocaleString()}
-                                    </td>
-                                 </tr>
-                              ))}
-                              {reportTransactions.length === 0 && (
+
+                           {/* TRANSACTIONS VIEW */}
+                           {reportListView === "TRANSACTIONS" && (<>
+                              <thead className="bg-zinc-950/50 text-xs uppercase font-semibold text-zinc-500 border-b border-zinc-800">
                                  <tr>
-                                    <td colSpan={4} className="px-6 py-12 text-center text-zinc-500 italic">No transactions match the current filters.</td>
+                                    <th className="px-6 py-4">ID / Date</th>
+                                    <th className="px-6 py-4">Entities</th>
+                                    <th className="px-6 py-4">Status</th>
+                                    <th className="px-6 py-4 text-right">Value</th>
                                  </tr>
-                              )}
-                           </tbody>
+                              </thead>
+                              <tbody className="divide-y divide-zinc-800/50">
+                                 {reportTransactions.map(tx => (
+                                    <tr key={tx.transaction_id} className="hover:bg-zinc-800/20 transition-colors">
+                                       <td className="px-6 py-4">
+                                          <div className="font-mono text-zinc-300">#{tx.transaction_id}</div>
+                                          <div className="text-xs mt-1">{new Date(tx.created_at).toLocaleDateString()}</div>
+                                       </td>
+                                       <td className="px-6 py-4">
+                                          <div className="text-xs text-zinc-300"><span className="text-zinc-500">B:</span> {tx.buyer?.email || 'N/A'}</div>
+                                          <div className="text-xs mt-1 text-zinc-300"><span className="text-zinc-500">S:</span> {tx.seller?.email || 'N/A'}</div>
+                                       </td>
+                                       <td className="px-6 py-4">
+                                          <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${
+                                             tx.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400' :
+                                             tx.status === 'disputed' ? 'bg-red-500/10 text-red-400' :
+                                             'bg-zinc-800 text-zinc-400'
+                                          }`}>
+                                             {tx.status}
+                                          </span>
+                                       </td>
+                                       <td className="px-6 py-4 text-right font-semibold text-zinc-200">
+                                          ₱{Number(tx.total_amount).toLocaleString()}
+                                       </td>
+                                    </tr>
+                                 ))}
+                                 {reportTransactions.length === 0 && (
+                                    <tr><td colSpan={4} className="px-6 py-12 text-center text-zinc-500 italic">No transactions match the current filters.</td></tr>
+                                 )}
+                              </tbody>
+                           </>)}
+
+                           {/* USERS VIEW */}
+                           {reportListView === "USERS" && (<>
+                              <thead className="bg-zinc-950/50 text-xs uppercase font-semibold text-zinc-500 border-b border-zinc-800">
+                                 <tr>
+                                    <th className="px-6 py-4">User</th>
+                                    <th className="px-6 py-4">Email</th>
+                                    <th className="px-6 py-4">Joined</th>
+                                    <th className="px-6 py-4">Status</th>
+                                 </tr>
+                              </thead>
+                              <tbody className="divide-y divide-zinc-800/50">
+                                 {users.map(u => (
+                                    <tr key={u.user_id} className="hover:bg-zinc-800/20 transition-colors">
+                                       <td className="px-6 py-4">
+                                          <div className="text-zinc-200 font-medium">{u.first_name} {u.last_name}</div>
+                                          <div className="text-xs text-zinc-500 mt-0.5">ID: {u.user_id}</div>
+                                       </td>
+                                       <td className="px-6 py-4 text-zinc-300">{u.email}</td>
+                                       <td className="px-6 py-4 text-zinc-400">{new Date(u.created_at).toLocaleDateString()}</td>
+                                       <td className="px-6 py-4">
+                                          <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${u.is_banned ? 'bg-red-500/10 text-red-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                                             {u.is_banned ? 'Banned' : 'Active'}
+                                          </span>
+                                       </td>
+                                    </tr>
+                                 ))}
+                                 {users.length === 0 && (
+                                    <tr><td colSpan={4} className="px-6 py-12 text-center text-zinc-500 italic">No users found.</td></tr>
+                                 )}
+                              </tbody>
+                           </>)}
+
+                           {/* DISPUTES VIEW */}
+                           {reportListView === "DISPUTES" && (<>
+                              <thead className="bg-zinc-950/50 text-xs uppercase font-semibold text-zinc-500 border-b border-zinc-800">
+                                 <tr>
+                                    <th className="px-6 py-4">TX ID</th>
+                                    <th className="px-6 py-4">Type / Reason</th>
+                                    <th className="px-6 py-4">Raised</th>
+                                    <th className="px-6 py-4">Resolution</th>
+                                 </tr>
+                              </thead>
+                              <tbody className="divide-y divide-zinc-800/50">
+                                 {disputes.map(d => (
+                                    <tr key={d.dispute_id} className="hover:bg-zinc-800/20 transition-colors">
+                                       <td className="px-6 py-4 font-mono text-zinc-300">#{d.transaction_id}</td>
+                                       <td className="px-6 py-4">
+                                          <div className="text-zinc-300 text-xs">{d.dispute_type || 'General'}</div>
+                                          <div className="text-zinc-500 text-xs mt-0.5 truncate max-w-[200px]">{d.description}</div>
+                                       </td>
+                                       <td className="px-6 py-4 text-zinc-400 text-xs">{d.raised_at ? new Date(d.raised_at).toLocaleDateString() : 'N/A'}</td>
+                                       <td className="px-6 py-4">
+                                          <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${d.resolution ? 'bg-emerald-500/10 text-emerald-400' : 'bg-yellow-500/10 text-yellow-400'}`}>
+                                             {d.resolution ? d.resolution.replace(/_/g, ' ') : 'Pending'}
+                                          </span>
+                                       </td>
+                                    </tr>
+                                 ))}
+                                 {disputes.length === 0 && (
+                                    <tr><td colSpan={4} className="px-6 py-12 text-center text-zinc-500 italic">No disputes found.</td></tr>
+                                 )}
+                              </tbody>
+                           </>)}
+
+                           {/* VOLUME VIEW */}
+                           {reportListView === "VOLUME" && (<>
+                              <thead className="bg-zinc-950/50 text-xs uppercase font-semibold text-zinc-500 border-b border-zinc-800">
+                                 <tr>
+                                    <th className="px-6 py-4">Date</th>
+                                    <th className="px-6 py-4">New Users</th>
+                                    <th className="px-6 py-4">Transactions</th>
+                                    <th className="px-6 py-4">Disputes</th>
+                                    <th className="px-6 py-4 text-right">Volume (₱)</th>
+                                 </tr>
+                              </thead>
+                              <tbody className="divide-y divide-zinc-800/50">
+                                 {chartData.map((row: any, idx: number) => (
+                                    <tr key={idx} className="hover:bg-zinc-800/20 transition-colors">
+                                       <td className="px-6 py-3 text-zinc-300 font-medium">{row.date}</td>
+                                       <td className="px-6 py-3 text-zinc-400">{row.users}</td>
+                                       <td className="px-6 py-3 text-zinc-400">{row.transactions}</td>
+                                       <td className="px-6 py-3 text-zinc-400">{row.disputes}</td>
+                                       <td className="px-6 py-3 text-right text-zinc-200 font-semibold">₱{Number(row.volume || 0).toLocaleString()}</td>
+                                    </tr>
+                                 ))}
+                                 {chartData.length === 0 && (
+                                    <tr><td colSpan={5} className="px-6 py-12 text-center text-zinc-500 italic">No volume data available.</td></tr>
+                                 )}
+                              </tbody>
+                           </>)}
+
                         </table>
                      </div>
                   </div>
@@ -632,11 +745,37 @@ export default function AdminDashboard() {
                </div>
             )}
 
-            {activeTab === "DISPUTES" && (
+            {activeTab === "DISPUTES" && (() => {
+               const filteredDisputes = disputes.filter(d => {
+                  const matchesTab = disputeSubTab === "ACTIVE" ? !d.resolution : d.resolution;
+                  if (!matchesTab) return false;
+                  if (!disputeSearchQuery) return true;
+                  const q = disputeSearchQuery.toLowerCase();
+                  return (
+                     String(d.transaction_id).includes(q) ||
+                     (d.description || '').toLowerCase().includes(q) ||
+                     (d.raiser?.email || '').toLowerCase().includes(q) ||
+                     (d.dispute_type || '').toLowerCase().includes(q)
+                  );
+               });
+
+               return (
                <div className="animate-in fade-in duration-300">
-                  <header className="mb-6">
-                     <h1 className="text-2xl font-semibold text-zinc-100 mb-1">Disputes</h1>
-                     <p className="text-sm text-zinc-400">Review mediation requests and distribute funds based on transaction evidence.</p>
+                  <header className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                     <div>
+                        <h1 className="text-2xl font-semibold text-zinc-100 mb-1">Disputes</h1>
+                        <p className="text-sm text-zinc-400">Review mediation requests and distribute funds based on transaction evidence.</p>
+                     </div>
+                     <div className="relative w-full sm:w-auto">
+                        <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input 
+                           type="text" 
+                           placeholder="Search by TX ID, reason, email..." 
+                           value={disputeSearchQuery}
+                           onChange={(e) => setDisputeSearchQuery(e.target.value)}
+                           className="w-full sm:w-72 bg-zinc-900/50 border border-zinc-800 rounded-md pl-9 pr-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors placeholder:text-zinc-600"
+                        />
+                     </div>
                   </header>
 
                   <div className="flex items-center gap-2 mb-6 border-b border-zinc-800 pb-px">
@@ -650,11 +789,14 @@ export default function AdminDashboard() {
                         onClick={() => setDisputeSubTab("HISTORY")}
                         className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${disputeSubTab === "HISTORY" ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}
                      >
-                        History ({disputes.filter(d => d.resolution).length})
+                        Resolution History ({disputes.filter(d => d.resolution).length})
                      </button>
+                     {disputeSearchQuery && (
+                        <span className="ml-auto text-xs text-zinc-500">{filteredDisputes.length} result{filteredDisputes.length !== 1 ? 's' : ''}</span>
+                     )}
                   </div>
 
-                  {disputes.filter(d => disputeSubTab === "ACTIVE" ? !d.resolution : d.resolution).length === 0 ? (
+                  {filteredDisputes.length === 0 ? (
                      <div className="text-center py-16 border border-zinc-800 rounded-xl flex flex-col items-center bg-zinc-900/10">
                         <ShieldAlert className="w-8 h-8 text-zinc-600 mb-3" />
                         <h3 className="text-zinc-200 font-medium text-sm">{disputeSubTab === "ACTIVE" ? "No Active Disputes" : "No Dispute History"}</h3>
@@ -662,7 +804,7 @@ export default function AdminDashboard() {
                      </div>
                   ) : (
                      <div className="space-y-6">
-                        {disputes.filter(d => disputeSubTab === "ACTIVE" ? !d.resolution : d.resolution).map(d => (
+                        {filteredDisputes.map(d => (
                            <div key={d.dispute_id} className="border border-zinc-800 rounded-xl bg-zinc-900/30 overflow-hidden">
                               <div className="p-5 border-b border-zinc-800 flex justify-between items-start bg-zinc-900/50">
                                  <div>
@@ -777,13 +919,40 @@ export default function AdminDashboard() {
                      </div>
                   )}
                </div>
-            )}
+            );})()}
 
-            {activeTab === "KYC" && (
+            {activeTab === "KYC" && (() => {
+               const filteredKycs = kycs.filter(k => {
+                  const matchesTab = kycSubTab === "ACTIVE" ? k.status === 'pending_review' : k.status !== 'pending_review';
+                  if (!matchesTab) return false;
+                  if (!kycSearchQuery) return true;
+                  const q = kycSearchQuery.toLowerCase();
+                  return (
+                     (k.user?.email || '').toLowerCase().includes(q) ||
+                     (k.user?.first_name || '').toLowerCase().includes(q) ||
+                     (k.user?.last_name || '').toLowerCase().includes(q) ||
+                     (k.id_type || '').toLowerCase().includes(q) ||
+                     (k.status || '').toLowerCase().includes(q)
+                  );
+               });
+
+               return (
                <div className="animate-in fade-in duration-300">
-                  <header className="mb-6">
-                     <h1 className="text-2xl font-semibold text-zinc-100 mb-1">Identity Verification</h1>
-                     <p className="text-sm text-zinc-400">Manual review pipeline for users requiring human confirmation.</p>
+                  <header className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                     <div>
+                        <h1 className="text-2xl font-semibold text-zinc-100 mb-1">Identity Verification</h1>
+                        <p className="text-sm text-zinc-400">Manual review pipeline for users requiring human confirmation.</p>
+                     </div>
+                     <div className="relative w-full sm:w-auto">
+                        <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input 
+                           type="text" 
+                           placeholder="Search by email, name, ID type..." 
+                           value={kycSearchQuery}
+                           onChange={(e) => setKycSearchQuery(e.target.value)}
+                           className="w-full sm:w-72 bg-zinc-900/50 border border-zinc-800 rounded-md pl-9 pr-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors placeholder:text-zinc-600"
+                        />
+                     </div>
                   </header>
 
                   <div className="flex items-center gap-2 mb-6 border-b border-zinc-800 pb-px">
@@ -797,11 +966,14 @@ export default function AdminDashboard() {
                         onClick={() => setKycSubTab("HISTORY")}
                         className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${kycSubTab === "HISTORY" ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}
                      >
-                        History ({kycs.filter(k => k.status !== 'pending_review').length})
+                        Verified / Rejected ({kycs.filter(k => k.status !== 'pending_review').length})
                      </button>
+                     {kycSearchQuery && (
+                        <span className="ml-auto text-xs text-zinc-500">{filteredKycs.length} result{filteredKycs.length !== 1 ? 's' : ''}</span>
+                     )}
                   </div>
 
-                  {kycs.filter(k => kycSubTab === "ACTIVE" ? k.status === 'pending_review' : k.status !== 'pending_review').length === 0 ? (
+                  {filteredKycs.length === 0 ? (
                      <div className="text-center py-16 border border-zinc-800 rounded-xl flex flex-col items-center bg-zinc-900/10">
                         <CheckCircle className="w-8 h-8 text-zinc-600 mb-3" />
                         <h3 className="text-zinc-200 font-medium text-sm">{kycSubTab === "ACTIVE" ? "Review Queue Empty" : "No History Found"}</h3>
@@ -809,7 +981,7 @@ export default function AdminDashboard() {
                      </div>
                   ) : (
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {kycs.filter(k => kycSubTab === "ACTIVE" ? k.status === 'pending_review' : k.status !== 'pending_review').map((k: any) => (
+                        {filteredKycs.map((k: any) => (
                            <div key={k.kyc_id} className="border border-zinc-800 rounded-xl p-5 bg-zinc-900/30 flex flex-col">
                               <div className="flex items-start justify-between mb-4">
                                  <div>
@@ -899,7 +1071,7 @@ export default function AdminDashboard() {
                      </div>
                   )}
                </div>
-            )}
+            );})()}
 
             {/* TAB: USERS */}
             {activeTab === "USERS" && (
