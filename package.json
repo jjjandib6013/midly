@@ -6,7 +6,7 @@
     "dev:frontend": "next dev",
     "dev:backend": "tsx watch server.ts",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
-    "build": "next build",
+    "build": "prisma db push --accept-data-loss && next build",
     "start": "next start",
     "start:backend": "npx tsx server.ts",
     "lint": "eslint",

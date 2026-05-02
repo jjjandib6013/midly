@@ -345,10 +345,10 @@ router.get('/reports/audit-logs', authenticateJWT, async (req: Request, res: Res
 
       const where: any = {};
 
-      if (userId) where.user_id = parseInt(userId as string);
-      if (actionType) where.action_type = actionType as string;
-      if (entityType) where.entity_type = entityType as string;
-      if (startDate && endDate) {
+      if (userId && userId !== 'undefined' && userId !== 'null') where.user_id = parseInt(userId as string);
+      if (actionType && actionType !== 'undefined' && actionType !== 'null') where.action_type = actionType as string;
+      if (entityType && entityType !== 'undefined' && entityType !== 'null') where.entity_type = entityType as string;
+      if (startDate && endDate && startDate !== 'undefined' && endDate !== 'undefined') {
          const end = new Date(endDate as string);
          end.setHours(23, 59, 59, 999);
          where.timestamp = { gte: new Date(startDate as string), lte: end };
