@@ -297,7 +297,7 @@ export default function Wallet() {
               </div>
             </div>
             
-            <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 mt-4 space-y-8" data-lenis-prevent>
+            <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 mt-4 space-y-8 max-h-[400px] xl:max-h-[600px]" data-lenis-prevent>
               {history.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 grayscale opacity-40 h-full">
                    <div className="w-20 h-20 rounded-full border border-dashed border-text-muted flex items-center justify-center mb-6">
