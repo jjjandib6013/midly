@@ -11,7 +11,6 @@ router.get('/disputes', authenticateJWT, async (req: Request, res: Response): Pr
    if (!dbUser || dbUser.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
    try {
       const disputesRaw = await prisma.dispute.findMany({
-         where: { resolution: null },
          include: { 
             evidence: true,
             transaction: { 
