@@ -2,8 +2,18 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../../config/db';
 import { authenticateJWT } from '../../shared/middlewares/auth.middleware';
 import { io } from '../../../server';
+import rateLimit from 'express-rate-limit';
 
 const router = Router();
+
+// Rate limiting to prevent chat spam and AI engine DoS
+const chatRateLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    max: 20, // Limit each IP/user to 20 messages per window
+    message: { error: 'You are sending messages too quickly. Please slow down.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
 
 // GET Messages for Transaction
 router.get('/:txId', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
@@ -32,8 +42,8 @@ router.get('/:txId', authenticateJWT, async (req: Request, res: Response): Promi
    }
 });
 
-// POST Message (with terminal state restriction)
-router.post('/:txId', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
+// POST Message (with terminal state restriction and rate limiting)
+router.post('/:txId', authenticateJWT, chatRateLimiter, async (req: Request, res: Response): Promise<any> => {
    try {
       const txId = parseInt(req.params.txId as string);
       const { text, isAi } = req.body;
@@ -80,6 +90,14 @@ router.post('/:txId', authenticateJWT, async (req: Request, res: Response): Prom
       
       let computedRiskLevel = 'Safe';
       
+      // --- FUZZY MATCHING CALIBRATION ---
+      // We use a Levenshtein distance similarity threshold. 
+      // 1.0 = exact match.
+      // Calibration intent: 0.80 catches "gcas h", "gcesh" (scammer typos)
+      // but allows safe phrases without false-flagging.
+      // False positive mitigation: only high-risk substrings are scored.
+      const FUZZY_THRESHOLD = 0.80;
+
       // 1. Check strict substrings
       if (HIGH_RISK_PATTERNS.some(p => (text || '').toLowerCase().includes(p) || normalizedText.includes(p.replace(/[^a-z0-9]/g, '')))) {
          computedRiskLevel = 'High';
@@ -88,12 +106,12 @@ router.post('/:txId', authenticateJWT, async (req: Request, res: Response): Prom
          for (const pattern of HIGH_RISK_PATTERNS) {
             const patternNorm = pattern.replace(/[^a-z0-9]/g, '');
             // Check if any word token is very similar to the pattern
-            if (rawTextTokens.some((token: string) => similarity(token, patternNorm) > 0.85)) {
+            if (rawTextTokens.some((token: string) => similarity(token, patternNorm) >= FUZZY_THRESHOLD)) {
                computedRiskLevel = 'High';
                break;
             }
             // Check similarity of whole normalized block
-            if (similarity(normalizedText, patternNorm) > 0.85) {
+            if (similarity(normalizedText, patternNorm) >= FUZZY_THRESHOLD) {
                computedRiskLevel = 'High';
                break;
             }
@@ -121,7 +139,7 @@ router.post('/:txId', authenticateJWT, async (req: Request, res: Response): Prom
             data: {
                transaction_id: txId,
                sender_id: req.user.user_id, // System acts under context
-               message_text: `[SYSTEM WARNING] Midly has detected a possible off-platform communication or payment attempt. Do not transact outside the Smart Vault. You will lose all buyer protection.`,
+               message_text: `[SYSTEM WARNING] Midly has detected a possible off-platform communication. Do not transact outside the Smart Vault or you will lose buyer protection.\n\nACTION REQUIRED: If the seller insists on outside payment, tap "File Dispute" immediately.`,
                is_system_generated: true,
                risk_level: 'Critical'
             }

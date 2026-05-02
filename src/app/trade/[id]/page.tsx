@@ -205,15 +205,24 @@ export default function TradeHub() {
       });
       socket.emit("join_trade", tradeId);
 
+      // Handle reconnects to fetch any messages missed while disconnected
+      socket.on("connect", () => {
+         fetchMessages();
+      });
+
       // Listen for incoming messages
       socket.on("new_message", (msg: any) => {
          const myUserId = parseInt(JSON.parse(atob(token?.split('.')[1])).user_id);
-         setMessages(prev => [...prev, {
-            id: msg.message_id.toString(),
-            text: msg.message_text,
-            sender: msg.is_system_generated ? 'ai' : (msg.sender_id === myUserId ? 'user' : 'other'),
-            timestamp: new Date(msg.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-         }]);
+         setMessages(prev => {
+            // Prevent duplicate messages if reconnect fetch already got it
+            if (prev.some(p => p.id === msg.message_id.toString())) return prev;
+            return [...prev, {
+               id: msg.message_id.toString(),
+               text: msg.message_text,
+               sender: msg.is_system_generated ? 'ai' : (msg.sender_id === myUserId ? 'user' : 'other'),
+               timestamp: new Date(msg.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            }];
+         });
       });
 
       // Listen for immediate state updates
@@ -738,7 +747,7 @@ export default function TradeHub() {
 
                {/* Logs Panel */}
                <div className="col-span-1 lg:col-span-2 bg-dark-panel border border-dark-border rounded-xl p-6 flex flex-col h-[700px] shadow-xl">
-                  <h3 className="font-bold text-white mb-6 uppercase tracking-wider flex items-center gap-2 text-sm"><Server className="w-4 h-4 text-primary"/> Immutable System Logs</h3>
+                  <h3 className="font-bold text-white mb-6 uppercase tracking-wider flex items-center gap-2 text-sm"><Server className="w-4 h-4 text-primary"/> Tamper-Evident System Logs</h3>
                   
                   <div className="flex-1 overflow-y-auto pr-3 custom-scrollbar space-y-4 bg-dark-bg rounded-lg border border-dark-border p-4">
                      {messages.map((m: any) => (
