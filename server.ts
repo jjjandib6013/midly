@@ -22,7 +22,7 @@ import { createAdapter } from '@socket.io/redis-adapter';
 import { prisma } from './server/config/db';
 import { resend } from './server/config/resend';
 import { pubClient, subClient } from './server/config/redis';
-import { authLimiter, aiKycLimiter } from './server/shared/middlewares/rateLimiter';
+import { authLimiter, aiKycLimiter, globalLimiter } from './server/shared/middlewares/rateLimiter';
 import { authenticateJWT, requireKYC } from './server/shared/middlewares/auth.middleware';
 import uploadRoutes from './server/modules/uploads/upload.routes';
 import kycRoutes from './server/modules/kyc/kyc.routes';
@@ -101,6 +101,9 @@ app.use('/uploads', (req, res, next) => {
 // ==========================================
 // API ROUTES START HERE
 // ==========================================
+
+// Apply global rate limiting to all API routes
+app.use('/api', globalLimiter);
 
 // ==========================================
 // API ROUTES START HERE

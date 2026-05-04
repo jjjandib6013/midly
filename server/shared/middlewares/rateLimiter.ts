@@ -41,3 +41,19 @@ export const listingLimiter = isDev ? devPassthrough : rateLimit({
    },
    message: { error: 'Listing creation limit exceeded. Maximum 10 listings per hour.' }
 });
+
+export const globalLimiter = isDev ? devPassthrough : rateLimit({
+   windowMs: 15 * 60 * 1000, // 15 minutes
+   limit: 200,
+   message: { error: 'Too many requests from this IP, please try again later.' }
+});
+
+export const heavyEndpointLimiter = isDev ? devPassthrough : rateLimit({
+   windowMs: 60 * 1000, // 1 minute
+   limit: 30,
+   keyGenerator: (req, res) => {
+      if ((req as any).user?.user_id) return String((req as any).user.user_id);
+      return ipKeyGenerator(req.ip || 'unknown');
+   },
+   message: { error: 'You are fetching data too quickly. Please slow down.' }
+});

@@ -1,11 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../../config/db';
 import { authenticateJWT, requireKYC } from '../../shared/middlewares/auth.middleware';
+import { heavyEndpointLimiter } from '../../shared/middlewares/rateLimiter';
 
 const router = Router();
 
 // GET Wallet Stats
-router.get('/user/wallet', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
+router.get('/user/wallet', heavyEndpointLimiter, authenticateJWT, async (req: Request, res: Response): Promise<any> => {
    try {
       const userId = req.user.user_id;
       const user = await prisma.user.findUnique({ where: { user_id: userId } });
@@ -34,7 +35,7 @@ router.get('/user/wallet', authenticateJWT, async (req: Request, res: Response):
 });
 
 // GET Wallet History
-router.get('/wallet/history', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
+router.get('/wallet/history', heavyEndpointLimiter, authenticateJWT, async (req: Request, res: Response): Promise<any> => {
    try {
       const transactions = await prisma.walletTransaction.findMany({
          where: { user_id: req.user.user_id },
@@ -106,7 +107,7 @@ router.post('/wallet/withdraw', authenticateJWT, requireKYC, async (req: Request
 });
 
 // GET Profile Information
-router.get('/user/profile', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
+router.get('/user/profile', heavyEndpointLimiter, authenticateJWT, async (req: Request, res: Response): Promise<any> => {
    try {
       const user = await prisma.user.findUnique({
          where: { user_id: req.user.user_id },

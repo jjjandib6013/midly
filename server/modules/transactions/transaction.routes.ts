@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../../config/db';
 import { authenticateJWT, requireKYC } from '../../shared/middlewares/auth.middleware';
-import { disputeLimiter, listingLimiter } from '../../shared/middlewares/rateLimiter';
+import { disputeLimiter, listingLimiter, heavyEndpointLimiter } from '../../shared/middlewares/rateLimiter';
 import { io } from '../../../server';
 import { logAudit, ACTION_TYPES } from '../../utils/auditLogger';
 import { encryptForTrade, decryptForTrade } from '../../../src/ai/cryptoUtils';
@@ -17,7 +17,7 @@ const PRE_ACCEPTANCE_STATES = ['pending_invite'];
 
 
 // GET P2P Listings
-router.get('/listings', async (req, res): Promise<any> => {
+router.get('/listings', heavyEndpointLimiter, async (req, res): Promise<any> => {
    try {
       const page = Math.max(0, parseInt(req.query.page as string || '0'));
       const limit = 20;
@@ -45,7 +45,7 @@ router.get('/listings', async (req, res): Promise<any> => {
 });
 
 // GET My Trades (For Dashboard/Transactions)
-router.get('/', authenticateJWT, async (req, res): Promise<any> => {
+router.get('/', heavyEndpointLimiter, authenticateJWT, async (req, res): Promise<any> => {
    try {
       const trades = await prisma.transaction.findMany({
          where: { OR: [{ buyer_id: req.user.user_id }, { seller_id: req.user.user_id }] },

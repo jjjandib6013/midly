@@ -147,6 +147,10 @@ model Transaction {
   buyer               User       @relation("BuyerTrades", fields: [buyer_id], references: [user_id])
   seller              User       @relation("SellerTrades", fields: [seller_id], references: [user_id])
 
+  @@index([buyer_id])
+  @@index([seller_id])
+  @@index([status])
+  @@index([created_at])
   @@map("transactions")
 }
 
@@ -213,6 +217,8 @@ model Message {
   sender              User?       @relation(fields: [sender_id], references: [user_id])
   transaction         Transaction @relation(fields: [transaction_id], references: [transaction_id], onDelete: Cascade)
 
+  @@index([transaction_id])
+  @@index([sent_at])
   @@map("message")
 }
 
@@ -248,6 +254,8 @@ model Listing {
   created_at DateTime @default(now()) @db.Timestamp(6)
   seller     User     @relation("UserListings", fields: [seller_id], references: [user_id], onDelete: Cascade)
 
+  @@index([seller_id])
+  @@index([status, game_type])
   @@map("listing")
 }
 
@@ -284,6 +292,7 @@ model WalletTransaction {
   created_at  DateTime @default(now()) @db.Timestamp(6)
   user        User     @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
 
+  @@index([user_id])
   @@map("wallet_transactions")
 }
 
