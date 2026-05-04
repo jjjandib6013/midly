@@ -9,6 +9,7 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { TableSkeleton } from '@/components/ui/TableSkeleton';
+import { DisputeCardSkeleton } from '@/components/ui/DisputeCardSkeleton';
 import { useDelayedSkeleton } from '@/hooks/useDelayedSkeleton';
 
 type TabState = "OVERVIEW" | "REPORTS" | "DISPUTES" | "KYC" | "USERS" | "SETTINGS" | "RISK";
@@ -855,7 +856,8 @@ export default function AdminDashboard() {
 
                   {showSkeleton ? (
                      <div className="space-y-6">
-                        <TableSkeleton />
+                        <DisputeCardSkeleton />
+                        <DisputeCardSkeleton />
                      </div>
                   ) : filteredDisputes.length === 0 ? (
                      <div className="text-center py-16 border border-zinc-800 rounded-xl flex flex-col items-center bg-zinc-900/10">
