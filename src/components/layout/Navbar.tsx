@@ -107,10 +107,12 @@ let globalSocket: any = null;
   // Unauthenticated nav links (landing page)
   const publicNavLinks: any[] = [
     { name: "Platform", href: "/" },
+    { name: "Marketplace", href: "/marketplace" },
   ];
 
   // Authenticated nav links (shown inline in navbar on desktop)
   const authNavLinks: { name: string; href: string; icon: any; showBadge?: boolean }[] = [
+    { name: "Marketplace", href: "/marketplace", icon: Store },
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { name: "Wallet", href: "/wallet", icon: Wallet },
     ...(!isKycVerified ? [{ name: "Verify", href: "/kyc", icon: ShieldCheck }] : []),
