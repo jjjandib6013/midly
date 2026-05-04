@@ -12,6 +12,8 @@ import {
 import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
 import ReputationBadge from "@/components/ui/ReputationBadge";
+import { RowSkeleton } from "@/components/ui/RowSkeleton";
+import { useDelayedSkeleton } from "@/hooks/useDelayedSkeleton";
 import { API_URL } from "@/lib/api";
 
 type Trade = {
@@ -50,6 +52,7 @@ export default function Dashboard() {
    const [user, setUser] = useState<any>(null);
    const [trades, setTrades] = useState<Trade[]>([]);
    const [isLoading, setIsLoading] = useState(true);
+   const showSkeleton = useDelayedSkeleton(isLoading, 200);
    
    const containerRef = useRef<HTMLDivElement>(null);
 
@@ -90,8 +93,6 @@ export default function Dashboard() {
 
    const live = trades.filter(t => !['completed', 'cancelled', 'refunded'].includes(t.status));
    const sorted = [...trades].sort((a, b) => new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime());
-
-   if (isLoading) return <div className="flex-1 flex justify-center items-center h-[50vh]"><div className="w-8 h-8 rounded-full border-[3px] border-primary border-t-transparent animate-spin" /></div>;
 
    return (
       <div ref={containerRef} className="flex-1 w-full max-w-[1600px] mx-auto px-4 sm:px-6 py-6 sm:py-8 lg:px-16 lg:py-12">
@@ -183,6 +184,10 @@ export default function Dashboard() {
                             Start your first trade on the Marketplace <ArrowRight className="w-4 h-4" />
                          </Link>
                       </div>
+                  ) : showSkeleton ? (
+                     <div className="flex flex-col gap-4">
+                        {Array.from({ length: 3 }).map((_, i) => <RowSkeleton key={i} />)}
+                     </div>
                   ) : (
                      <div className="flex flex-col gap-4">
                         {live.map((t, i) => {
@@ -233,6 +238,10 @@ export default function Dashboard() {
                       <p className="text-[#8892b0] text-sm font-medium mb-2">No past activity found.</p>
                       <Link href="/marketplace" className="text-primary text-xs font-bold uppercase tracking-widest hover:underline">Explore Marketplace</Link>
                    </div>
+               ) : showSkeleton ? (
+                  <div className="flex flex-col gap-3 sm:gap-4">
+                     {Array.from({ length: 4 }).map((_, i) => <RowSkeleton key={i} />)}
+                  </div>
                ) : (
                   <div className="flex flex-col gap-4">
                      {sorted.slice(0, 7).map((t, i) => {

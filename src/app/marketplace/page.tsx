@@ -7,6 +7,8 @@ import { Store, Tag, PlusSquare } from "lucide-react";
 import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
 import ReputationBadge from "@/components/ui/ReputationBadge";
+import { CardSkeleton } from "@/components/ui/CardSkeleton";
+import { useDelayedSkeleton } from "@/hooks/useDelayedSkeleton";
 import toast from "react-hot-toast";
 import { API_URL } from "@/lib/api";
 
@@ -25,6 +27,8 @@ export default function Marketplace() {
 
    const router = useRouter();
    const [listings, setListings] = useState<Listing[]>([]);
+   const [isLoading, setIsLoading] = useState(true);
+   const showSkeleton = useDelayedSkeleton(isLoading, 200);
    const [showModal, setShowModal] = useState(false);
    const [newGameType, setNewGameType] = useState("Valorant");
    const [newItemName, setNewItemName] = useState("");
@@ -36,8 +40,12 @@ export default function Marketplace() {
          .then(res => res.json())
          .then(data => {
             if (data.listings) setListings(data.listings);
+            setIsLoading(false);
          })
-         .catch(console.error);
+         .catch((err) => {
+            console.error(err);
+            setIsLoading(false);
+         });
    };
 
    useEffect(() => {
@@ -123,14 +131,20 @@ export default function Marketplace() {
             </NeonButton>
          </div>
 
-         {listings.length === 0 ? (
+         {showSkeleton ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+               {Array.from({ length: 6 }).map((_, i) => (
+                  <CardSkeleton key={i} />
+               ))}
+            </div>
+         ) : !isLoading && listings.length === 0 ? (
             <div className="text-center py-20 border border-dark-border rounded-2xl bg-dark-panel">
                <Tag className="w-12 h-12 text-text-muted mx-auto mb-4" />
                <h2 className="text-xl text-white font-medium">No listings available.</h2>
                <p className="text-text-muted mt-2">Be the first to post a digital asset for sale.</p>
             </div>
          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 transition-opacity duration-300">
                {listings.map(listing => (
                   <DynamicCard key={listing.listing_id} className="border border-dark-border bg-dark-panel p-6 flex flex-col justify-between">
                      <div>
