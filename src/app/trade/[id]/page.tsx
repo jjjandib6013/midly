@@ -150,6 +150,7 @@ export default function TradeHub() {
                else if (data.trade.status === 'verifying') setCurrentStep(4);
                else if (data.trade.status === 'completed') setCurrentStep(5);
                else if (data.trade.status === 'disputed') setCurrentStep(6);
+               else if (data.trade.status === 'frozen') setCurrentStep(7);
                else if (data.trade.status === 'cancelled') setCurrentStep(-1);
                else if (data.trade.status === 'refunded') setCurrentStep(-2);
             }
@@ -236,6 +237,7 @@ export default function TradeHub() {
          if (newStatus === 'verifying') toast.success("Items Delivered. Verification started.");
          if (newStatus === 'completed') toast.success("Funds successfully Released!");
          if (newStatus === 'disputed') toast.error("Trade has been officially Disputed. Funds are frozen.");
+         if (newStatus === 'frozen') toast.error("SECURITY ALERT: Trade Frozen by Administrator.");
          if (newStatus === 'cancel_requested') toast.error("A participant requested to mutually cancel the trade.");
          if (newStatus === 'cancelled') toast.success("Trade Cancelled!");
          fetchTrade();
@@ -255,6 +257,7 @@ export default function TradeHub() {
    ];
 
    if (currentStep === 6) steps.push({ id: 6, label: "DISPUTED", status: "current" });
+   if (currentStep === 7) steps.push({ id: 7, label: "SECURITY LOCKDOWN", status: "current" });
    if (currentStep === -1) steps.splice(0, steps.length, { id: -1, label: "CANCELLED", status: "current" });
    if (currentStep === -2) steps.splice(0, steps.length, { id: -2, label: "REFUNDED", status: "current" });
 
@@ -1019,6 +1022,17 @@ export default function TradeHub() {
                         </div>
                      </div>
                   )}
+                  {currentStep === 7 && (
+                     <div className="p-4 rounded-xl border border-red-500/30 bg-red-500/10 mb-4 shadow-[0_0_20px_rgba(239,68,68,0.2)] animate-pulse">
+                        <div className="flex items-start gap-3">
+                           <ShieldAlert className="w-8 h-8 text-red-500 flex-shrink-0" />
+                           <div>
+                              <h4 className="text-red-500 font-bold text-lg mb-1">SECURITY LOCKDOWN</h4>
+                              <p className="text-sm text-red-400 mt-1 leading-relaxed">This transaction has been flagged for high-risk behavior or manually suspended by an Administrator. All escrowed funds and actions are mathematically frozen. The platform Risk Engine is currently auditing this room.</p>
+                           </div>
+                        </div>
+                     </div>
+                  )}
                   {currentStep === 1 && (
                      <>
                         <h4 className="text-white font-bold text-sm">Agreement Phase</h4>
@@ -1026,7 +1040,7 @@ export default function TradeHub() {
                            <>
                               <p className="text-sm text-text-muted">Verify terms with the buyer. When ready, lock the terms to request funds into Escrow.</p>
                               <div className="flex gap-2">
-                                 <NeonButton className="flex-[2] justify-center !py-3 bg-dark-bg" onClick={() => handleTradeProgress('REQUEST_PAYMENT')}>
+                                 <NeonButton disabled={isLoading} className="flex-[2] justify-center !py-3 bg-dark-bg" onClick={() => handleTradeProgress('REQUEST_PAYMENT')}>
                                     Lock Terms & Request Payment <ArrowRight className="w-4 h-4 ml-2" />
                                  </NeonButton>
                                  <button className="flex-1 text-red-500 hover:text-red-400 text-xs font-bold uppercase tracking-widest transition-colors" onClick={handleCancelTrade}>
@@ -1090,7 +1104,7 @@ export default function TradeHub() {
                                  <NeonButton
                                     className="w-full justify-center !py-3 text-lg relative overflow-hidden group"
                                     onClick={() => handleTradeProgress('PAY')}
-                                    disabled={isPaymentSimulating}
+                                    disabled={isPaymentSimulating || isLoading}
                                  >
                                     {isPaymentSimulating ? (
                                        <span className="flex items-center gap-2">
@@ -1173,7 +1187,7 @@ export default function TradeHub() {
                                     </div>
                                  )
                               ) : (
-                                 <NeonButton className="w-full justify-center !py-3 mt-2" onClick={() => handleTradeProgress('DELIVER')}>
+                                 <NeonButton disabled={isLoading} className="w-full justify-center !py-3 mt-2" onClick={() => handleTradeProgress('DELIVER')}>
                                     Confirm Item Delivered <ArrowRight className="w-4 h-4 ml-2" />
                                  </NeonButton>
                               )}
