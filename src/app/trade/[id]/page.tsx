@@ -573,9 +573,11 @@ export default function TradeHub() {
       return (
          <div className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 lg:py-8 flex flex-col lg:grid lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 lg:h-[calc(100vh-64px)]">
             {/* Left Column Skeleton */}
-            <div className="order-2 lg:order-1 flex flex-col gap-6">
+            <div className="order-2 lg:order-1 flex flex-col gap-6 lg:overflow-y-auto lg:pr-2 custom-scrollbar">
+               
+               {/* Trading Partner Skeleton */}
                <DynamicCard className="p-5 border border-dark-border bg-dark-panel">
-                  <Skeleton className="h-4 w-24 mb-4" />
+                  <Skeleton className="h-3 w-24 mb-4" />
                   <div className="flex items-center gap-4">
                      <Skeleton className="w-14 h-14 rounded-full" />
                      <div>
@@ -584,27 +586,48 @@ export default function TradeHub() {
                      </div>
                   </div>
                </DynamicCard>
+
+               {/* Trade Summary Skeleton */}
+               <DynamicCard className="p-6 border border-dark-border bg-dark-bg/50">
+                  <Skeleton className="h-4 w-32 mb-4" />
+                  <div className="space-y-4">
+                     <div className="flex justify-between items-center"><Skeleton className="h-4 w-16" /><Skeleton className="h-4 w-24" /></div>
+                     <div className="flex justify-between items-center"><Skeleton className="h-4 w-20" /><Skeleton className="h-4 w-32" /></div>
+                     <div className="flex justify-between items-center"><Skeleton className="h-4 w-20" /><Skeleton className="h-4 w-24" /></div>
+                     <div className="flex justify-between items-center"><Skeleton className="h-4 w-24" /><Skeleton className="h-4 w-20" /></div>
+                     <div className="flex justify-between items-center pt-2"><Skeleton className="h-5 w-32" /><Skeleton className="h-5 w-24" /></div>
+                  </div>
+               </DynamicCard>
+
+               {/* Transaction Status Skeleton */}
                <DynamicCard className="p-6 border border-dark-border bg-dark-panel flex-1">
                   <Skeleton className="h-5 w-40 mb-6" />
-                  <div className="space-y-4">
-                     <Skeleton className="h-16 w-full" />
-                     <Skeleton className="h-16 w-full" />
-                     <Skeleton className="h-16 w-full" />
+                  <div className="space-y-6">
+                     <div className="flex items-center gap-3"><Skeleton className="w-5 h-5 rounded-full" /><Skeleton className="h-4 w-24" /></div>
+                     <div className="flex items-center gap-3"><Skeleton className="w-5 h-5 rounded-full" /><Skeleton className="h-4 w-32" /></div>
+                     <div className="flex items-center gap-3"><Skeleton className="w-5 h-5 rounded-full" /><Skeleton className="h-4 w-32" /></div>
+                     <div className="flex items-center gap-3"><Skeleton className="w-5 h-5 rounded-full" /><Skeleton className="h-4 w-24" /></div>
                   </div>
                </DynamicCard>
             </div>
             {/* Right Column (Chat) Skeleton */}
-            <div className="order-1 lg:order-2 lg:col-span-2 flex flex-col h-[600px] lg:h-full bg-dark-panel border border-dark-border rounded-2xl p-4 lg:p-6 shadow-xl">
-               <div className="flex justify-between items-center border-b border-dark-border pb-4 mb-4">
-                  <Skeleton className="h-6 w-32" />
-                  <Skeleton className="h-6 w-24" />
+            <div className="order-1 lg:order-2 lg:col-span-2 flex flex-col h-[600px] lg:h-full bg-dark-panel border border-dark-border rounded-xl shadow-xl">
+               <div className="flex justify-between items-center border-b border-dark-border p-4">
+                  <div className="flex items-center gap-2"><Skeleton className="w-4 h-4" /><Skeleton className="h-5 w-48" /></div>
+                  <div className="flex gap-2">
+                     <Skeleton className="h-8 w-32 rounded-full" />
+                     <Skeleton className="h-8 w-40 rounded-full" />
+                  </div>
                </div>
-               <div className="flex-1 overflow-hidden">
+               <div className="flex-1 overflow-hidden p-6">
                   <ChatSkeleton />
                </div>
-               <div className="mt-4 flex gap-2">
-                  <Skeleton className="h-12 flex-1 rounded-xl" />
-                  <Skeleton className="h-12 w-12 rounded-xl" />
+               <div className="p-4 border-t border-dark-border bg-dark-bg/50">
+                  <div className="flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-full p-2 pl-4">
+                     <Skeleton className="h-5 flex-1" />
+                     <Skeleton className="w-8 h-8 rounded-full" />
+                     <Skeleton className="w-20 h-10 rounded-full" />
+                  </div>
                </div>
             </div>
          </div>

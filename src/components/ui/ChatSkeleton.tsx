@@ -4,35 +4,47 @@ import { Skeleton } from './Skeleton';
 export function ChatSkeleton() {
    return (
       <div className="flex flex-col gap-4 w-full animate-in fade-in duration-300">
-         {/* System Message Skeleton */}
-         <div className="flex justify-center my-4">
-            <Skeleton className="h-6 w-3/4 max-w-md rounded-lg" />
+         {/* System Message Skeleton (Red Border) */}
+         <div className="flex justify-center my-2">
+            <div className="w-full max-w-2xl bg-red-500/5 border border-red-500/20 p-4 rounded-xl flex items-start gap-3">
+               <Skeleton className="w-4 h-4 rounded-full shrink-0 mt-1" />
+               <div className="space-y-2 w-full">
+                  <Skeleton className="h-4 w-[90%]" />
+                  <Skeleton className="h-4 w-[60%]" />
+               </div>
+            </div>
+         </div>
+
+         {/* System Message Skeleton (Red Border) */}
+         <div className="flex justify-center my-2">
+            <div className="w-full max-w-2xl bg-red-500/5 border border-red-500/20 p-4 rounded-xl flex items-start gap-3">
+               <Skeleton className="w-4 h-4 rounded-full shrink-0 mt-1" />
+               <div className="space-y-2 w-full">
+                  <Skeleton className="h-4 w-[85%]" />
+                  <Skeleton className="h-4 w-[40%]" />
+               </div>
+            </div>
          </div>
 
          {/* Left Bubble Skeleton */}
-         <div className="flex justify-start">
-            <div className="bg-dark-panel border border-white/[0.04] p-4 rounded-2xl rounded-tl-sm max-w-[85%] sm:max-w-[75%] space-y-3">
-               <Skeleton className="h-4 w-24" />
-               <Skeleton className="h-5 w-48 sm:w-64" />
-               <Skeleton className="h-3 w-16" />
+         <div className="flex justify-start mt-4">
+            <div className="bg-dark-panel border border-white/[0.04] p-4 rounded-2xl rounded-tl-sm max-w-[85%] sm:max-w-[75%] space-y-3 w-64">
+               <div className="flex justify-between items-center">
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="h-3 w-12" />
+               </div>
+               <Skeleton className="h-5 w-48" />
             </div>
          </div>
 
          {/* Right Bubble Skeleton */}
-         <div className="flex justify-end">
-            <div className="bg-primary/10 border border-primary/20 p-4 rounded-2xl rounded-tr-sm max-w-[85%] sm:max-w-[75%] space-y-3">
-               <div className="flex justify-end"><Skeleton className="h-4 w-20" /></div>
-               <div className="flex justify-end"><Skeleton className="h-5 w-56 sm:w-72" /></div>
-               <div className="flex justify-end"><Skeleton className="h-3 w-16" /></div>
-            </div>
-         </div>
-
-         {/* Left Bubble Skeleton */}
-         <div className="flex justify-start">
-            <div className="bg-dark-panel border border-white/[0.04] p-4 rounded-2xl rounded-tl-sm max-w-[85%] sm:max-w-[75%] space-y-3">
-               <Skeleton className="h-4 w-24" />
-               <Skeleton className="h-5 w-32" />
-               <Skeleton className="h-3 w-16" />
+         <div className="flex justify-end mt-2">
+            <div className="bg-primary/5 border border-primary/10 p-4 rounded-2xl rounded-tr-sm max-w-[85%] sm:max-w-[75%] space-y-3 w-64">
+               <div className="flex justify-between items-center">
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="h-3 w-12" />
+               </div>
+               <Skeleton className="h-5 w-48" />
             </div>
          </div>
       </div>
