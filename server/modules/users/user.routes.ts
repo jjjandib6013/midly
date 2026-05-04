@@ -5,6 +5,106 @@ import { heavyEndpointLimiter } from '../../shared/middlewares/rateLimiter';
 
 const router = Router();
 
+// =====================================
+// NEW: UNIFIED PROFILE HUB
+// =====================================
+router.get('/user/hub', heavyEndpointLimiter, authenticateJWT, async (req: Request, res: Response): Promise<any> => {
+   try {
+      const userId = req.user.user_id;
+      const user = await prisma.user.findUnique({
+         where: { user_id: userId },
+         include: { kyc_verification: true }
+      });
+
+      if (!user) return res.status(404).json({ error: 'User not found' });
+
+      // 1. Identity Layer
+      const identity = {
+         name: `${user.first_name} ${user.last_name}`,
+         email: user.email,
+         created_at: user.created_at,
+         reputation: user.reputation_score,
+         kyc_status: user.kyc_verification?.status || 'pending'
+      };
+
+      // 2. Financial Layer (Wallet)
+      const wallet = {
+         balance: Number(user.wallet_balance || 0)
+      };
+
+      // 3. Marketplace & Escrow Summary (Quick Stats)
+      const activeListingsCount = await prisma.listing.count({
+         where: { seller_id: userId, status: 'open' }
+      });
+      const soldListingsCount = await prisma.listing.count({
+         where: { seller_id: userId, status: 'sold' }
+      });
+      const activeEscrowsCount = await prisma.transaction.count({
+         where: { OR: [{ buyer_id: userId }, { seller_id: userId }], status: { in: ['pending_invite', 'active', 'verifying', 'disputed'] } }
+      });
+      
+      const stats = {
+         active_listings: activeListingsCount,
+         sold_listings: soldListingsCount,
+         active_escrows: activeEscrowsCount
+      };
+
+      // 4. Activity Timeline (Unified from Wallet & Completed Trades)
+      const walletTxs = await prisma.walletTransaction.findMany({
+         where: { user_id: userId },
+         orderBy: { created_at: 'desc' },
+         take: 10
+      });
+      
+      const completedTrades = await prisma.transaction.findMany({
+         where: { OR: [{ buyer_id: userId }, { seller_id: userId }], status: 'completed' },
+         orderBy: { updated_at: 'desc' },
+         take: 10,
+         include: { buyer: { select: { first_name: true } }, seller: { select: { first_name: true } } }
+      });
+
+      // Merge and sort
+      let timeline: any[] = [];
+      
+      walletTxs.forEach(w => {
+         timeline.push({
+            id: `w_${w.id}`,
+            type: 'wallet',
+            action: w.type,
+            description: w.description || 'Wallet Transaction',
+            amount: Number(w.amount),
+            date: w.created_at
+         });
+      });
+
+      completedTrades.forEach(t => {
+         const isBuyer = t.buyer_id === userId;
+         timeline.push({
+            id: `t_${t.transaction_id}`,
+            type: 'trade',
+            action: isBuyer ? 'purchased' : 'sold',
+            description: isBuyer ? `Purchased ${t.item_name} from ${t.seller.first_name}` : `Sold ${t.item_name} to ${t.buyer.first_name}`,
+            amount: isBuyer ? -Number(t.total_amount) : Number(t.agreed_price),
+            date: t.updated_at
+         });
+      });
+
+      timeline.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      const recentTimeline = timeline.slice(0, 10);
+
+      // Return unified payload
+      res.json({
+         identity,
+         wallet,
+         stats,
+         timeline: recentTimeline
+      });
+   } catch (error: any) {
+      res.status(500).json({ error: 'Server error', msg: error.message });
+   }
+});
+
+
 // GET Wallet Stats
 router.get('/user/wallet', heavyEndpointLimiter, authenticateJWT, async (req: Request, res: Response): Promise<any> => {
    try {
