@@ -99,8 +99,8 @@ export default function Marketplace() {
          });
          const data = await res.json();
          if (res.ok) {
-            toast.success("Escrow secured! Redirecting to trade hub...");
-            router.push(`/trade/${data.tradeId}`);
+            toast.success("Escrow Invitation Sent! Waiting for seller to accept.");
+            fetchListings(); // Refresh to remove the reserved item
          } else {
             toast.error(data.error || "Purchase failed.");
          }

@@ -673,6 +673,60 @@ export async function processCryptoShredder(data: { tradeId: number }) {
 }
 
 // ==========================================
+// AUTO-CANCEL INVITE HANDLER
+// ==========================================
+export async function processAutoCancelInvite(data: { tradeId: number }) {
+    const { tradeId } = data;
+    console.log(`[AI Worker] Executing Auto-Cancel Invite for Trade ID ${tradeId}`);
+    try {
+        await prisma.$transaction(async (tx) => {
+            const updated = await tx.transaction.updateMany({
+                where: { transaction_id: tradeId, status: 'pending_invite' },
+                data: { status: 'expired' }
+            });
+
+            if (updated.count === 0) {
+                console.log(`[AI Worker] Trade ID ${tradeId} is no longer pending. Auto-cancel aborted.`);
+                return;
+            }
+
+            const trade = await tx.transaction.findUnique({ where: { transaction_id: tradeId } });
+            if (!trade) return;
+
+            // Auto-Return item to marketplace
+            const linkedListing = await tx.listing.findFirst({
+                where: { seller_id: trade.seller_id, item_name: trade.item_name || '', game_type: trade.game_type || '', status: 'reserved' }
+            });
+            if (linkedListing) {
+                await tx.listing.update({ where: { listing_id: linkedListing.listing_id }, data: { status: 'open' } });
+            }
+
+            // Notify parties
+            const io = (global as any).io; // Or however we emit from worker if possible. Actually worker doesn't have io. We'll just create DB notifications.
+            await tx.notification.create({
+                data: {
+                    user_id: trade.buyer_id,
+                    message: `Your Escrow Invite for ${trade.item_name} has expired without seller response.`,
+                    type: 'system_alert',
+                    reference_id: tradeId
+                }
+            });
+            await tx.notification.create({
+                data: {
+                    user_id: trade.seller_id,
+                    message: `The Escrow Invite for your listing ${trade.item_name} has expired. The listing is open again.`,
+                    type: 'system_alert',
+                    reference_id: tradeId
+                }
+            });
+        });
+        console.log(`[AI Worker] Successfully auto-cancelled invite for Trade ID ${tradeId}`);
+    } catch (e) {
+        console.error(`[AI Worker] Auto-cancel failed for Trade ID ${tradeId}:`, e);
+    }
+}
+
+// ==========================================
 // BULLMQ WORKER INITIALIZATION (#1)
 // ==========================================
 const isDev = process.env.NODE_ENV !== 'production';
@@ -685,6 +739,7 @@ if (!USE_FALLBACK) {
         else if (job.name === 'verify-kyc-phase3') await processKycPhase3(job.data);
         else if (job.name === 'auto-release') await processAutoRelease(job.data);
         else if (job.name === 'crypto-shredder') await processCryptoShredder(job.data);
+        else if (job.name === 'auto-cancel-invite') await processAutoCancelInvite(job.data);
     }, {
         connection: process.env.REDIS_URL 
             ? new IORedis(process.env.REDIS_URL.endsWith(':') ? process.env.REDIS_URL.slice(0, -1) : process.env.REDIS_URL, { maxRetriesPerRequest: null, password: process.env.REDIS_PASSWORD }) 

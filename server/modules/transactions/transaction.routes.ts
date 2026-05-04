@@ -97,8 +97,35 @@ router.post('/listings/buy/:id', authenticateJWT, requireKYC, async (req, res): 
       const listingId = parseInt(req.params.id as string);
       const tradeIdRes = await prisma.$transaction(async (tx) => {
          const listing = await tx.listing.findUnique({ where: { listing_id: listingId } });
-         if (!listing || listing.status !== 'open') throw new Error('Listing not available');
+         if (!listing) throw new Error('Listing not found');
          if (listing.seller_id === req.user.user_id) throw new Error('Cannot buy your own listing');
+
+         // --- Layered Abuse Protection ---
+         // 1. Max active invites
+         const activeInvitesCount = await tx.transaction.count({
+            where: { buyer_id: req.user.user_id, status: 'pending_invite' }
+         });
+         if (activeInvitesCount >= 2) throw new Error('Maximum of 2 active escrow invitations allowed at a time. Please wait for sellers to respond.');
+
+         // 2. Prevent re-reserving the exact same item if they already backed out before
+         const itemCancelCount = await tx.transaction.count({
+            where: { buyer_id: req.user.user_id, seller_id: listing.seller_id, item_name: listing.item_name, status: 'cancelled' }
+         });
+         if (itemCancelCount >= 1) throw new Error('You have already cancelled a reservation for this exact item previously. You cannot reserve it again.');
+
+         // 3. Global Cooldown / Spam limit
+         const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+         const cancelCount = await tx.auditLog.count({
+            where: { 
+               user_id: req.user.user_id, 
+               action_type: 'TRADE_CANCELLED', 
+               timestamp: { gte: twentyFourHoursAgo } 
+            }
+         });
+         if (cancelCount >= 3) {
+            throw new Error('You have cancelled too many trades. Please wait 24 hours before reserving new items.');
+         }
+         // ----------------------------------------
 
          const seller = await tx.user.findUnique({ where: { user_id: listing.seller_id } });
          const sellerScore = Number(seller?.reputation_score || 0);
@@ -112,7 +139,14 @@ router.post('/listings/buy/:id', authenticateJWT, requireKYC, async (req, res): 
          const basePrice = Number(listing.price);
          const serviceFee = basePrice * feeRate;
 
-         await tx.listing.update({ where: { listing_id: listingId }, data: { status: 'sold' } });
+         // ATOMIC LOCK: Only update if it's currently open
+         const updatedListing = await tx.listing.updateMany({ 
+            where: { listing_id: listingId, status: 'open' }, 
+            data: { status: 'reserved' } 
+         });
+         if (updatedListing.count === 0) throw new Error('Listing is no longer available or was reserved by another buyer.');
+
+         const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes hard expiry
 
          const trade = await tx.transaction.create({
             data: {
@@ -123,27 +157,17 @@ router.post('/listings/buy/:id', authenticateJWT, requireKYC, async (req, res): 
                agreed_price: basePrice,
                service_fee: serviceFee,
                total_amount: basePrice + serviceFee,
-               status: 'agreement',
+               status: 'pending_invite',
                inspection_hours: 24,
-            }
-         });
-
-         // Phase 1: Agreement Phase initialized
-         await tx.message.create({
-            data: {
-               transaction_id: trade.transaction_id,
-               sender_id: null,
-               message_text: `MIDLY TRADE AGREEMENT PHASE INITIATED.\n\nItem: ${listing.item_name}\nPrice: ₱${basePrice.toLocaleString()}\n\nNo funds have been locked yet. Please discuss the terms. When ready, the Seller must Request Payment, and the Buyer will be prompted to deposit funds into the Midly Smart Vault.`,
-               is_system_generated: true,
-               risk_level: 'Safe'
+               expires_at: expiresAt
             }
          });
 
          const notif = await tx.notification.create({
             data: {
                user_id: listing.seller_id,
-               message: `Your listing for ${listing.item_name} has been bought! An escrow room has been created.`,
-               type: 'listing_sold',
+               message: `You have received an Escrow Invitation for your listing ${listing.item_name}.`,
+               type: 'escrow_invite',
                reference_id: trade.transaction_id
             }
          });
@@ -155,6 +179,11 @@ router.post('/listings/buy/:id', authenticateJWT, requireKYC, async (req, res): 
          await logAudit({ tx, transactionId: trade.transaction_id, userId: req.user.user_id, actionType: ACTION_TYPES.TRADE_CREATED, description: `Trade #${trade.transaction_id} created from listing #${listingId}`, ip: req.ip, metadata: { item_name: listing.item_name, agreed_price: basePrice, total_amount: basePrice + serviceFee, game_type: listing.game_type, buyer_id: req.user.user_id, seller_id: listing.seller_id } });
 
          return trade.transaction_id;
+      });
+
+      // --- Background Job: Enforce 15-min expiry ---
+      import('../../../src/ai/queue').then(({ kycQueue }) => {
+         kycQueue.add('auto-cancel-invite', { tradeId: tradeIdRes }, { delay: 15 * 60 * 1000 }).catch(console.error);
       });
 
       // --- Fraud Detection Layer 2: Initial Risk Score ---
@@ -280,7 +309,17 @@ router.put('/:id/accept-invite', authenticateJWT, async (req, res): Promise<any>
 
       // Idempotency: if trade already past pending_invite, return success silently
       if (trade.status !== 'pending_invite') {
-         return res.json({ success: true, message: 'Trade already accepted.' });
+         return res.json({ success: true, message: 'Trade already accepted or no longer pending.' });
+      }
+
+      // Hard Expiry Validation (Lazy Expiration)
+      if (trade.expires_at && new Date() > new Date(trade.expires_at)) {
+         await prisma.$transaction(async (tx) => {
+            await tx.transaction.update({ where: { transaction_id: tradeId }, data: { status: 'expired' } });
+            const linkedListing = await tx.listing.findFirst({ where: { seller_id: trade.seller_id, item_name: trade.item_name || '', game_type: trade.game_type || '', status: 'reserved' }});
+            if (linkedListing) await tx.listing.update({ where: { listing_id: linkedListing.listing_id }, data: { status: 'open' } });
+         });
+         return res.status(400).json({ error: 'This invitation has expired. The listing has been released.' });
       }
 
       // Authorization: must be part of the trade
@@ -289,20 +328,19 @@ router.put('/:id/accept-invite', authenticateJWT, async (req, res): Promise<any>
       }
 
       // CRITICAL: Only the counterparty (invited user) can accept, NOT the initiator
-      const inviteNotif = await prisma.notification.findFirst({
-         where: { reference_id: tradeId, type: 'escrow_invite' }
-      });
-      const invitedUserId = inviteNotif?.user_id;
-
-      if (!invitedUserId || req.user.user_id !== invitedUserId) {
+      // For listings, seller is the counterparty. For private invites, it could be either.
+      const isInitiator = trade.buyer_id === req.user.user_id; // Usually buyer initiates.
+      if (isInitiator) {
          return res.status(403).json({ error: 'Only the invited counterparty may accept this trade.' });
       }
 
       await prisma.$transaction(async (tx) => {
-         await tx.transaction.update({
-            where: { transaction_id: tradeId },
+         // Atomic state update: verify it's still pending
+         const updated = await tx.transaction.updateMany({
+            where: { transaction_id: tradeId, status: 'pending_invite' },
             data: { status: 'agreement' }
          });
+         if (updated.count === 0) throw new Error('Transaction is no longer pending.');
 
          await tx.notification.updateMany({
             where: { reference_id: tradeId, type: 'escrow_invite' },
@@ -310,7 +348,7 @@ router.put('/:id/accept-invite', authenticateJWT, async (req, res): Promise<any>
          });
 
          // Notify the initiator that their invite was accepted
-         const initiatorId = invitedUserId === trade.buyer_id ? trade.seller_id : trade.buyer_id;
+         const initiatorId = trade.buyer_id;
          const acceptNotif = await tx.notification.create({
             data: {
                user_id: initiatorId,
@@ -327,7 +365,7 @@ router.put('/:id/accept-invite', authenticateJWT, async (req, res): Promise<any>
             data: {
                transaction_id: tradeId,
                sender_id: req.user.user_id,
-               message_text: `[SYSTEM LOG] The Counterparty has accepted the Private Escrow Request. The Room is now unlocked. You are in the Agreement Phase. Please discuss terms.`,
+               message_text: `[SYSTEM LOG] The Counterparty has accepted the Escrow Request. The Room is now unlocked. You are in the Agreement Phase. Please discuss terms.`,
                is_system_generated: true,
                risk_level: 'Safe'
             }
@@ -340,7 +378,64 @@ router.put('/:id/accept-invite', authenticateJWT, async (req, res): Promise<any>
       io.to(`trade_${tradeId}`).emit('trade_updated', 'agreement');
       return res.json({ success: true });
    } catch (e: any) {
-      res.status(500).json({ error: 'Server error' });
+      res.status(500).json({ error: 'Server error', details: e.message });
+   }
+});
+
+// PUT Reject Escrow Invite
+router.put('/:id/reject-invite', authenticateJWT, async (req, res): Promise<any> => {
+   try {
+      const tradeId = parseInt(req.params.id as string);
+
+      const trade = await prisma.transaction.findUnique({ where: { transaction_id: tradeId } });
+      if (!trade) return res.status(404).json({ error: 'Trade not found' });
+      if (trade.status !== 'pending_invite') return res.status(400).json({ error: 'Trade is not pending.' });
+
+      if (req.user.user_id !== trade.buyer_id && req.user.user_id !== trade.seller_id) {
+         return res.status(403).json({ error: 'Forbidden.' });
+      }
+
+      await prisma.$transaction(async (tx) => {
+         const updated = await tx.transaction.updateMany({
+            where: { transaction_id: tradeId, status: 'pending_invite' },
+            data: { status: 'cancelled' }
+         });
+         if (updated.count === 0) throw new Error('Transaction is no longer pending.');
+
+         // Auto-Return item to marketplace if it was reserved
+         const linkedListing = await tx.listing.findFirst({
+            where: { seller_id: trade.seller_id, item_name: trade.item_name || '', game_type: trade.game_type || '', status: 'reserved' }
+         });
+         if (linkedListing) {
+            await tx.listing.update({ where: { listing_id: linkedListing.listing_id }, data: { status: 'open' } });
+         }
+
+         await tx.notification.updateMany({
+            where: { reference_id: tradeId, type: 'escrow_invite' },
+            data: { is_read: true }
+         });
+
+         // Notify initiator
+         const initiatorId = trade.buyer_id;
+         const rejectNotif = await tx.notification.create({
+            data: {
+               user_id: initiatorId,
+               message: `Your Escrow invite for Trade #${tradeId} was declined by the seller.`,
+               type: 'escrow_rejected',
+               reference_id: tradeId
+            }
+         });
+
+         const io = req.app.get('io');
+         if (io) io.to(`user_${initiatorId}`).emit('new_notification', rejectNotif);
+
+         await logAudit({ tx, transactionId: tradeId, userId: req.user.user_id, actionType: ACTION_TYPES.TRADE_CANCELLED, description: `User rejected escrow invite for trade #${tradeId}`, ip: req.ip });
+      });
+
+      io.to(`trade_${tradeId}`).emit('trade_updated', 'cancelled');
+      return res.json({ success: true });
+   } catch (e: any) {
+      res.status(500).json({ error: 'Server error', details: e.message });
    }
 });
 
@@ -806,7 +901,7 @@ router.post('/:id/cancel', authenticateJWT, async (req, res): Promise<any> => {
       if (trade.buyer_id !== req.user.user_id && trade.seller_id !== req.user.user_id) return res.status(403).json({ error: 'Forbidden.' });
 
       if (trade.status !== 'pending_invite' && trade.status !== 'agreement' && trade.status !== 'awaiting_payment') {
-         return res.status(400).json({ error: 'Cannot cancel directly. Funds may already be locked.' });
+         return res.status(400).json({ error: 'Cannot cancel directly. Mutual Cancellation or Dispute is required at this stage to protect the digital asset.' });
       }
 
       await prisma.$transaction(async (tx) => {
@@ -815,15 +910,26 @@ router.post('/:id/cancel', authenticateJWT, async (req, res): Promise<any> => {
             data: { status: 'cancelled' }
          });
 
+         // Logic: Auto-Return item to marketplace if it was reserved
+         const linkedListing = await tx.listing.findFirst({
+            where: { seller_id: trade.seller_id, item_name: trade.item_name || '', game_type: trade.game_type || '', status: 'reserved' }
+         });
+         if (linkedListing) {
+            await tx.listing.update({ where: { listing_id: linkedListing.listing_id }, data: { status: 'open' } });
+         }
+
          await tx.message.create({
             data: {
                transaction_id: tradeId,
                sender_id: req.user.user_id,
-               message_text: `[SYSTEM ALERT] This Escrow Room has been permanently CANCELLED. No funds were transferred.`,
+               message_text: `[SYSTEM ALERT] This Escrow Room has been permanently CANCELLED. No funds were transferred. The item has been returned to the marketplace.`,
                is_system_generated: true,
                risk_level: 'Safe'
             }
          });
+
+         // AUDIT: Trade cancelled
+         await logAudit({ tx, transactionId: tradeId, userId: req.user.user_id, actionType: ACTION_TYPES.TRADE_CANCELLED, description: `User cancelled trade #${tradeId}`, ip: req.ip, metadata: { restored_listing: !!linkedListing } });
       });
 
       io.to(`trade_${tradeId}`).emit('trade_updated', 'cancelled');

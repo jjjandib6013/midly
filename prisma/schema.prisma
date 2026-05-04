@@ -138,6 +138,7 @@ model Transaction {
   item_delivered_at   DateTime?  @db.Timestamp(6)
   buyer_approved_at   DateTime?  @db.Timestamp(6)
   cancel_requested_by Int?
+  expires_at          DateTime?  @db.Timestamp(6)
   created_at          DateTime   @default(now()) @db.Timestamp(6)
   updated_at          DateTime   @default(now()) @updatedAt @db.Timestamp(6)
   audit_logs          AuditLog[]
