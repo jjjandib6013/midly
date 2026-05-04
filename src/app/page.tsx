@@ -9,6 +9,7 @@ import Link from "next/link";
 import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
 import FeatureSlider from "@/components/sections/FeatureSlider";
+import SpinningCarousel from "@/components/sections/SpinningCarousel";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -18,37 +19,36 @@ export default function Home() {
   useGSAP(() => {
     const tl = gsap.timeline();
 
-    tl.fromTo(".hero-badge",
-      { opacity: 0, x: -30 },
-      { opacity: 1, x: 0, duration: 0.8, ease: "power4.out", delay: 0.2 }
+    // Pill tags fade in
+    tl.fromTo(".hero-tags span",
+      { opacity: 0, y: -15, scale: 0.9 },
+      { opacity: 1, y: 0, scale: 1, duration: 0.5, stagger: 0.08, ease: "back.out(1.5)", delay: 0.1 }
     )
-      .fromTo(".hero-title .line",
-        { opacity: 0, y: 50, rotateX: -40 },
-        { opacity: 1, y: 0, rotateX: 0, duration: 1, stagger: 0.15, ease: "power3.out" },
-        "-=0.5"
-      )
-      .fromTo(".hero-desc",
-        { opacity: 0, y: 30 },
-        { opacity: 1, y: 0, duration: 0.8, ease: "power2.out" },
-        "-=0.4"
-      )
-      .fromTo(".hero-btn",
-        { opacity: 0, scale: 0.9 },
-        { opacity: 1, scale: 1, duration: 0.6, stagger: 0.1, ease: "back.out(1.5)" },
-        "-=0.4"
-      )
-      .fromTo(".hero-footer",
-        { opacity: 0 },
-        { opacity: 1, duration: 1 },
-        "-=0.2"
-      );
+    // Headline lines
+    .fromTo(".hero-title .line",
+      { opacity: 0, y: 60, rotateX: -40 },
+      { opacity: 1, y: 0, rotateX: 0, duration: 1, stagger: 0.12, ease: "power3.out" },
+      "-=0.3"
+    )
+    // Subheadline
+    .fromTo(".hero-desc",
+      { opacity: 0, y: 30 },
+      { opacity: 1, y: 0, duration: 0.8, ease: "power2.out" },
+      "-=0.4"
+    )
+    // CTA buttons
+    .fromTo(".hero-btn",
+      { opacity: 0, scale: 0.9 },
+      { opacity: 1, scale: 1, duration: 0.6, stagger: 0.1, ease: "back.out(1.5)" },
+      "-=0.3"
+    );
 
     gsap.fromTo(".section-header",
       { opacity: 0, y: 50 },
       { scrollTrigger: { trigger: ".section-header", start: "top 80%" }, opacity: 1, y: 0, duration: 0.8, ease: "power3.out" }
     );
 
-    // Parallax logic for Awwwards-style depth
+    // Parallax depth
     gsap.utils.toArray<HTMLElement>("[data-speed]").forEach((el) => {
       const speed = parseFloat(el.getAttribute("data-speed") || "0");
       if (speed !== 0) {
@@ -69,56 +69,73 @@ export default function Home() {
   return (
     <div ref={containerRef} className="flex-1 flex flex-col items-center justify-start overflow-hidden bg-[#030407]">
 
-      {/* Asymmetric Hero Section */}
-      <section className="relative w-full min-h-[calc(100vh-64px)] sm:min-h-[calc(100vh-104px)] flex items-center pt-6 sm:pt-10 pb-12 sm:pb-20 px-4 sm:px-6 lg:px-16 max-w-[1600px] mx-auto">
-        <div data-speed="-0.15" className="absolute top-0 right-0 w-[50vw] h-[100vh] bg-primary/5 blur-[180px] rounded-full pointer-events-none -z-10 translate-x-1/3 -translate-y-1/4" />
+      {/* ===== HERO SECTION — VAULT STYLE ===== */}
+      <section className="relative w-full min-h-screen overflow-hidden">
+
+        {/* Background ambient glows */}
+        <div data-speed="-0.15" className="absolute top-0 right-0 w-[50vw] h-[80vh] bg-primary/5 blur-[180px] rounded-full pointer-events-none -z-10 translate-x-1/3 -translate-y-1/4" />
         <div data-speed="-0.25" className="absolute bottom-0 left-0 w-[40vw] h-[40vw] bg-white/[0.02] blur-[120px] rounded-full pointer-events-none -z-10 -translate-x-1/2 translate-y-1/2" />
 
-        <div className="grid grid-cols-1 gap-16 lg:gap-8 w-full items-center">
-          <div className="flex flex-col items-start relative z-10 max-w-4xl">
-            <div className="hero-badge inline-flex items-center gap-3 px-4 py-2 rounded-full border border-primary/20 bg-primary/[0.03] text-primary text-xs font-bold tracking-widest uppercase mb-10 shadow-[0_0_20px_rgba(63,229,108,0.1)]">
-              <ShieldCheck className="w-4 h-4" />
-              Hardware Identity Verification
+        {/* Text content wrapper — constrained width, above carousel */}
+        <div className="relative z-20 flex flex-col items-center pt-8 sm:pt-12 px-4 sm:px-6 lg:px-16 max-w-[1600px] mx-auto pointer-events-none">
+          <div className="pointer-events-auto flex flex-col items-center">
+          {/* 1. Pill Tags */}
+          <div className="hero-tags flex flex-wrap items-center justify-center gap-3 mb-8 sm:mb-10">
+            <span className="inline-flex items-center gap-2 px-5 py-2 rounded-full border border-primary/20 bg-primary/[0.04] text-primary text-[13px] font-bold tracking-widest uppercase">
+              <ShieldCheck className="w-4 h-4" /> Escrow Platform
+            </span>
+            <span className="inline-flex items-center px-5 py-2 rounded-full border border-white/10 bg-white/[0.02] text-[#8892b0] text-[13px] font-bold tracking-widest uppercase">
+              KYC Verified
+            </span>
+            <span className="inline-flex items-center px-5 py-2 rounded-full border border-white/10 bg-white/[0.02] text-[#8892b0] text-[13px] font-bold tracking-widest uppercase">
+              Dispute Engine
+            </span>
+            <span className="inline-flex items-center px-5 py-2 rounded-full border border-white/10 bg-white/[0.02] text-[#8892b0] text-[13px] font-bold tracking-widest uppercase">
+              10+ Games
+            </span>
+          </div>
+
+          {/* 2. Headline */}
+          <h1 className="hero-title text-center text-fluid-hero font-black tracking-tighter text-white mb-6 leading-[0.85] uppercase max-w-4xl">
+            <div className="line block" style={{ perspective: 1000 }}>Your Trusted</div>
+            <div className="line block text-transparent bg-clip-text bg-gradient-to-r from-primary via-green-400 to-emerald-900 drop-shadow-[0_0_30px_rgba(63,229,108,0.2)]" style={{ perspective: 1000 }}>
+              Gaming Asset
             </div>
+            <div className="line block" style={{ perspective: 1000 }}>Escrow</div>
+          </h1>
 
-            <h1 className="hero-title text-fluid-hero font-black tracking-tighter text-white mb-6 sm:mb-10 leading-[0.85] uppercase">
-              <div className="line block" style={{ perspective: 1000 }}>Absolute</div>
-              <div className="line block text-transparent bg-clip-text bg-gradient-to-r from-primary via-green-400 to-emerald-900 drop-shadow-[0_0_30px_rgba(63,229,108,0.2)]" style={{ perspective: 1000 }}>
-                Trust Protocol
-              </div>
-            </h1>
+          {/* 3. Subheadline */}
+          <p className="hero-desc text-center text-xl md:text-2xl text-[#8892b0] max-w-3xl mx-auto mb-10 leading-relaxed font-medium">
+            An innovative platform that eliminates digital asset fraud with hardware-enforced identity verification and automated escrow protection.
+          </p>
 
-            <p className="hero-desc text-lg md:text-xl text-[#8892b0] max-w-xl mb-12 leading-relaxed font-medium">
-              Eliminate digital asset fraud permanently. Midly leverages strict hardware-enforced KYC and secure escrow to guarantee safe peer-to-peer exchanges.
-            </p>
-
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 sm:gap-6 w-full sm:w-auto border-l-4 border-primary/50 pl-4 sm:pl-6">
-              <Link href="/register" className="hero-btn w-full sm:w-auto">
-                <NeonButton className="w-full sm:w-auto gap-3 text-sm !py-6 !px-12 tracking-widest uppercase shadow-[0_0_40px_-5px_rgba(63,229,108,0.3)]">
-                  Create Account <ArrowRight className="w-5 h-5" />
-                </NeonButton>
-              </Link>
-              <Link href="/login" className="hero-btn w-full sm:w-auto">
-                <NeonButton variant="secondary" className="w-full sm:w-auto text-sm !py-6 !px-12 tracking-widest uppercase">
-                  Sign In
-                </NeonButton>
-              </Link>
-            </div>
-
-            <div className="hero-footer mt-10 sm:mt-16 text-xs font-black tracking-widest uppercase text-[#8892b0] flex flex-wrap items-center gap-4 sm:gap-8 pl-4 sm:pl-6">
-              <span className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-primary" /> Supported Networks:</span>
-              <span className="text-white">Dota 2</span>
-              <span className="text-white">Valorant</span>
-              <span className="text-white">CS2</span>
-            </div>
+          {/* 4. CTA Buttons */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-5 sm:gap-6 w-full sm:w-auto justify-center">
+            <Link href="/register" className="hero-btn w-full sm:w-auto">
+              <NeonButton className="w-full sm:w-auto gap-3 text-base !py-6 !px-12 tracking-widest uppercase shadow-[0_0_40px_-5px_rgba(63,229,108,0.3)]">
+                Get Started <ArrowRight className="w-5 h-5" />
+              </NeonButton>
+            </Link>
+            <Link href="/login" className="hero-btn w-full sm:w-auto">
+              <NeonButton variant="secondary" className="w-full sm:w-auto text-base !py-6 !px-12 tracking-widest uppercase">
+                Sign In
+              </NeonButton>
+            </Link>
+          </div>
           </div>
         </div>
+
+        {/* 5. Spinning 3D Carousel — FULL WIDTH, spans edge to edge */}
+        <SpinningCarousel />
+
+        {/* Bottom gradient fade */}
+        <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-[#030407] to-transparent z-30 pointer-events-none" />
       </section>
 
-      {/* Advanced Image Slider Section */}
+      {/* ===== FEATURE SLIDER SECTION ===== */}
       <FeatureSlider />
 
-      {/* Structured Grid Section */}
+      {/* ===== ARCHITECTURE GRID SECTION ===== */}
       <section className="w-full px-4 sm:px-6 lg:px-16 py-16 sm:py-24 lg:py-32 max-w-[1600px] mx-auto border-t border-white/[0.02] relative">
         <div className="section-header flex flex-col md:flex-row md:items-end justify-between mb-12 sm:mb-16 lg:mb-24 gap-6 sm:gap-8">
           <div>
