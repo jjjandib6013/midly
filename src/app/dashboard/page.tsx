@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
+import ReputationBadge from "@/components/ui/ReputationBadge";
 import { API_URL } from "@/lib/api";
 
 type Trade = {
@@ -109,16 +110,7 @@ export default function Dashboard() {
                     </p>
                     {user && (
                        <div className="flex items-center gap-1.5 group relative cursor-help">
-                          {Number(user.reputation_score) >= 90 ? (
-                             <span className="text-[10px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20 font-bold tracking-wide">GOLD</span>
-                          ) : Number(user.reputation_score) >= 50 ? (
-                             <span className="text-[10px] bg-zinc-300/10 text-zinc-300 px-1.5 py-0.5 rounded border border-zinc-400/20 font-bold tracking-wide">SILVER</span>
-                          ) : Number(user.reputation_score) > 0 ? (
-                             <span className="text-[10px] bg-orange-700/10 text-orange-600 px-1.5 py-0.5 rounded border border-orange-700/20 font-bold tracking-wide">BRONZE</span>
-                          ) : (
-                             <span className="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded-full font-medium tracking-wide uppercase">NEW</span>
-                          )}
-                          <span className="text-xs text-yellow-500 font-bold">★ {Number(user.reputation_score || 0).toFixed(1)}</span>
+                          <ReputationBadge score={Number(user.reputation_score || 0)} showScore />
                           <div className="absolute top-full mt-2 right-0 md:right-auto md:-left-2 w-56 p-3 bg-dark-panel border border-dark-border shadow-xl rounded-lg text-[11px] leading-relaxed text-zinc-300 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-all z-50 normal-case tracking-normal">
                              <strong className="text-white block mb-1">Reputation Tier</strong>
                              Gold = 90+ points. Earned from successful trades. Higher tiers grant sellers lower platform fees.

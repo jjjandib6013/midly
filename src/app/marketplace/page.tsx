@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Store, Tag, PlusSquare } from "lucide-react";
 import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
+import ReputationBadge from "@/components/ui/ReputationBadge";
 import toast from "react-hot-toast";
 import { API_URL } from "@/lib/api";
 
@@ -28,7 +29,7 @@ export default function Marketplace() {
    const [newGameType, setNewGameType] = useState("Valorant");
    const [newItemName, setNewItemName] = useState("");
    const [newPrice, setNewPrice] = useState("");
-   const [isVerified, setIsVerified] = useState(false);
+   const [isVerified, setIsVerified] = useState<boolean | null>(null);
 
    const fetchListings = () => {
       fetch(`${API_URL}/api/listings`)
@@ -46,7 +47,7 @@ export default function Marketplace() {
             headers: { "Authorization": `Bearer ${token}` }
          })
             .then(res => res.json())
-            .then(data => { if (data.kyc?.status === 'verified') setIsVerified(true); })
+            .then(data => { if (data.kyc?.status === 'verified') setIsVerified(true); else setIsVerified(false); })
             .catch(console.error);
       }
    }, [token]);
@@ -78,6 +79,7 @@ export default function Marketplace() {
          toast.error("You must log in to buy items.");
          return router.push('/login');
       }
+      if (isVerified === null) return;
       if (!isVerified) {
          toast.error("AML Law: Identity Verification Required to trade.");
          return router.push('/kyc');
@@ -110,12 +112,13 @@ export default function Marketplace() {
             </div>
             <NeonButton onClick={() => {
                if (!token) return router.push('/login');
+               if (isVerified === null) return;
                if (!isVerified) {
                   toast.error("AML Law: Identity Verification Required to sell items.");
                   return router.push('/kyc');
                }
                setShowModal(true);
-            }} className="gap-2">
+            }} className="gap-2" disabled={isVerified === null && !!token}>
                <PlusSquare className="w-5 h-5" /> Post Listing
             </NeonButton>
          </div>
@@ -145,23 +148,12 @@ export default function Marketplace() {
                               {listing.seller.first_name[0]}
                            </div>
                            <span className="text-sm text-text-muted">{listing.seller.first_name} {listing.seller.last_name}</span>
-                           {Number(listing.seller.reputation_score) === 0 ? (
-                              <span className="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full ml-auto font-medium tracking-wide">NEW SELLER</span>
-                           ) : (
-                              <div className="ml-auto flex items-center gap-1.5">
-                                 {Number(listing.seller.reputation_score) >= 90 ? (
-                                    <span className="text-[10px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20 font-bold tracking-wide">GOLD</span>
-                                 ) : Number(listing.seller.reputation_score) >= 50 ? (
-                                    <span className="text-[10px] bg-zinc-300/10 text-zinc-300 px-1.5 py-0.5 rounded border border-zinc-400/20 font-bold tracking-wide">SILVER</span>
-                                 ) : (
-                                    <span className="text-[10px] bg-orange-700/10 text-orange-600 px-1.5 py-0.5 rounded border border-orange-700/20 font-bold tracking-wide">BRONZE</span>
-                                 )}
-                                 <span className="text-xs text-yellow-500 font-bold">★ {Number(listing.seller.reputation_score).toFixed(1)}</span>
-                              </div>
-                           )}
+                           <div className="ml-auto">
+                              <ReputationBadge score={Number(listing.seller.reputation_score)} showScore />
+                           </div>
                         </div>
                      </div>
-                     <NeonButton className="w-full justify-center" onClick={() => handleBuyNow(listing.listing_id)}>
+                     <NeonButton className="w-full justify-center" onClick={() => handleBuyNow(listing.listing_id)} disabled={isVerified === null && !!token}>
                         Buy Now via Escrow
                      </NeonButton>
                   </DynamicCard>

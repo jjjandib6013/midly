@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../../config/db';
 import { authenticateJWT, requireKYC } from '../../shared/middlewares/auth.middleware';
-import { disputeLimiter } from '../../shared/middlewares/rateLimiter';
+import { disputeLimiter, listingLimiter } from '../../shared/middlewares/rateLimiter';
 import { io } from '../../../server';
 import { logAudit, ACTION_TYPES } from '../../utils/auditLogger';
 import { encryptForTrade, decryptForTrade } from '../../../src/ai/cryptoUtils';
@@ -19,12 +19,26 @@ const PRE_ACCEPTANCE_STATES = ['pending_invite'];
 // GET P2P Listings
 router.get('/listings', async (req, res): Promise<any> => {
    try {
+      const page = Math.max(0, parseInt(req.query.page as string || '0'));
+      const limit = 20;
+
       const listings = await prisma.listing.findMany({
          where: { status: 'open' },
          include: { seller: { select: { first_name: true, last_name: true, reputation_score: true } } },
-         orderBy: { created_at: 'desc' }
+         orderBy: { created_at: 'desc' },
+         take: limit,
+         skip: page * limit
       });
-      res.json({ listings });
+
+      const anonymized = listings.map(l => ({
+         ...l,
+         seller: {
+            ...l.seller,
+            first_name: l.seller.first_name ? l.seller.first_name[0] + '.' : 'U.',
+            last_name: 'Hidden'
+         }
+      }));
+      res.json({ listings: anonymized });
    } catch (e) {
       res.status(500).json({ error: 'Server error' });
    }
@@ -49,16 +63,26 @@ router.get('/', authenticateJWT, async (req, res): Promise<any> => {
 });
 
 // POST Create P2P Listing
-router.post('/listings', authenticateJWT, requireKYC, async (req, res): Promise<any> => {
+router.post('/listings', authenticateJWT, requireKYC, listingLimiter, async (req, res): Promise<any> => {
    try {
       const { gameType, itemName, price } = req.body;
-      if (Number(price) <= 0 || isNaN(Number(price))) return res.status(400).json({ error: 'Invalid price.' });
+      
+      const ALLOWED_GAMES = ['Valorant', 'CS2', 'Dota 2', 'Steam Account'];
+      if (!ALLOWED_GAMES.includes(gameType)) return res.status(400).json({ error: 'Invalid game category.' });
+      
+      const p = Number(price);
+      if (isNaN(p) || p < 50 || p > 1000000) return res.status(400).json({ error: 'Price must be between 50 and 1,000,000 PHP.' });
+      
+      if (!itemName || typeof itemName !== 'string') return res.status(400).json({ error: 'Item name is required.' });
+      const cleanName = itemName.replace(/<[^>]*>?/gm, '').trim();
+      if (cleanName.length < 3 || cleanName.length > 100) return res.status(400).json({ error: 'Item name must be between 3 and 100 characters.' });
+
       const listing = await prisma.listing.create({
          data: {
             seller_id: req.user.user_id,
             game_type: gameType,
-            item_name: itemName,
-            price: Number(price)
+            item_name: cleanName,
+            price: p
          }
       });
       res.json({ listing });
@@ -71,25 +95,23 @@ router.post('/listings', authenticateJWT, requireKYC, async (req, res): Promise<
 router.post('/listings/buy/:id', authenticateJWT, requireKYC, async (req, res): Promise<any> => {
    try {
       const listingId = parseInt(req.params.id as string);
-      const listing = await prisma.listing.findUnique({ where: { listing_id: listingId } });
-
-      if (!listing || listing.status !== 'open') return res.status(404).json({ error: 'Listing not available' });
-      if (listing.seller_id === req.user.user_id) return res.status(400).json({ error: 'Cannot buy your own listing' });
-
-      const seller = await prisma.user.findUnique({ where: { user_id: listing.seller_id } });
-      const sellerScore = Number(seller?.reputation_score || 0);
-
-      const settings = await prisma.platformSettings.findUnique({ where: { id: 1 } });
-      let feeRate = Number(settings?.base_fee ?? 0.05);
-
-      if (sellerScore >= 90) feeRate = Math.max(0, feeRate - 0.02); // Gold Tier
-      else if (sellerScore >= 50) feeRate = Math.max(0, feeRate - 0.01); // Silver Tier
-
-      const basePrice = Number(listing.price);
-      const serviceFee = basePrice * feeRate;
-      const totalAmount = basePrice + serviceFee;
-
       const tradeIdRes = await prisma.$transaction(async (tx) => {
+         const listing = await tx.listing.findUnique({ where: { listing_id: listingId } });
+         if (!listing || listing.status !== 'open') throw new Error('Listing not available');
+         if (listing.seller_id === req.user.user_id) throw new Error('Cannot buy your own listing');
+
+         const seller = await tx.user.findUnique({ where: { user_id: listing.seller_id } });
+         const sellerScore = Number(seller?.reputation_score || 0);
+
+         const settings = await tx.platformSettings.findUnique({ where: { id: 1 } });
+         let feeRate = Number(settings?.base_fee ?? 0.05);
+
+         if (sellerScore >= 90) feeRate = Math.max(0, feeRate - 0.02); // Gold Tier
+         else if (sellerScore >= 50) feeRate = Math.max(0, feeRate - 0.01); // Silver Tier
+
+         const basePrice = Number(listing.price);
+         const serviceFee = basePrice * feeRate;
+
          await tx.listing.update({ where: { listing_id: listingId }, data: { status: 'sold' } });
 
          const trade = await tx.transaction.create({
@@ -110,12 +132,24 @@ router.post('/listings/buy/:id', authenticateJWT, requireKYC, async (req, res): 
          await tx.message.create({
             data: {
                transaction_id: trade.transaction_id,
-               sender_id: req.user.user_id, // acting as system trigger
+               sender_id: null,
                message_text: `MIDLY TRADE AGREEMENT PHASE INITIATED.\n\nItem: ${listing.item_name}\nPrice: ₱${basePrice.toLocaleString()}\n\nNo funds have been locked yet. Please discuss the terms. When ready, the Seller must Request Payment, and the Buyer will be prompted to deposit funds into the Midly Smart Vault.`,
                is_system_generated: true,
                risk_level: 'Safe'
             }
          });
+
+         const notif = await tx.notification.create({
+            data: {
+               user_id: listing.seller_id,
+               message: `Your listing for ${listing.item_name} has been bought! An escrow room has been created.`,
+               type: 'listing_sold',
+               reference_id: trade.transaction_id
+            }
+         });
+
+         const ioApp = req.app.get('io');
+         if (ioApp) ioApp.to(`user_${listing.seller_id}`).emit('new_notification', notif);
 
          // AUDIT: Trade created from listing
          await logAudit({ tx, transactionId: trade.transaction_id, userId: req.user.user_id, actionType: ACTION_TYPES.TRADE_CREATED, description: `Trade #${trade.transaction_id} created from listing #${listingId}`, ip: req.ip, metadata: { item_name: listing.item_name, agreed_price: basePrice, total_amount: basePrice + serviceFee, game_type: listing.game_type, buyer_id: req.user.user_id, seller_id: listing.seller_id } });

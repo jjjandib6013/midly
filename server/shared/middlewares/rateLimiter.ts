@@ -31,3 +31,13 @@ export const disputeLimiter = isDev ? devPassthrough : rateLimit({
    },
    message: { error: 'You have reached the maximum number of disputes allowed per 24 hours (3).' }
 });
+
+export const listingLimiter = isDev ? devPassthrough : rateLimit({
+   windowMs: 60 * 60 * 1000, // 1 hour
+   limit: 10,
+   keyGenerator: (req, res) => {
+      if ((req as any).user?.user_id) return String((req as any).user.user_id);
+      return ipKeyGenerator(req.ip || 'unknown');
+   },
+   message: { error: 'Listing creation limit exceeded. Maximum 10 listings per hour.' }
+});

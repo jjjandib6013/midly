@@ -205,12 +205,12 @@ model DisputeEvidence {
 model Message {
   message_id          Int         @id @default(autoincrement())
   transaction_id      Int
-  sender_id           Int
+  sender_id           Int?
   message_text        String?
   sent_at             DateTime?   @default(now()) @db.Timestamp(6)
   is_system_generated Boolean?    @default(false)
   risk_level          String?     @db.VarChar(20)
-  sender              User        @relation(fields: [sender_id], references: [user_id])
+  sender              User?       @relation(fields: [sender_id], references: [user_id])
   transaction         Transaction @relation(fields: [transaction_id], references: [transaction_id], onDelete: Cascade)
 
   @@map("message")
