@@ -13,6 +13,7 @@ import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
 import ReputationBadge from "@/components/ui/ReputationBadge";
 import { RowSkeleton } from "@/components/ui/RowSkeleton";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { useDelayedSkeleton } from "@/hooks/useDelayedSkeleton";
 import { API_URL } from "@/lib/api";
 
@@ -139,10 +140,16 @@ export default function Dashboard() {
                         <span className="text-xs font-black text-[#8892b0] uppercase tracking-widest">Available Balance</span>
                         <Wallet className="w-5 h-5 text-primary" />
                      </div>
-                     <p className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tighter">
-                        <span className="text-[#8892b0] text-xl lg:text-3xl pr-1">₱</span>
-                        {Number(user?.wallet_balance || 0).toLocaleString()}
-                     </p>
+                     {showSkeleton ? (
+                        <Skeleton className="h-10 sm:h-12 w-32 mt-2" />
+                     ) : isLoading ? (
+                        <div className="h-10 sm:h-12 mt-2" />
+                     ) : (
+                        <p className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tighter">
+                           <span className="text-[#8892b0] text-xl lg:text-3xl pr-1">₱</span>
+                           {Number(user?.wallet_balance || 0).toLocaleString()}
+                        </p>
+                     )}
                   </DynamicCard>
                   
                   <DynamicCard hoverEffect className="dash-metric p-5 sm:p-6 md:p-8 flex flex-col justify-between">
@@ -150,10 +157,16 @@ export default function Dashboard() {
                         <span className="text-xs font-black text-[#8892b0] uppercase tracking-widest">In Escrow (Your Funds)</span>
                         <ShieldCheck className="w-5 h-5 text-purple-400" />
                      </div>
-                     <p className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tighter">
-                        <span className="text-[#8892b0] text-xl lg:text-3xl pr-1">₱</span>
-                        {trades.filter(t => ['active', 'verifying'].includes(t.status)).reduce((s, t) => s + Number(t.agreed_price || 0), 0).toLocaleString()}
-                     </p>
+                     {showSkeleton ? (
+                        <Skeleton className="h-10 sm:h-12 w-32 mt-2" />
+                     ) : isLoading ? (
+                        <div className="h-10 sm:h-12 mt-2" />
+                     ) : (
+                        <p className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tighter">
+                           <span className="text-[#8892b0] text-xl lg:text-3xl pr-1">₱</span>
+                           {trades.filter(t => ['active', 'verifying'].includes(t.status)).reduce((s, t) => s + Number(t.agreed_price || 0), 0).toLocaleString()}
+                        </p>
+                     )}
                   </DynamicCard>
 
                   <DynamicCard hoverEffect className="dash-metric p-5 sm:p-6 md:p-8 flex flex-col justify-between border-primary/20 bg-primary/[0.02]">
@@ -161,9 +174,15 @@ export default function Dashboard() {
                         <span className="text-xs font-black text-primary uppercase tracking-widest">Active Trades</span>
                         <Activity className="w-5 h-5 text-primary" />
                      </div>
-                     <p className="text-4xl sm:text-5xl lg:text-7xl font-black text-white tracking-tighter leading-none">
-                        {live.length}
-                     </p>
+                     {showSkeleton ? (
+                        <Skeleton className="h-12 sm:h-16 w-20 mt-2" />
+                     ) : isLoading ? (
+                        <div className="h-12 sm:h-16 mt-2" />
+                     ) : (
+                        <p className="text-4xl sm:text-5xl lg:text-7xl font-black text-white tracking-tighter leading-none">
+                           {live.length}
+                        </p>
+                     )}
                   </DynamicCard>
                </div>
 
@@ -174,7 +193,13 @@ export default function Dashboard() {
                      {live.length > 0 && <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />}
                   </h2>
                   
-                  {live.length === 0 ? (
+                  {showSkeleton ? (
+                     <div className="flex flex-col gap-4">
+                        {Array.from({ length: 3 }).map((_, i) => <RowSkeleton key={i} />)}
+                     </div>
+                  ) : isLoading ? (
+                     <div className="min-h-[200px]" />
+                  ) : live.length === 0 ? (
                       <div className="dash-header p-12 rounded-[2rem] border border-dashed border-white/10 flex flex-col items-center justify-center text-center">
                          <div className="w-16 h-16 rounded-full bg-white/[0.02] flex items-center justify-center mb-4">
                             <Store className="w-6 h-6 text-[#8892b0]" />
@@ -184,10 +209,6 @@ export default function Dashboard() {
                             Start your first trade on the Marketplace <ArrowRight className="w-4 h-4" />
                          </Link>
                       </div>
-                  ) : showSkeleton ? (
-                     <div className="flex flex-col gap-4">
-                        {Array.from({ length: 3 }).map((_, i) => <RowSkeleton key={i} />)}
-                     </div>
                   ) : (
                      <div className="flex flex-col gap-4">
                         {live.map((t, i) => {
@@ -233,15 +254,17 @@ export default function Dashboard() {
                   <Link href="/transactions" className="text-xs font-bold tracking-widest uppercase text-primary hover:brightness-110">Archive</Link>
                </div>
 
-               {sorted.length === 0 ? (
+               {showSkeleton ? (
+                  <div className="flex flex-col gap-3 sm:gap-4">
+                     {Array.from({ length: 4 }).map((_, i) => <RowSkeleton key={i} />)}
+                  </div>
+               ) : isLoading ? (
+                  <div className="min-h-[200px]" />
+               ) : sorted.length === 0 ? (
                    <div className="text-center py-10">
                       <p className="text-[#8892b0] text-sm font-medium mb-2">No past activity found.</p>
                       <Link href="/marketplace" className="text-primary text-xs font-bold uppercase tracking-widest hover:underline">Explore Marketplace</Link>
                    </div>
-               ) : showSkeleton ? (
-                  <div className="flex flex-col gap-3 sm:gap-4">
-                     {Array.from({ length: 4 }).map((_, i) => <RowSkeleton key={i} />)}
-                  </div>
                ) : (
                   <div className="flex flex-col gap-4">
                      {sorted.slice(0, 7).map((t, i) => {
