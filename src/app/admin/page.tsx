@@ -8,6 +8,8 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsToolti
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { TableSkeleton } from '@/components/ui/TableSkeleton';
+import { useDelayedSkeleton } from '@/hooks/useDelayedSkeleton';
 
 type TabState = "OVERVIEW" | "REPORTS" | "DISPUTES" | "KYC" | "USERS" | "SETTINGS" | "RISK";
 
@@ -35,6 +37,7 @@ export default function AdminDashboard() {
   const [biometricThreshold, setBiometricThreshold] = useState("0.55");
   const [reviewThreshold, setReviewThreshold] = useState("0.45");
   const [isLoading, setIsLoading] = useState(true);
+  const showSkeleton = useDelayedSkeleton(isLoading, 200);
 
   // Reports Data
   const [chartData, setChartData] = useState<any[]>([]);
@@ -850,7 +853,11 @@ export default function AdminDashboard() {
                      )}
                   </div>
 
-                  {filteredDisputes.length === 0 ? (
+                  {showSkeleton ? (
+                     <div className="space-y-6">
+                        <TableSkeleton />
+                     </div>
+                  ) : filteredDisputes.length === 0 ? (
                      <div className="text-center py-16 border border-zinc-800 rounded-xl flex flex-col items-center bg-zinc-900/10">
                         <ShieldAlert className="w-8 h-8 text-zinc-600 mb-3" />
                         <h3 className="text-zinc-200 font-medium text-sm">{disputeSubTab === "ACTIVE" ? "No Active Disputes" : "No Dispute History"}</h3>

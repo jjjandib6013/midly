@@ -13,6 +13,8 @@ import { API_URL } from "@/lib/api";
 import { io } from "socket.io-client";
 import { getTransactionUIInfo, formatCurrency, groupTransactionsByDate } from "@/lib/walletFormatters";
 import { motion, AnimatePresence } from "framer-motion";
+import { RowSkeleton } from "@/components/ui/RowSkeleton";
+import { useDelayedSkeleton } from "@/hooks/useDelayedSkeleton";
 
 export default function Wallet() {
   const { data: session } = useSession();
@@ -40,6 +42,8 @@ export default function Wallet() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const showSkeleton = useDelayedSkeleton(isLoading, 200);
 
   const fetchWallet = async (pageNum: number = 1, append: boolean = false) => {
     if (!token) return;
@@ -64,6 +68,7 @@ export default function Wallet() {
       }
     } catch (e) { console.error("Wallet fetch error:", e); } finally {
        if (append) setIsLoadingMore(false);
+       if (!append) setIsLoading(false);
     }
 
     try {
@@ -298,7 +303,11 @@ export default function Wallet() {
             </div>
             
             <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 mt-4 space-y-8 max-h-[400px] xl:max-h-[600px]" data-lenis-prevent>
-              {history.length === 0 ? (
+              {showSkeleton ? (
+                 <div className="flex flex-col gap-3">
+                    {Array.from({ length: 5 }).map((_, i) => <RowSkeleton key={i} />)}
+                 </div>
+              ) : !isLoading && history.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 grayscale opacity-40 h-full">
                    <div className="w-20 h-20 rounded-full border border-dashed border-text-muted flex items-center justify-center mb-6">
                       <History className="w-8 h-8 text-text-muted" />

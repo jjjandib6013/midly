@@ -6,6 +6,9 @@ import { useParams } from "next/navigation";
 import { ShieldCheck, MessageSquare, CheckCircle2, ShieldAlert, Paperclip, ImageIcon, ArrowRight, Copy, Wallet, Smartphone, CreditCard, Lock, Timer, Unlock, XCircle, Key, Eye, EyeOff, Clock, Server, X, UploadCloud } from "lucide-react";
 import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
+import { ChatSkeleton } from "@/components/ui/ChatSkeleton";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { useDelayedSkeleton } from "@/hooks/useDelayedSkeleton";
 import { io } from "socket.io-client";
 import toast from "react-hot-toast";
 import { API_URL } from "@/lib/api";
@@ -34,6 +37,7 @@ export default function TradeHub() {
 
 
    const [isLoading, setIsLoading] = useState(true);
+   const showSkeleton = useDelayedSkeleton(isLoading, 200);
    const [hasRated, setHasRated] = useState(false);
    const [credentialsInput, setCredentialsInput] = useState("");
    const [isVaultOpen, setIsVaultOpen] = useState(false);
@@ -564,7 +568,48 @@ export default function TradeHub() {
       } catch (e) { }
    };
 
-   if (isLoading || !trade) return <div className="flex-1 flex justify-center items-center"><div className="w-8 h-8 rounded-full border-4 border-primary border-t-transparent animate-spin" /></div>;
+   if (isLoading || !trade) {
+      if (!showSkeleton) return <div className="flex-1 w-full min-h-screen" />; // Blank state before 200ms
+      return (
+         <div className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 lg:py-8 flex flex-col lg:grid lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 lg:h-[calc(100vh-64px)]">
+            {/* Left Column Skeleton */}
+            <div className="order-2 lg:order-1 flex flex-col gap-6">
+               <DynamicCard className="p-5 border border-dark-border bg-dark-panel">
+                  <Skeleton className="h-4 w-24 mb-4" />
+                  <div className="flex items-center gap-4">
+                     <Skeleton className="w-14 h-14 rounded-full" />
+                     <div>
+                        <Skeleton className="h-5 w-32 mb-2" />
+                        <Skeleton className="h-4 w-12" />
+                     </div>
+                  </div>
+               </DynamicCard>
+               <DynamicCard className="p-6 border border-dark-border bg-dark-panel flex-1">
+                  <Skeleton className="h-5 w-40 mb-6" />
+                  <div className="space-y-4">
+                     <Skeleton className="h-16 w-full" />
+                     <Skeleton className="h-16 w-full" />
+                     <Skeleton className="h-16 w-full" />
+                  </div>
+               </DynamicCard>
+            </div>
+            {/* Right Column (Chat) Skeleton */}
+            <div className="order-1 lg:order-2 lg:col-span-2 flex flex-col h-[600px] lg:h-full bg-dark-panel border border-dark-border rounded-2xl p-4 lg:p-6 shadow-xl">
+               <div className="flex justify-between items-center border-b border-dark-border pb-4 mb-4">
+                  <Skeleton className="h-6 w-32" />
+                  <Skeleton className="h-6 w-24" />
+               </div>
+               <div className="flex-1 overflow-hidden">
+                  <ChatSkeleton />
+               </div>
+               <div className="mt-4 flex gap-2">
+                  <Skeleton className="h-12 flex-1 rounded-xl" />
+                  <Skeleton className="h-12 w-12 rounded-xl" />
+               </div>
+            </div>
+         </div>
+      );
+   }
 
    // =============================================
    // PENDING INVITE: Completely separate page
