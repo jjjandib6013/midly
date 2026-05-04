@@ -11,10 +11,7 @@ export async function middleware(request: NextRequest) {
   const token = secret ? await getToken({ req: request, secret }) : null;
   const { pathname } = request.nextUrl;
 
-  // 1. Immediately redirect marketplace to dashboard (disabled feature)
-  if (pathname.startsWith('/marketplace')) {
-     return NextResponse.redirect(new URL('/dashboard', request.url));
-  }
+
 
   // 2. Protect Authenticated Routes
   const isProtectedRoute = 
