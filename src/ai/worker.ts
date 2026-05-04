@@ -618,14 +618,25 @@ export async function processAutoRelease(data: { tradeId: number }) {
                 });
             }
 
-            const amount = Number(freshTrade.total_amount);
+            const amountToReceive = Number(freshTrade.agreed_price);
 
             // Release funds to seller
-            await tx.user.update({
+            const updatedSeller = await tx.user.update({
                 where: { user_id: freshTrade.seller_id },
                 data: {
-                    wallet_balance: { increment: amount },
+                    wallet_balance: { increment: amountToReceive },
                     reputation_score: { increment: 0.01 } // Issue #9: Increase reputation
+                }
+            });
+
+            // Create the missing wallet transaction log
+            await tx.walletTransaction.create({
+                data: { 
+                   user_id: freshTrade.seller_id, 
+                   type: 'escrow_release', 
+                   amount: amountToReceive, 
+                   balance: updatedSeller.wallet_balance || 0, 
+                   description: `Auto Escrow Release - Trade #${tradeId}` 
                 }
             });
 
@@ -633,7 +644,7 @@ export async function processAutoRelease(data: { tradeId: number }) {
             await tx.notification.create({
                 data: {
                     user_id: freshTrade.seller_id,
-                    message: `Auto-release completed for Trade #${tradeId}. ₱${amount.toFixed(2)} has been credited to your wallet.`,
+                    message: `Auto-release completed for Trade #${tradeId}. ₱${amountToReceive.toFixed(2)} has been credited to your wallet.`,
                     type: 'system_alert',
                     reference_id: tradeId
                 }
