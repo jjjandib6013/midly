@@ -53,13 +53,13 @@ router.get('/user/hub', heavyEndpointLimiter, authenticateJWT, async (req: Reque
       const walletTxs = await prisma.walletTransaction.findMany({
          where: { user_id: userId },
          orderBy: { created_at: 'desc' },
-         take: 10
+         take: 5
       });
       
       const completedTrades = await prisma.transaction.findMany({
          where: { OR: [{ buyer_id: userId }, { seller_id: userId }], status: 'completed' },
          orderBy: { updated_at: 'desc' },
-         take: 10,
+         take: 5,
          include: { buyer: { select: { first_name: true } }, seller: { select: { first_name: true } } }
       });
 
@@ -90,7 +90,7 @@ router.get('/user/hub', heavyEndpointLimiter, authenticateJWT, async (req: Reque
       });
 
       timeline.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      const recentTimeline = timeline.slice(0, 10);
+      const recentTimeline = timeline.slice(0, 5);
 
       // Return unified payload
       res.json({

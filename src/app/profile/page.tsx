@@ -3,10 +3,12 @@ import { useSession, signOut } from 'next-auth/react';
 import { useState, useEffect, useRef } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
-import { ShieldCheck, User, Mail, Settings, LogOut, CheckCircle2, CreditCard, Plus, Trash2, Wallet, Activity, Laptop, Smartphone, LockKeyhole, CalendarDays, ArrowDownRight, ArrowUpRight, TrendingUp, AlertCircle, ShoppingCart, ArrowRight } from "lucide-react";
+import { ShieldCheck, User, Mail, Settings, LogOut, CheckCircle2, CreditCard, Plus, Trash2, Wallet, Activity, Laptop, Smartphone, LockKeyhole, CalendarDays, ArrowDownRight, ArrowUpRight, TrendingUp, AlertCircle, ShoppingCart } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { API_URL } from "@/lib/api";
+import DynamicCard from "@/components/ui/DynamicCard";
+import ReputationBadge from "@/components/ui/ReputationBadge";
 
 export default function Profile() {
   const { data: session } = useSession();
@@ -20,11 +22,10 @@ export default function Profile() {
   const [isAddingMode, setIsAddingMode] = useState(false);
   const [newMethod, setNewMethod] = useState({ provider: 'Visa', account_mask: '' });
   
-  const [activeTab, setActiveTab] = useState<'hub' | 'payment' | 'security'>('hub');
+  const [activeTab, setActiveTab] = useState<'overview' | 'payment' | 'security'>('overview');
   const tabContentRef = useRef<HTMLDivElement>(null);
 
   const fetchHubData = () => {
-    // 1. Fetch unified intelligence hub
     fetch(`${API_URL}/api/user/hub`, {
        headers: { "Authorization": `Bearer ${token}` }
     })
@@ -33,7 +34,6 @@ export default function Profile() {
       .catch(console.error)
       .finally(() => setIsLoading(false));
       
-    // 2. Fetch payment methods
     fetch(`${API_URL}/api/user/payment-methods`, {
        headers: { "Authorization": `Bearer ${token}` }
     })
@@ -41,7 +41,6 @@ export default function Profile() {
       .then(data => { if(data.methods) setMethods(data.methods); })
       .catch(()=>{});
 
-    // 3. Fetch security sessions
     fetch(`${API_URL}/api/user/sessions`, {
        headers: { "Authorization": `Bearer ${token}` }
     })
@@ -56,10 +55,13 @@ export default function Profile() {
 
   useGSAP(() => {
      if (tabContentRef.current && !isLoading) {
-        gsap.fromTo(tabContentRef.current.children, 
-           { opacity: 0, y: 15 }, 
-           { opacity: 1, y: 0, duration: 0.5, stagger: 0.08, ease: "power3.out" }
-        );
+        const tl = gsap.timeline();
+        tl.fromTo(tabContentRef.current.querySelectorAll('.dash-header'), 
+           { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.6, ease: "power3.out" })
+          .fromTo(tabContentRef.current.querySelectorAll('.dash-metric'), 
+           { opacity: 0, scale: 0.95 }, { opacity: 1, scale: 1, duration: 0.5, stagger: 0.1, ease: "back.out(1.2)" }, "-=0.3")
+          .fromTo(tabContentRef.current.querySelectorAll('.dash-item'), 
+           { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.4, stagger: 0.05, ease: "power2.out" }, "-=0.2");
      }
   }, [activeTab, isLoading]);
 
@@ -99,52 +101,44 @@ export default function Profile() {
 
   const { identity, wallet, stats, timeline } = hubData;
 
-  const renderTrustTier = (score: number) => {
-     if (score >= 90) return { label: 'Gold Tier', color: 'text-yellow-500 border-yellow-500/20 bg-yellow-500/10' };
-     if (score >= 50) return { label: 'Silver Tier', color: 'text-gray-300 border-gray-500/30 bg-gray-500/10' };
-     return { label: 'Standard Tier', color: 'text-text-muted border-dark-border bg-dark-bg' };
-  };
-
-  const tier = renderTrustTier(Number(identity.reputation));
-
   return (
     <div className="flex-1 w-full max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col md:flex-row gap-8 font-sans">
       
       {/* Sidebar Navigation */}
       <div className="w-full md:w-64 shrink-0 space-y-6">
         <div>
-           <h1 className="text-2xl font-semibold text-white mb-1">User Hub</h1>
-           <p className="text-sm text-text-muted">Manage your identity and activities.</p>
+           <h1 className="text-2xl font-semibold text-white mb-1">Profile</h1>
+           <p className="text-sm text-text-muted">Manage your account and settings.</p>
         </div>
         
         <nav className="flex md:flex-col space-x-1 md:space-x-0 md:space-y-1 overflow-x-auto pb-2 md:pb-0 -mx-1 md:mx-0">
-           <button onClick={() => setActiveTab('hub')} className={`whitespace-nowrap flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm transition-all touch-manipulation ${activeTab === 'hub' ? 'bg-dark-panel border border-dark-border text-white shadow-sm' : 'text-text-muted hover:bg-white/5 hover:text-white border border-transparent'}`}>
-              <User className="w-4 h-4" /> Intelligence Dashboard
+           <button onClick={() => setActiveTab('overview')} className={`whitespace-nowrap flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm transition-all touch-manipulation ${activeTab === 'overview' ? 'bg-dark-panel border border-dark-border text-white shadow-sm' : 'text-text-muted hover:bg-white/5 hover:text-white border border-transparent'}`}>
+              <User className="w-4 h-4" /> Overview
            </button>
            <button onClick={() => setActiveTab('payment')} className={`whitespace-nowrap flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm transition-all touch-manipulation ${activeTab === 'payment' ? 'bg-dark-panel border border-dark-border text-white shadow-sm' : 'text-text-muted hover:bg-white/5 hover:text-white border border-transparent'}`}>
-              <CreditCard className="w-4 h-4" /> Bridges & Billing
+              <CreditCard className="w-4 h-4" /> Payment Methods
            </button>
            <button onClick={() => setActiveTab('security')} className={`whitespace-nowrap flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm transition-all touch-manipulation ${activeTab === 'security' ? 'bg-dark-panel border border-dark-border text-white shadow-sm' : 'text-text-muted hover:bg-white/5 hover:text-white border border-transparent'}`}>
-              <ShieldCheck className="w-4 h-4" /> Security Sessions
+              <ShieldCheck className="w-4 h-4" /> Security & Devices
            </button>
         </nav>
 
         <div className="pt-6 border-t border-dark-border">
            <button onClick={() => signOut({ callbackUrl: "/" })} className="flex items-center gap-3 px-4 text-sm font-medium text-text-muted hover:text-red-500 transition-colors group">
-              <LogOut className="w-4 h-4 group-hover:-translate-x-1 transition-transform" /> Disconnect Identity
+              <LogOut className="w-4 h-4 group-hover:-translate-x-1 transition-transform" /> Sign Out
            </button>
         </div>
       </div>
 
       {/* Main Content Area */}
       <div className="flex-1 min-w-0" ref={tabContentRef}>
-         {activeTab === 'hub' && (
+         {activeTab === 'overview' && (
             <div className="space-y-6">
                
                {/* Identity & Wallet Hero Grid */}
-               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+               <div className="dash-header grid grid-cols-1 lg:grid-cols-3 gap-6">
                   {/* Identity Card */}
-                  <div className="lg:col-span-2 bg-dark-panel border border-dark-border rounded-2xl p-8 flex flex-col sm:flex-row items-center sm:items-start gap-6 shadow-sm">
+                  <DynamicCard hoverEffect className="lg:col-span-2 flex flex-col sm:flex-row items-center sm:items-start gap-6 shadow-none">
                      <div className="w-20 h-20 rounded-full bg-dark-bg border border-dark-border flex items-center justify-center relative shrink-0">
                         <span className="text-2xl font-semibold text-white">{identity.name[0]}</span>
                         {identity.kyc_status === 'verified' && (
@@ -159,35 +153,33 @@ export default function Profile() {
                            <Mail className="w-4 h-4" /> {identity.email}
                         </p>
                         <div className="mt-5 flex flex-wrap gap-2 justify-center sm:justify-start">
-                           <span className={`px-2.5 py-1 text-xs font-medium rounded-md border ${tier.color}`}>
-                              {tier.label} ({Number(identity.reputation).toFixed(1)})
+                           <ReputationBadge score={Number(identity.reputation)} showScore />
+                           <span className={`px-2 py-0.5 text-[10px] font-bold tracking-wide uppercase rounded border ${identity.kyc_status === 'verified' ? 'bg-primary/10 border-primary/20 text-primary' : 'bg-dark-bg border-dark-border text-text-muted'}`}>
+                              KYC: {identity.kyc_status}
                            </span>
-                           <span className={`px-2.5 py-1 text-xs font-medium rounded-md border ${identity.kyc_status === 'verified' ? 'bg-primary/10 border-primary/20 text-primary' : 'bg-dark-bg border-dark-border text-text-muted'}`}>
-                              Identity: {identity.kyc_status.charAt(0).toUpperCase() + identity.kyc_status.slice(1)}
-                           </span>
-                           <span className="px-2.5 py-1 text-xs font-medium rounded-md border border-dark-border bg-dark-bg text-text-muted flex items-center gap-1.5">
-                              <CalendarDays className="w-3 h-3" /> Joined {new Date(identity.created_at).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
+                           <span className="px-2 py-0.5 text-[10px] font-bold tracking-wide uppercase rounded border border-dark-border bg-dark-bg text-text-muted flex items-center gap-1.5">
+                              Joined {new Date(identity.created_at).getFullYear()}
                            </span>
                         </div>
                      </div>
-                  </div>
+                  </DynamicCard>
 
                   {/* Wallet Mini-Ledger */}
-                  <div className="bg-dark-panel border border-dark-border rounded-2xl p-8 flex flex-col justify-center shadow-sm">
-                     <div className="flex items-center gap-2 mb-2 text-text-muted">
+                  <DynamicCard hoverEffect className="flex flex-col justify-center shadow-none text-center lg:text-left">
+                     <div className="flex items-center justify-center lg:justify-start gap-2 mb-2 text-text-muted">
                         <Wallet className="w-4 h-4" />
                         <h3 className="text-sm font-medium">Available Balance</h3>
                      </div>
                      <p className="text-3xl font-semibold text-white tracking-tight">₱{wallet.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
                      <button onClick={() => router.push('/wallet')} className="mt-4 w-full py-2 bg-dark-bg border border-dark-border hover:bg-white/5 text-sm font-medium text-white rounded-lg transition-colors flex items-center justify-center gap-2">
-                        View Wallet Details <ArrowRight className="w-4 h-4" />
+                        View Wallet
                      </button>
-                  </div>
+                  </DynamicCard>
                </div>
 
                {/* Lock Match Banner for Unverified */}
                {identity.kyc_status !== 'verified' && (
-                  <div className="bg-dark-bg border border-yellow-500/20 rounded-2xl p-6 flex flex-col sm:flex-row items-center gap-6 shadow-sm">
+                  <div className="dash-header bg-dark-bg border border-yellow-500/20 rounded-2xl p-6 flex flex-col sm:flex-row items-center gap-6 shadow-sm">
                      <div className="w-12 h-12 rounded-full bg-yellow-500/10 flex items-center justify-center shrink-0">
                         <AlertCircle className="w-6 h-6 text-yellow-500" />
                      </div>
@@ -203,45 +195,42 @@ export default function Profile() {
 
                {/* Quick Stats & Active Metrics */}
                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="bg-dark-panel border border-dark-border rounded-xl p-5 shadow-sm hover:border-dark-border/80 transition-colors">
+                  <DynamicCard hoverEffect className="dash-metric p-5 shadow-none">
                      <div className="flex items-center gap-2 mb-2 text-text-muted">
                         <ShoppingCart className="w-4 h-4" />
                         <span className="text-xs font-medium uppercase tracking-wide">Active Listings</span>
                      </div>
                      <p className="text-2xl font-semibold text-white">{stats.active_listings}</p>
-                  </div>
-                  <div className="bg-dark-panel border border-dark-border rounded-xl p-5 shadow-sm hover:border-dark-border/80 transition-colors">
+                  </DynamicCard>
+                  <DynamicCard hoverEffect className="dash-metric p-5 shadow-none">
                      <div className="flex items-center gap-2 mb-2 text-text-muted">
                         <TrendingUp className="w-4 h-4" />
-                        <span className="text-xs font-medium uppercase tracking-wide">Sold Items</span>
+                        <span className="text-xs font-medium uppercase tracking-wide">Completed Trades</span>
                      </div>
                      <p className="text-2xl font-semibold text-white">{stats.sold_listings}</p>
-                  </div>
-                  <div className="bg-dark-panel border border-dark-border rounded-xl p-5 shadow-sm hover:border-dark-border/80 transition-colors col-span-2 md:col-span-2 relative overflow-hidden">
+                  </DynamicCard>
+                  <DynamicCard hoverEffect className="dash-metric col-span-2 md:col-span-2 relative overflow-hidden p-5 shadow-none">
                      <div className="relative z-10 flex items-center gap-2 mb-2 text-primary">
                         <Activity className="w-4 h-4" />
-                        <span className="text-xs font-medium uppercase tracking-wide">Escrows In Transit</span>
+                        <span className="text-xs font-medium uppercase tracking-wide">Active Escrows</span>
                      </div>
                      <p className="relative z-10 text-2xl font-semibold text-white">{stats.active_escrows}</p>
-                     {stats.active_escrows > 0 && (
-                        <div className="absolute right-0 top-0 bottom-0 w-32 bg-gradient-to-l from-primary/10 to-transparent pointer-events-none" />
-                     )}
-                  </div>
+                  </DynamicCard>
                </div>
 
                {/* Unified Activity Timeline */}
-               <div className="bg-dark-panel border border-dark-border rounded-2xl overflow-hidden shadow-sm">
+               <div className="dash-item bg-dark-panel border border-dark-border rounded-2xl overflow-hidden shadow-sm">
                   <div className="px-6 py-5 border-b border-dark-border">
                      <h3 className="text-base font-semibold text-white">Recent Activity</h3>
                   </div>
                   <div className="divide-y divide-dark-border">
                      {timeline.length === 0 ? (
-                        <div className="px-6 py-12 text-center">
-                           <p className="text-sm text-text-muted font-medium">Your activity timeline is clean.</p>
+                        <div className="px-6 py-8 text-center">
+                           <p className="text-sm text-text-muted font-medium">No recent activity.</p>
                         </div>
                      ) : (
                         timeline.map((event: any) => (
-                           <div key={event.id} className="px-6 py-4 flex items-center justify-between hover:bg-white/[0.02] transition-colors group">
+                           <div key={event.id} className="dash-item px-6 py-4 flex items-center justify-between hover:bg-white/[0.02] transition-colors group">
                               <div className="flex items-center gap-4">
                                  <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 border ${
                                     event.action === 'deposit' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' :
@@ -254,7 +243,7 @@ export default function Profile() {
                                  </div>
                                  <div>
                                     <p className="text-sm font-medium text-white">{event.description}</p>
-                                    <p className="text-xs text-text-muted mt-0.5">{new Date(event.date).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                                    <p className="text-xs text-text-muted mt-0.5">{new Date(event.date).toLocaleDateString()}</p>
                                  </div>
                               </div>
                               <div className="text-right font-mono text-sm">
@@ -272,20 +261,20 @@ export default function Profile() {
 
          {activeTab === 'payment' && (
             <div className="space-y-6">
-               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-4 border-b border-dark-border gap-4">
+               <div className="dash-header flex flex-col sm:flex-row items-start sm:items-center justify-between pb-4 border-b border-dark-border gap-4">
                   <div>
-                     <h3 className="text-lg font-semibold text-white mb-1">Bridges & Billing</h3>
-                     <p className="text-sm text-text-muted">Manage external accounts for fiat off-ramping.</p>
+                     <h3 className="text-lg font-semibold text-white mb-1">Payment Methods</h3>
+                     <p className="text-sm text-text-muted">Manage your linked accounts for deposits and withdrawals.</p>
                   </div>
                   {!isAddingMode && (
                      <button onClick={() => setIsAddingMode(true)} className="flex items-center gap-2 bg-dark-bg border border-dark-border px-4 py-2 rounded-lg text-sm font-medium text-white hover:bg-white/5 transition-colors shadow-sm">
-                        <Plus className="w-4 h-4" /> Add Bridge
+                        <Plus className="w-4 h-4" /> Add Method
                      </button>
                   )}
                </div>
 
                {isAddingMode ? (
-                  <div className="bg-dark-panel border border-dark-border rounded-xl p-6 shadow-sm">
+                  <DynamicCard hoverEffect className="dash-item shadow-none p-6">
                      <h4 className="text-base font-semibold text-white mb-5">Link New Account</h4>
                      <form onSubmit={handleAddMethod} className="space-y-5">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -314,19 +303,19 @@ export default function Profile() {
                         </div>
                         <div className="flex items-center gap-3 pt-2">
                            <button type="button" onClick={() => setIsAddingMode(false)} className="px-4 py-2 rounded-lg text-sm font-medium text-text-muted hover:text-white transition-colors">Cancel</button>
-                           <button type="submit" className="px-4 py-2 rounded-lg text-sm font-medium bg-white text-black hover:bg-gray-200 transition-colors shadow-sm">Save Bridge</button>
+                           <button type="submit" className="px-4 py-2 rounded-lg text-sm font-medium bg-white text-black hover:bg-gray-200 transition-colors shadow-sm">Save Details</button>
                         </div>
                      </form>
-                  </div>
+                  </DynamicCard>
                ) : (
                   <div className="grid grid-cols-1 gap-3">
                      {methods.length === 0 ? (
-                        <div className="text-center py-12 border border-dashed border-dark-border rounded-xl">
-                           <p className="text-sm text-text-muted">No external bridges configured.</p>
+                        <div className="dash-item text-center py-12 border border-dashed border-dark-border rounded-xl">
+                           <p className="text-sm text-text-muted">No payment methods configured.</p>
                         </div>
                      ) : (
                         methods.map((method) => (
-                           <div key={method.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-5 bg-dark-panel border border-dark-border rounded-xl gap-4 group shadow-sm">
+                           <DynamicCard key={method.id} hoverEffect className="dash-item flex flex-col sm:flex-row items-start sm:items-center justify-between p-5 gap-4 group shadow-none">
                               <div className="flex items-center gap-4">
                                  <div className="w-10 h-10 bg-dark-bg border border-dark-border rounded-lg flex items-center justify-center text-text-muted">
                                     <CreditCard className="w-4 h-4" />
@@ -342,7 +331,7 @@ export default function Profile() {
                               <button onClick={() => handleDeleteMethod(method.id)} className="text-text-muted hover:text-red-500 transition-colors sm:opacity-0 sm:group-hover:opacity-100 p-2">
                                  <Trash2 className="w-4 h-4" />
                               </button>
-                           </div>
+                           </DynamicCard>
                         ))
                      )}
                   </div>
@@ -352,17 +341,17 @@ export default function Profile() {
 
          {activeTab === 'security' && (
             <div className="space-y-6">
-               <div className="pb-4 border-b border-dark-border">
-                  <h3 className="text-lg font-semibold text-white mb-1">Active Sessions</h3>
+               <div className="dash-header pb-4 border-b border-dark-border">
+                  <h3 className="text-lg font-semibold text-white mb-1">Security & Devices</h3>
                   <p className="text-sm text-text-muted">Review devices currently logged into your account.</p>
                </div>
 
                <div className="grid grid-cols-1 gap-3">
                   {sessions.length === 0 ? (
-                     <div className="text-sm text-text-muted">No active sessions tracked.</div>
+                     <div className="dash-item text-sm text-text-muted">No active sessions tracked.</div>
                   ) : (
                      sessions.map((session, i) => (
-                        <div key={session.id || i} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-5 bg-dark-panel border border-dark-border rounded-xl gap-4 shadow-sm">
+                        <DynamicCard key={session.id || i} hoverEffect className="dash-item flex flex-col sm:flex-row items-start sm:items-center justify-between p-5 gap-4 shadow-none">
                            <div className="flex items-center gap-4">
                               <div className="w-10 h-10 bg-dark-bg border border-dark-border rounded-full flex items-center justify-center text-text-muted">
                                  {session.user_agent?.toLowerCase().includes('mobile') ? <Smartphone className="w-4 h-4" /> : <Laptop className="w-4 h-4" />}
@@ -380,7 +369,7 @@ export default function Profile() {
                               <p className="text-xs text-text-muted mb-0.5">Last Active</p>
                               <p className="text-sm font-medium text-white">{new Date(session.last_active).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</p>
                            </div>
-                        </div>
+                        </DynamicCard>
                      ))
                   )}
                </div>
