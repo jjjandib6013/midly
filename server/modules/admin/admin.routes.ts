@@ -69,11 +69,19 @@ router.post('/disputes/:txId/resolve', authenticateJWT, async (req: Request, res
             await tx.payment.update({ where: { payment_id: trade.payment!.payment_id }, data: { vault_status: 'refunded', refund_date: new Date() } });
             const updatedBuyer = await tx.user.update({ where: { user_id: trade.buyer_id }, data: { wallet_balance: { increment: amount } } });
             await tx.walletTransaction.create({ data: { user_id: trade.buyer_id, type: 'escrow_refund', amount: amount, balance: updatedBuyer.wallet_balance || 0, description: `Admin Escrow Refund - Trade #${txId}` }});
+            
+            // Penalize Seller
+            const s = await tx.user.findUnique({ where: { user_id: trade.seller_id } });
+            await tx.user.update({ where: { user_id: trade.seller_id }, data: { reputation_score: Math.max(0, Number(s?.reputation_score || 0) - 10) } });
          } else if (action === 'FORWARD_TO_SELLER') {
             await tx.transaction.update({ where: { transaction_id: txId }, data: { status: 'completed' } });
             await tx.payment.update({ where: { payment_id: trade.payment!.payment_id }, data: { vault_status: 'released', release_date: new Date() } });
             const updatedSeller = await tx.user.update({ where: { user_id: trade.seller_id }, data: { wallet_balance: { increment: baseAmount } } });
             await tx.walletTransaction.create({ data: { user_id: trade.seller_id, type: 'escrow_release', amount: baseAmount, balance: updatedSeller.wallet_balance || 0, description: `Admin Escrow Release - Trade #${txId}` }});
+
+            // Penalize Buyer
+            const b = await tx.user.findUnique({ where: { user_id: trade.buyer_id } });
+            await tx.user.update({ where: { user_id: trade.buyer_id }, data: { reputation_score: Math.max(0, Number(b?.reputation_score || 0) - 10) } });
          }
 
          await tx.message.create({

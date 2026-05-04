@@ -883,9 +883,24 @@ export default function TradeHub() {
                      <span className="text-text-muted text-sm">Description</span>
                      <span className="text-white text-sm font-medium truncate max-w-[150px]" title={trade.item_type}>{trade.item_type}</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between border-b border-dark-border pb-2">
                      <span className="text-text-muted text-sm">Base Price</span>
-                     <span className="text-primary font-bold">₱ {Number(trade.agreed_price).toLocaleString()}</span>
+                     <span className="text-white text-sm font-medium">₱ {Number(trade.agreed_price).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-dark-border pb-2">
+                     <span className="text-text-muted text-sm">Platform Fee</span>
+                     <div className="text-right">
+                        <span className="text-white text-sm font-medium">₱ {Number(trade.service_fee).toLocaleString()}</span>
+                        {Number(trade.seller?.reputation_score || 0) >= 90 ? (
+                           <span className="block text-[10px] text-amber-500 font-bold tracking-wide uppercase mt-0.5">Gold Seller Discount</span>
+                        ) : Number(trade.seller?.reputation_score || 0) >= 50 ? (
+                           <span className="block text-[10px] text-zinc-400 font-bold tracking-wide uppercase mt-0.5">Silver Seller Discount</span>
+                        ) : null}
+                     </div>
+                  </div>
+                  <div className="flex justify-between pt-1">
+                     <span className="text-text-muted text-sm">Total Escrow Required</span>
+                     <span className="text-primary font-bold text-lg">₱ {Number(trade.total_amount).toLocaleString()}</span>
                   </div>
                </div>
             </DynamicCard>

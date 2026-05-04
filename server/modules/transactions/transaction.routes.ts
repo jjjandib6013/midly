@@ -76,8 +76,14 @@ router.post('/listings/buy/:id', authenticateJWT, requireKYC, async (req, res): 
       if (!listing || listing.status !== 'open') return res.status(404).json({ error: 'Listing not available' });
       if (listing.seller_id === req.user.user_id) return res.status(400).json({ error: 'Cannot buy your own listing' });
 
+      const seller = await prisma.user.findUnique({ where: { user_id: listing.seller_id } });
+      const sellerScore = Number(seller?.reputation_score || 0);
+
       const settings = await prisma.platformSettings.findUnique({ where: { id: 1 } });
-      const feeRate = Number(settings?.base_fee ?? 0.05);
+      let feeRate = Number(settings?.base_fee ?? 0.05);
+
+      if (sellerScore >= 90) feeRate = Math.max(0, feeRate - 0.02); // Gold Tier
+      else if (sellerScore >= 50) feeRate = Math.max(0, feeRate - 0.01); // Silver Tier
 
       const basePrice = Number(listing.price);
       const serviceFee = basePrice * feeRate;
@@ -149,8 +155,14 @@ router.post('', authenticateJWT, requireKYC, async (req, res): Promise<any> => {
       const buyerId = role === 'BUY' ? req.user.user_id : counterParty.user_id;
       const sellerId = role === 'SELL' ? req.user.user_id : counterParty.user_id;
 
+      const seller = await prisma.user.findUnique({ where: { user_id: sellerId } });
+      const sellerScore = Number(seller?.reputation_score || 0);
+
       const settings = await prisma.platformSettings.findUnique({ where: { id: 1 } });
-      const feeRate = Number(settings?.base_fee ?? 0.05);
+      let feeRate = Number(settings?.base_fee ?? 0.05);
+
+      if (sellerScore >= 90) feeRate = Math.max(0, feeRate - 0.02); // Gold Tier
+      else if (sellerScore >= 50) feeRate = Math.max(0, feeRate - 0.01); // Silver Tier
 
       const basePrice = Number(agreedPrice);
       const serviceFee = basePrice * feeRate;
@@ -498,11 +510,26 @@ router.put('/:id/progress', authenticateJWT, async (req, res): Promise<any> => {
             const amountToReceive = Number(trade.agreed_price);
             const updatedSeller = await tx.user.update({
                where: { user_id: trade.seller_id },
-               data: { 
-                  wallet_balance: { increment: amountToReceive },
-                  reputation_score: { increment: 0.01 }
-               }
+               data: { wallet_balance: { increment: amountToReceive } }
             });
+            
+            // Reputation Tier Logic (Anti-Collusion & Asymmetric Caps)
+            const completedCount = await tx.transaction.count({
+               where: { buyer_id: trade.buyer_id, seller_id: trade.seller_id, status: 'completed' }
+            });
+            // >5 trades between the same users = 0 points (collusion prevention)
+            if (completedCount <= 5) {
+               const b = await tx.user.findUnique({ where: { user_id: trade.buyer_id } });
+               const s = await tx.user.findUnique({ where: { user_id: trade.seller_id } });
+               await tx.user.update({
+                  where: { user_id: trade.buyer_id },
+                  data: { reputation_score: Math.min(100.00, Number(b?.reputation_score || 0) + 0.1) }
+               });
+               await tx.user.update({
+                  where: { user_id: trade.seller_id },
+                  data: { reputation_score: Math.min(100.00, Number(s?.reputation_score || 0) + 0.5) }
+               });
+            }
             await tx.walletTransaction.create({
                data: { user_id: trade.seller_id, type: 'escrow_release', amount: amountToReceive, balance: updatedSeller.wallet_balance || 0, description: `Escrow Release - Trade #${tradeId}` }
             });
@@ -687,6 +714,23 @@ router.post('/:id/auto-release', authenticateJWT, async (req, res): Promise<any>
             where: { user_id: trade.seller_id },
             data: { wallet_balance: { increment: amountToReceive } }
          });
+
+         // Reputation Tier Logic (Anti-Collusion & Asymmetric Caps)
+         const completedCount = await tx.transaction.count({
+            where: { buyer_id: trade.buyer_id, seller_id: trade.seller_id, status: 'completed' }
+         });
+         if (completedCount <= 5) {
+            const b = await tx.user.findUnique({ where: { user_id: trade.buyer_id } });
+            const s = await tx.user.findUnique({ where: { user_id: trade.seller_id } });
+            await tx.user.update({
+               where: { user_id: trade.buyer_id },
+               data: { reputation_score: Math.min(100.00, Number(b?.reputation_score || 0) + 0.1) }
+            });
+            await tx.user.update({
+               where: { user_id: trade.seller_id },
+               data: { reputation_score: Math.min(100.00, Number(s?.reputation_score || 0) + 0.5) }
+            });
+         }
          await tx.walletTransaction.create({
             data: { user_id: trade.seller_id, type: 'escrow_release', amount: amountToReceive, balance: updatedSeller.wallet_balance || 0, description: `Escrow Auto-Release - Trade #${tradeId}` }
          });

@@ -145,10 +145,19 @@ export default function Marketplace() {
                               {listing.seller.first_name[0]}
                            </div>
                            <span className="text-sm text-text-muted">{listing.seller.first_name} {listing.seller.last_name}</span>
-                           {Number(listing.seller.reputation_score) > 0 ? (
-                              <span className="text-xs text-yellow-500 ml-auto flex items-center gap-1">★ {Number(listing.seller.reputation_score).toFixed(1)}</span>
+                           {Number(listing.seller.reputation_score) === 0 ? (
+                              <span className="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full ml-auto font-medium tracking-wide">NEW SELLER</span>
                            ) : (
-                              <span className="text-[10px] px-2 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded ml-auto uppercase tracking-widest font-bold">New Seller</span>
+                              <div className="ml-auto flex items-center gap-1.5">
+                                 {Number(listing.seller.reputation_score) >= 90 ? (
+                                    <span className="text-[10px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20 font-bold tracking-wide">GOLD</span>
+                                 ) : Number(listing.seller.reputation_score) >= 50 ? (
+                                    <span className="text-[10px] bg-zinc-300/10 text-zinc-300 px-1.5 py-0.5 rounded border border-zinc-400/20 font-bold tracking-wide">SILVER</span>
+                                 ) : (
+                                    <span className="text-[10px] bg-orange-700/10 text-orange-600 px-1.5 py-0.5 rounded border border-orange-700/20 font-bold tracking-wide">BRONZE</span>
+                                 )}
+                                 <span className="text-xs text-yellow-500 font-bold">★ {Number(listing.seller.reputation_score).toFixed(1)}</span>
+                              </div>
                            )}
                         </div>
                      </div>
