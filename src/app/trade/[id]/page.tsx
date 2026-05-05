@@ -240,6 +240,16 @@ export default function TradeHub() {
          if (newStatus === 'frozen') toast.error("SECURITY ALERT: Trade Frozen by Administrator.");
          if (newStatus === 'cancel_requested') toast.error("A participant requested to mutually cancel the trade.");
          if (newStatus === 'cancelled') toast.success("Trade Cancelled!");
+
+         // Immediately update the UI step from the WebSocket event (no round-trip delay)
+         const stepMap: Record<string, number> = {
+            'pending_invite': 0, 'agreement': 1, 'awaiting_payment': 2,
+            'active': 3, 'verifying': 4, 'completed': 5,
+            'disputed': 6, 'frozen': 7, 'cancelled': -1, 'refunded': -2
+         };
+         if (stepMap[newStatus] !== undefined) setCurrentStep(stepMap[newStatus]);
+
+         // Then backfill full trade data asynchronously
          fetchTrade();
          fetchMessages();
       });
