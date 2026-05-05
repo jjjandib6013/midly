@@ -467,7 +467,16 @@ router.post('/risk-transactions/:id/freeze', authenticateJWT, async (req: Reques
       const tx = await prisma.transaction.findUnique({ where: { transaction_id: txId } });
       if (!tx) return res.status(404).json({ error: 'Transaction not found' });
 
-      const newStatus = action === 'freeze' ? 'frozen' : 'in_progress'; // simplified release status
+      let newStatus = action === 'freeze' ? 'frozen' : 'active';
+      if (action !== 'freeze') {
+         const lastLog = await prisma.auditLog.findFirst({
+            where: { transaction_id: txId, action_type: { in: [ACTION_TYPES.ADMIN_FREEZE, ACTION_TYPES.SYSTEM_FREEZE] } },
+            orderBy: { timestamp: 'desc' }
+         });
+         if (lastLog && lastLog.metadata && (lastLog.metadata as any).previous_status) {
+            newStatus = (lastLog.metadata as any).previous_status;
+         }
+      }
       
       await prisma.transaction.update({
          where: { transaction_id: txId },
@@ -476,6 +485,10 @@ router.post('/risk-transactions/:id/freeze', authenticateJWT, async (req: Reques
 
       // AUDIT: Freeze/Unfreeze (use new utility directly)
       await logAudit({ transactionId: txId, userId: dbUser.user_id, actionType: action === 'freeze' ? ACTION_TYPES.ADMIN_FREEZE : ACTION_TYPES.ADMIN_UNFREEZE, description: `Admin manually ${action}d transaction #${txId}`, ip: req.ip, metadata: { previous_status: tx?.status, new_status: newStatus } });
+
+      if (io) {
+          io.to(`trade_${txId}`).emit('trade_updated', action === 'freeze' ? 'frozen' : 'unfrozen');
+      }
 
       res.json({ success: true, status: newStatus });
    } catch (e) {

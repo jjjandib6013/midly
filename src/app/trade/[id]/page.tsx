@@ -238,6 +238,7 @@ export default function TradeHub() {
          if (newStatus === 'completed') toast.success("Funds successfully Released!");
          if (newStatus === 'disputed') toast.error("Trade has been officially Disputed. Funds are frozen.");
          if (newStatus === 'frozen') toast.error("SECURITY ALERT: Trade Frozen by Administrator.");
+         if (newStatus === 'unfrozen') toast.success("Trade has been successfully unfrozen. Resuming Escrow.");
          if (newStatus === 'cancel_requested') toast.error("A participant requested to mutually cancel the trade.");
          if (newStatus === 'cancelled') toast.success("Trade Cancelled!");
          fetchTrade();
