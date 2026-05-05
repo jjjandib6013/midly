@@ -483,11 +483,30 @@ router.post('/risk-transactions/:id/freeze', authenticateJWT, async (req: Reques
          data: { status: newStatus }
       });
 
+      // Add system message to trade chat for audit visibility
+      await prisma.message.create({
+         data: {
+            transaction_id: txId,
+            sender_id: req.user.user_id,
+            message_text: action === 'freeze'
+               ? `[SYSTEM TRIGGER: SECURITY LOCKDOWN]\nAdministrator has manually frozen this transaction. All actions are suspended pending review.`
+               : `[SYSTEM TRIGGER: LOCKDOWN LIFTED]\nAdministrator has unfrozen this transaction. Normal operations have resumed.`,
+            is_system_generated: true,
+            risk_level: 'Critical'
+         }
+      });
+
       // AUDIT: Freeze/Unfreeze (use new utility directly)
       await logAudit({ transactionId: txId, userId: dbUser.user_id, actionType: action === 'freeze' ? ACTION_TYPES.ADMIN_FREEZE : ACTION_TYPES.ADMIN_UNFREEZE, description: `Admin manually ${action}d transaction #${txId}`, ip: req.ip, metadata: { previous_status: tx?.status, new_status: newStatus } });
 
+      // Emit real-time WebSocket events AFTER all DB writes are committed
       if (io) {
-          io.to(`trade_${txId}`).emit('trade_updated', action === 'freeze' ? 'frozen' : 'unfrozen');
+          if (action === 'freeze') {
+              io.to(`trade_${txId}`).emit('trade_updated', 'frozen');
+          } else {
+              // Emit the actual restored status so fetchTrade() picks up the correct state
+              io.to(`trade_${txId}`).emit('trade_updated', newStatus);
+          }
       }
 
       res.json({ success: true, status: newStatus });

@@ -117,8 +117,18 @@ export async function calculateTransactionRisk(transactionId: number): Promise<{
                description: `System automatically frozen transaction due to high risk score (${score})`,
                ip: 'system',
                riskScore: score,
-               metadata: { risk_flags: flags, score, threshold: 81 }
+               metadata: { risk_flags: flags, score, threshold: 81, previous_status: tx.status }
             });
+
+            // Emit real-time WebSocket event to notify users in the trade room
+            try {
+                const { io } = await import('../../server');
+                if (io) {
+                    io.to(`trade_${transactionId}`).emit('trade_updated', 'frozen');
+                }
+            } catch (e) {
+                console.error('[Risk Engine] Failed to emit WebSocket event:', e);
+            }
         }
 
         // Update transaction
