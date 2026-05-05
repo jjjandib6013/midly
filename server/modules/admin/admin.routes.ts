@@ -467,14 +467,20 @@ router.post('/risk-transactions/:id/freeze', authenticateJWT, async (req: Reques
       const tx = await prisma.transaction.findUnique({ where: { transaction_id: txId } });
       if (!tx) return res.status(404).json({ error: 'Transaction not found' });
 
-      let newStatus = action === 'freeze' ? 'frozen' : 'active';
+      let newStatus = action === 'freeze' ? 'frozen' : 'agreement';
       if (action !== 'freeze') {
-         const lastLog = await prisma.auditLog.findFirst({
+         // Walk through freeze audit logs to find the original pre-freeze status
+         // (skip any that have 'frozen' as previous_status, which happens with double-freezes)
+         const freezeLogs = await prisma.auditLog.findMany({
             where: { transaction_id: txId, action_type: { in: [ACTION_TYPES.ADMIN_FREEZE, ACTION_TYPES.SYSTEM_FREEZE] } },
             orderBy: { timestamp: 'desc' }
          });
-         if (lastLog && lastLog.metadata && (lastLog.metadata as any).previous_status) {
-            newStatus = (lastLog.metadata as any).previous_status;
+         for (const log of freezeLogs) {
+            const prev = (log.metadata as any)?.previous_status;
+            if (prev && prev !== 'frozen') {
+               newStatus = prev;
+               break;
+            }
          }
       }
       
