@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useEffect, useState } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
@@ -13,22 +13,130 @@ import SpinningCarousel from "@/components/sections/SpinningCarousel";
 
 gsap.registerPlugin(ScrollTrigger);
 
+/* ─── Starfield Component ─── */
+function StarField() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const resize = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    };
+    resize();
+    window.addEventListener("resize", resize);
+
+    // Generate stars with natural variance
+    const stars: {
+      x: number;
+      y: number;
+      size: number;
+      baseOpacity: number;
+      twinkleSpeed: number;
+      twinklePhase: number;
+    }[] = [];
+
+    const starCount = Math.floor((canvas.width * canvas.height) / 3500); // Responsive count
+
+    for (let i = 0; i < starCount; i++) {
+      // Random distribution — cluster some stars, leave gaps
+      const x = Math.random() * canvas.width;
+      const y = Math.random() * canvas.height;
+
+      // Natural size distribution: mostly tiny pin-pricks, very few noticeable
+      const sizeRandom = Math.random();
+      let size: number;
+      if (sizeRandom < 0.65) {
+        size = 0.2 + Math.random() * 0.5; // 65% tiny specks
+      } else if (sizeRandom < 0.85) {
+        size = 0.5 + Math.random() * 0.8; // 20% small dots
+      } else if (sizeRandom < 0.96) {
+        size = 1 + Math.random() * 0.8; // 11% medium
+      } else {
+        size = 1.8 + Math.random() * 1.2; // 4% bright stars
+      }
+
+      // Brightness variation — most faint, a few bright
+      const baseOpacity = sizeRandom < 0.6
+        ? 0.1 + Math.random() * 0.25  // Faint
+        : 0.3 + Math.random() * 0.5;  // Brighter
+
+      stars.push({
+        x,
+        y,
+        size,
+        baseOpacity,
+        twinkleSpeed: 0.3 + Math.random() * 2.5,
+        twinklePhase: Math.random() * Math.PI * 2,
+      });
+    }
+
+    let animId: number;
+    const animate = (time: number) => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      for (const star of stars) {
+        const twinkle = Math.sin(time * 0.001 * star.twinkleSpeed + star.twinklePhase);
+        const opacity = star.baseOpacity + twinkle * 0.2;
+        const clampedOpacity = Math.max(0.05, Math.min(1, opacity));
+
+        ctx.beginPath();
+
+        // Large stars get a subtle glow
+        if (star.size > 2) {
+          const gradient = ctx.createRadialGradient(
+            star.x, star.y, 0,
+            star.x, star.y, star.size * 3
+          );
+          gradient.addColorStop(0, `rgba(200, 220, 255, ${clampedOpacity})`);
+          gradient.addColorStop(0.4, `rgba(180, 200, 240, ${clampedOpacity * 0.4})`);
+          gradient.addColorStop(1, `rgba(150, 180, 220, 0)`);
+          ctx.fillStyle = gradient;
+          ctx.arc(star.x, star.y, star.size * 3, 0, Math.PI * 2);
+        } else {
+          // Small stars — simple dots with slight color variation
+          const warmth = Math.random() > 0.7 ? '255, 240, 220' : '200, 215, 255';
+          ctx.fillStyle = `rgba(${warmth}, ${clampedOpacity})`;
+          ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+        }
+
+        ctx.fill();
+      }
+
+      animId = requestAnimationFrame(animate);
+    };
+
+    animId = requestAnimationFrame(animate);
+
+    return () => {
+      cancelAnimationFrame(animId);
+      window.removeEventListener("resize", resize);
+    };
+  }, []);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="absolute inset-0 w-full h-full pointer-events-none z-0"
+      style={{ opacity: 0.9 }}
+    />
+  );
+}
+
 export default function Home() {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useGSAP(() => {
     const tl = gsap.timeline();
 
-    // Pill tags fade in
-    tl.fromTo(".hero-tags span",
-      { opacity: 0, y: -15, scale: 0.9 },
-      { opacity: 1, y: 0, scale: 1, duration: 0.5, stagger: 0.08, ease: "back.out(1.5)", delay: 0.1 }
-    )
     // Headline lines
-    .fromTo(".hero-title .line",
+    tl.fromTo(".hero-title .line",
       { opacity: 0, y: 60, rotateX: -40 },
-      { opacity: 1, y: 0, rotateX: 0, duration: 1, stagger: 0.12, ease: "power3.out" },
-      "-=0.3"
+      { opacity: 1, y: 0, rotateX: 0, duration: 1, stagger: 0.12, ease: "power3.out", delay: 0.3 }
     )
     // Subheadline
     .fromTo(".hero-desc",
@@ -72,31 +180,19 @@ export default function Home() {
       {/* ===== HERO SECTION — VAULT STYLE ===== */}
       <section className="relative w-full min-h-screen overflow-hidden">
 
+        {/* Star field background */}
+        <StarField />
+
         {/* Background ambient glows */}
-        <div data-speed="-0.15" className="absolute top-0 right-0 w-[50vw] h-[80vh] bg-primary/5 blur-[180px] rounded-full pointer-events-none -z-10 translate-x-1/3 -translate-y-1/4" />
-        <div data-speed="-0.25" className="absolute bottom-0 left-0 w-[40vw] h-[40vw] bg-white/[0.02] blur-[120px] rounded-full pointer-events-none -z-10 -translate-x-1/2 translate-y-1/2" />
+        <div data-speed="-0.15" className="absolute top-0 right-0 w-[50vw] h-[80vh] bg-primary/5 blur-[180px] rounded-full pointer-events-none z-[1] translate-x-1/3 -translate-y-1/4" />
+        <div data-speed="-0.25" className="absolute bottom-0 left-0 w-[40vw] h-[40vw] bg-white/[0.02] blur-[120px] rounded-full pointer-events-none z-[1] -translate-x-1/2 translate-y-1/2" />
 
         {/* Text content wrapper — constrained width, above carousel */}
         <div className="relative z-20 flex flex-col items-center pt-8 sm:pt-12 px-4 sm:px-6 lg:px-16 max-w-[1600px] mx-auto pointer-events-none">
           <div className="pointer-events-auto flex flex-col items-center">
-          {/* 1. Pill Tags */}
-          <div className="hero-tags flex flex-wrap items-center justify-center gap-3 mb-8 sm:mb-10">
-            <span className="inline-flex items-center gap-2 px-5 py-2 rounded-full border border-primary/20 bg-primary/[0.04] text-primary text-[13px] font-bold tracking-widest uppercase">
-              <ShieldCheck className="w-4 h-4" /> Escrow Platform
-            </span>
-            <span className="inline-flex items-center px-5 py-2 rounded-full border border-white/10 bg-white/[0.02] text-[#8892b0] text-[13px] font-bold tracking-widest uppercase">
-              KYC Verified
-            </span>
-            <span className="inline-flex items-center px-5 py-2 rounded-full border border-white/10 bg-white/[0.02] text-[#8892b0] text-[13px] font-bold tracking-widest uppercase">
-              Dispute Engine
-            </span>
-            <span className="inline-flex items-center px-5 py-2 rounded-full border border-white/10 bg-white/[0.02] text-[#8892b0] text-[13px] font-bold tracking-widest uppercase">
-              10+ Games
-            </span>
-          </div>
 
-          {/* 2. Headline */}
-          <h1 className="hero-title text-center text-fluid-hero font-black tracking-tighter text-white mb-6 leading-[0.85] uppercase max-w-4xl">
+          {/* Headline */}
+          <h1 className="hero-title text-center text-fluid-hero font-black tracking-tighter text-white mb-6 leading-[0.85] uppercase max-w-4xl mt-8 sm:mt-12">
             <div className="line block" style={{ perspective: 1000 }}>Your Trusted</div>
             <div className="line block text-transparent bg-clip-text bg-gradient-to-r from-primary via-green-400 to-emerald-900 drop-shadow-[0_0_30px_rgba(63,229,108,0.2)]" style={{ perspective: 1000 }}>
               Gaming Asset
@@ -104,12 +200,12 @@ export default function Home() {
             <div className="line block" style={{ perspective: 1000 }}>Escrow</div>
           </h1>
 
-          {/* 3. Subheadline */}
+          {/* Subheadline */}
           <p className="hero-desc text-center text-xl md:text-2xl text-[#8892b0] max-w-3xl mx-auto mb-10 leading-relaxed font-medium">
             An innovative platform that eliminates digital asset fraud with hardware-enforced identity verification and automated escrow protection.
           </p>
 
-          {/* 4. CTA Buttons */}
+          {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-5 sm:gap-6 w-full sm:w-auto justify-center">
             <Link href="/register" className="hero-btn w-full sm:w-auto">
               <NeonButton className="w-full sm:w-auto gap-3 text-base !py-6 !px-12 tracking-widest uppercase shadow-[0_0_40px_-5px_rgba(63,229,108,0.3)]">

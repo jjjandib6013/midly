@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { ShieldCheck, User, Menu, Bell, Wallet, LayoutDashboard, X, LogOut, ArrowRight, Store, CheckCircle2 } from "lucide-react";
+import { User, Menu, Bell, Wallet, LayoutDashboard, X, LogOut, ArrowRight, Store, ShieldCheck, CheckCircle2 } from "lucide-react";
 import NeonButton from "@/components/ui/NeonButton";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
@@ -104,10 +105,12 @@ let globalSocket: any = null;
     await signOut({ callbackUrl: "/" });
   };
 
-  // Unauthenticated nav links (landing page)
+  // Unauthenticated nav links (landing page) — matches prototype
   const publicNavLinks: any[] = [
-    { name: "Platform", href: "/" },
-    { name: "Marketplace", href: "/marketplace" },
+    { name: "Home", href: "/" },
+    { name: "How It Works", href: "/#how-it-works" },
+    { name: "About", href: "/#about" },
+    { name: "Contact", href: "/#contact" },
   ];
 
   // Authenticated nav links (shown inline in navbar on desktop)
@@ -183,62 +186,79 @@ let globalSocket: any = null;
 
   return (
     <>
-      {/* High-End Absolute Glass Header */}
+      {/* Glassmorphism Floating Navbar — matching prototype design */}
       <div
         ref={navRef}
-        className="fixed top-0 left-0 w-full z-50 bg-[#030407]/80 backdrop-blur-2xl border-b border-white/[0.04]"
+        className="fixed top-0 left-0 w-full z-50 flex justify-center px-4 sm:px-6 pt-4"
       >
-        <div className="w-full px-4 sm:px-6 lg:px-12 h-16 sm:h-20 lg:h-24 flex items-center justify-between">
-          <div className="flex items-center gap-8 lg:gap-12">
-            <Link href="/" className="flex items-center gap-3 group relative">
-              <div className="absolute -inset-4 bg-primary/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
-              <ShieldCheck className="relative z-10 h-8 w-8 text-primary drop-shadow-[0_0_15px_rgba(63,229,108,0.3)]" />
-              <span className="relative z-10 text-2xl font-black tracking-tighter text-white uppercase translate-y-[1px]">MIDLY</span>
-            </Link>
+        <div
+          className="w-full max-w-[1200px] px-5 sm:px-8 h-14 sm:h-16 flex items-center justify-between rounded-2xl"
+          style={{
+            background: 'rgba(10, 15, 20, 0.55)',
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
+          }}
+        >
+          {/* Logo */}
+          <Link href="/" className="flex items-center gap-2.5 group relative">
+            <div className="absolute -inset-4 bg-primary/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+            <Image
+              src="/images/midly-logo.png"
+              alt="Midly Logo"
+              width={32}
+              height={32}
+              className="relative z-10 drop-shadow-[0_0_12px_rgba(63,229,108,0.3)]"
+            />
+            <span className="relative z-10 text-lg font-black tracking-tight text-white uppercase translate-y-[1px]">MIDLY</span>
+          </Link>
 
-            {/* Desktop Nav Links - Authenticated */}
-            {isAuthenticated && (
-              <div className="hidden md:flex items-center gap-1 lg:gap-2 pl-6 lg:pl-8 border-l border-white/[0.04] h-8">
-                {authNavLinks.map((link) => {
-                  const isActive = pathname.startsWith(link.href);
-                  return (
-                    <Link
-                      key={link.name}
-                      href={link.href}
-                      className={`flex items-center gap-2 px-3 lg:px-4 py-2 rounded-lg text-[10px] lg:text-xs font-bold tracking-widest uppercase transition-all duration-300
-                        ${isActive
-                          ? "text-primary bg-primary/10 border border-primary/20"
-                          : "text-[#8892b0] hover:text-white hover:bg-white/[0.03]"
-                        }
-                      `}
-                    >
-                      <link.icon className={`w-3.5 h-3.5 ${isActive ? "text-primary" : ""}`} />
-                      {link.name}
-                      {link.showBadge && <CheckCircle2 className="w-3.5 h-3.5 text-primary ml-1" />}
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Desktop Nav Links - Unauthenticated */}
-            {!isAuthenticated && (
-              <div className="hidden md:flex items-center gap-8 pl-8 border-l border-white/[0.04] h-8">
-                {publicNavLinks.map((link) => (
+          {/* Desktop Nav Links - Authenticated */}
+          {isAuthenticated && (
+            <div className="hidden md:flex items-center gap-1 lg:gap-2">
+              {authNavLinks.map((link) => {
+                const isActive = pathname.startsWith(link.href);
+                return (
                   <Link
                     key={link.name}
                     href={link.href}
-                    className={`text-xs font-bold tracking-widest uppercase transition-all flex items-center gap-2 ${pathname === link.href ? "text-primary" : "text-[#8892b0] hover:text-white"
-                      }`}
+                    className={`flex items-center gap-2 px-3 lg:px-4 py-2 rounded-lg text-[10px] lg:text-xs font-bold tracking-widest uppercase transition-all duration-300
+                      ${isActive
+                        ? "text-primary bg-primary/10 border border-primary/20"
+                        : "text-[#8892b0] hover:text-white hover:bg-white/[0.03]"
+                      }
+                    `}
                   >
+                    <link.icon className={`w-3.5 h-3.5 ${isActive ? "text-primary" : ""}`} />
                     {link.name}
+                    {link.showBadge && <CheckCircle2 className="w-3.5 h-3.5 text-primary ml-1" />}
                   </Link>
-                ))}
-              </div>
-            )}
-          </div>
+                );
+              })}
+            </div>
+          )}
 
-          <div className="flex items-center gap-4 lg:gap-6">
+          {/* Desktop Nav Links - Unauthenticated (prototype style) */}
+          {!isAuthenticated && (
+            <div className="hidden md:flex items-center gap-8">
+              {publicNavLinks.map((link) => (
+                <Link
+                  key={link.name}
+                  href={link.href}
+                  className={`text-sm font-medium transition-all duration-300 ${
+                    pathname === link.href
+                      ? "text-white"
+                      : "text-[#8892b0] hover:text-white"
+                  }`}
+                >
+                  {link.name}
+                </Link>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center gap-4 lg:gap-5">
             {isAuthenticated ? (
               <>
                 <div className="relative">
@@ -291,9 +311,29 @@ let globalSocket: any = null;
 
               </>
             ) : (
-              <div className="hidden md:flex items-center gap-6">
-                <Link href="/login" className="text-xs font-bold uppercase tracking-widest text-[#8892b0] hover:text-white transition-colors">Log In</Link>
-                <Link href="/register"><NeonButton className="!py-2.5 !px-8 text-xs tracking-widest uppercase">Launch App</NeonButton></Link>
+              <div className="hidden md:flex items-center">
+                <Link href="/register">
+                  <button
+                    className="px-6 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 flex items-center gap-2"
+                    style={{
+                      background: 'rgba(63, 229, 108, 0.15)',
+                      color: '#b8f5cb',
+                      border: '1px solid rgba(63, 229, 108, 0.25)',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(63, 229, 108, 0.25)';
+                      e.currentTarget.style.color = '#ffffff';
+                      e.currentTarget.style.borderColor = 'rgba(63, 229, 108, 0.4)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(63, 229, 108, 0.15)';
+                      e.currentTarget.style.color = '#b8f5cb';
+                      e.currentTarget.style.borderColor = 'rgba(63, 229, 108, 0.25)';
+                    }}
+                  >
+                    Get started <ArrowRight className="w-4 h-4" />
+                  </button>
+                </Link>
               </div>
             )}
 
@@ -317,8 +357,13 @@ let globalSocket: any = null;
         className="fixed inset-0 z-[100] bg-[#030407] flex flex-col p-6 sm:p-8 transform -translate-y-full will-change-transform"
       >
         <div className="flex justify-between items-center mb-16 mt-4">
-          <Link href="/" className="flex items-center gap-3" onClick={() => setIsMobileMenuOpen(false)}>
-            <ShieldCheck className="h-8 w-8 text-primary" />
+          <Link href="/" className="flex items-center gap-2.5" onClick={() => setIsMobileMenuOpen(false)}>
+            <Image
+              src="/images/midly-logo.png"
+              alt="Midly Logo"
+              width={32}
+              height={32}
+            />
             <span className="text-2xl font-black tracking-tighter text-white uppercase pt-1">MIDLY</span>
           </Link>
           <button
