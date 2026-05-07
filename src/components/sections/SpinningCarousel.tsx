@@ -22,7 +22,7 @@ export default function SpinningCarousel() {
   const isDragging = useRef(false);
   const startX = useRef(0);
   const dragStartAngle = useRef(0);
-  const velocityRef = useRef(0);
+  const velocityRef = useRef(50.0); // Start with a fast spin on load
   const lastX = useRef(0);
   const lastTime = useRef(0);
   const [mounted, setMounted] = useState(false);
@@ -128,10 +128,6 @@ export default function SpinningCarousel() {
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
     >
-      {/* Ambient glow — centered behind carousel with right-side teal bias like VAULT */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/3 w-[900px] h-[700px] bg-primary/[0.04] rounded-full blur-[200px] pointer-events-none" />
-      <div className="absolute top-1/3 right-[5%] w-[500px] h-[500px] bg-primary/[0.07] rounded-full blur-[160px] pointer-events-none" />
-
       {/* Particles */}
       <div className="absolute top-[8%] left-[22%] w-1 h-1 bg-white/20 rounded-full" />
       <div className="absolute top-[4%] left-[68%] w-1.5 h-1.5 bg-white/15 rounded-full" />

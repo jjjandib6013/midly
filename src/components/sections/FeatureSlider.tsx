@@ -85,7 +85,7 @@ export default function FeatureSlider() {
   const currentSlide = defaultSlides[currentIndex];
 
   return (
-    <section className="relative w-full h-[800px] overflow-hidden bg-[#030407] border-y border-white/5 my-24">
+    <section id="features" className="relative w-full h-[800px] overflow-hidden bg-transparent py-24">
       {/* Background Crossfade */}
       <AnimatePresence mode="sync">
         <motion.div
@@ -125,21 +125,21 @@ export default function FeatureSlider() {
                     exit="exit"
                     className="absolute inset-0 flex flex-col justify-center"
                   >
-                     <h3 className="text-5xl lg:text-7xl font-black text-white tracking-tighter uppercase leading-[0.9] mb-6" style={{ textShadow: '0 4px 20px rgba(0,0,0,0.5)' }}>
+                     <h3 className="text-4xl lg:text-6xl font-extrabold tracking-tight text-white leading-[1.05] mb-6" style={{ textShadow: '0 4px 20px rgba(0,0,0,0.4)' }}>
                         {currentSlide.title}
                      </h3>
-                     <p className="text-lg text-[#8892b0] font-medium leading-relaxed max-w-md border-l-2 pl-6" style={{ borderColor: currentSlide.accentColor }}>
+                     <p className="text-lg lg:text-xl text-[#a1a1aa] font-normal leading-relaxed max-w-md border-l-4 pl-6" style={{ borderColor: currentSlide.accentColor }}>
                         {currentSlide.description}
                      </p>
                      
                      <div className="mt-10">
                         <motion.button 
-                           whileHover={{ scale: 1.05 }}
-                           whileTap={{ scale: 0.95 }}
-                           className="group relative inline-flex items-center justify-center overflow-hidden rounded-full px-8 py-4 font-bold text-black tracking-widest uppercase transition-all shadow-xl"
-                           style={{ backgroundColor: currentSlide.accentColor }}
+                           whileHover={{ scale: 1.02, y: -2 }}
+                           whileTap={{ scale: 0.98 }}
+                           className="group relative inline-flex items-center justify-center overflow-hidden rounded-full px-8 py-3.5 font-semibold text-white transition-all shadow-lg"
+                           style={{ backgroundColor: currentSlide.accentColor, boxShadow: `0 8px 30px ${currentSlide.accentColor}40` }}
                         >
-                           Explore Feature <ArrowRight className="w-5 h-5 ml-3" />
+                           Explore Feature <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" />
                         </motion.button>
                      </div>
                   </motion.div>

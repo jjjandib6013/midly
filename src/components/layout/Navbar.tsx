@@ -106,21 +106,10 @@ let globalSocket: any = null;
 
   // Unauthenticated nav links (landing page)
   const publicNavLinks: any[] = [
-    { name: "Platform", href: "/" },
-    { name: "Marketplace", href: "/marketplace" },
+    { name: "Features", href: "/#features" },
+    { name: "How It Works", href: "/#how-it-works" },
+    { name: "FAQ", href: "/#faq" },
   ];
-
-  // Authenticated nav links (shown inline in navbar on desktop)
-  const authNavLinks: { name: string; href: string; icon: any; showBadge?: boolean }[] = [
-    { name: "Marketplace", href: "/marketplace", icon: Store },
-    { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { name: "Wallet", href: "/wallet", icon: Wallet },
-    ...(!isKycVerified ? [{ name: "Verify", href: "/kyc", icon: ShieldCheck }] : []),
-  ];
-
-  if (isAdmin) {
-    authNavLinks.push({ name: "Admin", href: "/admin", icon: ShieldCheck });
-  }
 
   // GSAP animations for mobile menu
   useEffect(() => {
@@ -186,9 +175,17 @@ let globalSocket: any = null;
       {/* High-End Absolute Glass Header */}
       <div
         ref={navRef}
-        className="fixed top-0 left-0 w-full z-50 bg-[#030407]/80 backdrop-blur-2xl border-b border-white/[0.04]"
+        className={`fixed z-50 transition-all duration-300 ${
+          pathname === '/'
+            ? 'top-4 left-4 right-4 mx-auto max-w-[1200px] rounded-full bg-[#030407]/40 backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)]'
+            : 'top-0 left-0 w-full bg-[#030407]/80 backdrop-blur-2xl border-b border-white/[0.04]'
+        }`}
       >
-        <div className="w-full px-4 sm:px-6 lg:px-12 h-16 sm:h-20 lg:h-24 flex items-center justify-between">
+        <div className={`w-full flex items-center justify-between ${
+          pathname === '/' 
+            ? 'px-6 sm:px-8 lg:px-10 h-16 sm:h-20' 
+            : 'px-4 sm:px-6 lg:px-12 h-16 sm:h-20 lg:h-24'
+        }`}>
           <div className="flex items-center gap-8 lg:gap-12">
             <Link href="/" className="flex items-center gap-3 group relative">
               <div className="absolute -inset-4 bg-primary/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
@@ -196,89 +193,75 @@ let globalSocket: any = null;
               <span className="relative z-10 text-2xl font-black tracking-tighter text-white uppercase translate-y-[1px]">MIDLY</span>
             </Link>
 
-            {/* Desktop Nav Links - Authenticated */}
-            {isAuthenticated && (
-              <div className="hidden md:flex items-center gap-1 lg:gap-2 pl-6 lg:pl-8 border-l border-white/[0.04] h-8">
-                {authNavLinks.map((link) => {
-                  const isActive = pathname.startsWith(link.href);
-                  return (
-                    <Link
-                      key={link.name}
-                      href={link.href}
-                      className={`flex items-center gap-2 px-3 lg:px-4 py-2 rounded-lg text-[10px] lg:text-xs font-bold tracking-widest uppercase transition-all duration-300
-                        ${isActive
-                          ? "text-primary bg-primary/10 border border-primary/20"
-                          : "text-[#8892b0] hover:text-white hover:bg-white/[0.03]"
-                        }
-                      `}
-                    >
-                      <link.icon className={`w-3.5 h-3.5 ${isActive ? "text-primary" : ""}`} />
-                      {link.name}
-                      {link.showBadge && <CheckCircle2 className="w-3.5 h-3.5 text-primary ml-1" />}
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Desktop Nav Links - Unauthenticated */}
-            {!isAuthenticated && (
-              <div className="hidden md:flex items-center gap-8 pl-8 border-l border-white/[0.04] h-8">
-                {publicNavLinks.map((link) => (
+            {/* Desktop Nav Links */}
+            <div className="hidden md:flex absolute left-1/2 -translate-x-1/2 items-center gap-6 lg:gap-8 h-8">
+              {pathname === '/' && (
+                publicNavLinks.map((link) => (
                   <Link
                     key={link.name}
                     href={link.href}
-                    className={`text-xs font-bold tracking-widest uppercase transition-all flex items-center gap-2 ${pathname === link.href ? "text-primary" : "text-[#8892b0] hover:text-white"
-                      }`}
+                    className="text-xs font-bold tracking-widest uppercase text-[#8892b0] hover:text-white transition-colors"
                   >
                     {link.name}
                   </Link>
-                ))}
-              </div>
-            )}
+                ))
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center gap-4 lg:gap-6">
+          <div className="flex items-center justify-end gap-4 lg:gap-6 relative z-10">
             {isAuthenticated ? (
               <>
-                <div className="relative">
-                  <button
-                    onClick={() => setShowNotifs(!showNotifs)}
-                    className="relative p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center text-text-muted hover:text-white transition-colors"
-                    aria-label="Notifications"
-                    aria-haspopup="true"
-                    aria-expanded={showNotifs}
-                  >
-                    <Bell className="w-5 h-5" />
-                    {hasNewNotifs && <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse" />}
-                  </button>
+                {pathname !== '/' && (
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowNotifs(!showNotifs)}
+                      className="relative p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center text-text-muted hover:text-white transition-colors"
+                      aria-label="Notifications"
+                      aria-haspopup="true"
+                      aria-expanded={showNotifs}
+                    >
+                      <Bell className="w-5 h-5" />
+                      {hasNewNotifs && <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse" />}
+                    </button>
 
-                  <div
-                    ref={notifMenuRef}
-                    className="hidden absolute right-0 mt-6 w-[calc(100vw-2rem)] sm:w-96 max-w-[400px] bg-[#090b10] border border-white/5 shadow-[0_30px_60px_rgba(0,0,0,0.8)] rounded-2xl sm:rounded-3xl overflow-hidden z-50"
-                  >
-                    <div className="p-6 border-b border-white/5 flex justify-between items-center bg-[#050608]">
-                      <h4 className="text-xs font-black text-[#8892b0] tracking-widest uppercase">NOTIFICATIONS</h4>
-                    </div>
-                    <div className="max-h-[350px] overflow-y-auto custom-scrollbar bg-[#090b10]">
-                      {notifications.length === 0 ? (
-                        <p className="p-8 text-sm text-[#8892b0] text-center font-medium">All caught up.</p>
-                      ) : (
-                        notifications.map(notif => (
-                          <div key={notif.notification_id} className={`p-5 border-b border-white/5 last:border-b-0 hover:bg-white/[0.02] transition-colors ${notif.is_read ? '' : 'bg-primary/[0.02]'}`}>
-                            <p className="text-sm text-white font-medium leading-relaxed">{notif.message}</p>
-                            <p className="text-xs text-[#8892b0] mt-3 font-semibold uppercase tracking-wider">{new Date(notif.created_at).toLocaleDateString()}</p>
-                            {notif.type === 'escrow_invite' && notif.reference_id && (
-                              <button className="mt-4 text-xs bg-primary text-dark-bg hover:brightness-110 px-5 py-2.5 rounded-full font-bold transition-all w-full flex items-center justify-center gap-2" onClick={() => handleAcceptInvite(notif.reference_id)}>
-                                ACCEPT ESCROW <ArrowRight className="w-3 h-3" />
-                              </button>
-                            )}
-                          </div>
-                        ))
-                      )}
+                    <div
+                      ref={notifMenuRef}
+                      className="hidden absolute right-0 mt-6 w-[calc(100vw-2rem)] sm:w-96 max-w-[400px] bg-[#090b10] border border-white/5 shadow-[0_30px_60px_rgba(0,0,0,0.8)] rounded-2xl sm:rounded-3xl overflow-hidden z-50"
+                    >
+                      <div className="p-6 border-b border-white/5 flex justify-between items-center bg-[#050608]">
+                        <h4 className="text-xs font-black text-[#8892b0] tracking-widest uppercase">NOTIFICATIONS</h4>
+                      </div>
+                      <div className="max-h-[350px] overflow-y-auto custom-scrollbar bg-[#090b10]">
+                        {notifications.length === 0 ? (
+                          <p className="p-8 text-sm text-[#8892b0] text-center font-medium">All caught up.</p>
+                        ) : (
+                          notifications.map(notif => (
+                            <div key={notif.notification_id} className={`p-5 border-b border-white/5 last:border-b-0 hover:bg-white/[0.02] transition-colors ${notif.is_read ? '' : 'bg-primary/[0.02]'}`}>
+                              <p className="text-sm text-white font-medium leading-relaxed">{notif.message}</p>
+                              <p className="text-xs text-[#8892b0] mt-3 font-semibold uppercase tracking-wider">{new Date(notif.created_at).toLocaleDateString()}</p>
+                              {notif.type === 'escrow_invite' && notif.reference_id && (
+                                <button className="mt-4 text-xs bg-primary text-dark-bg hover:brightness-110 px-5 py-2.5 rounded-full font-bold transition-all w-full flex items-center justify-center gap-2" onClick={() => handleAcceptInvite(notif.reference_id)}>
+                                  ACCEPT ESCROW <ArrowRight className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
+                          ))
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
+
+                {pathname === '/' && (
+                  <div className="hidden md:block pr-2 border-r border-white/[0.04]">
+                    <Link href="/dashboard">
+                      <NeonButton className="!py-2.5 !px-6 text-xs tracking-widest uppercase gap-2 flex items-center">
+                        Dashboard <ArrowRight className="w-3.5 h-3.5" />
+                      </NeonButton>
+                    </Link>
+                  </div>
+                )}
 
                 <Link
                   href="/profile"
@@ -288,7 +271,6 @@ let globalSocket: any = null;
                   <User className="w-5 h-5" />
                   {isKycVerified && <CheckCircle2 className="absolute top-1 right-1 w-3 h-3 text-primary bg-[#030407] rounded-full" />}
                 </Link>
-
               </>
             ) : (
               <div className="hidden md:flex items-center gap-6">

@@ -315,7 +315,7 @@ export default function Profile() {
                         </div>
                      ) : (
                         methods.map((method) => (
-                           <DynamicCard key={method.id} hoverEffect className="dash-item flex flex-col sm:flex-row items-start sm:items-center justify-between p-5 gap-4 group shadow-none">
+                           <DynamicCard key={method.method_id} hoverEffect className="dash-item flex flex-col sm:flex-row items-start sm:items-center justify-between p-5 gap-4 group shadow-none">
                               <div className="flex items-center gap-4">
                                  <div className="w-10 h-10 bg-dark-bg border border-dark-border rounded-lg flex items-center justify-center text-text-muted">
                                     <CreditCard className="w-4 h-4" />
@@ -328,7 +328,7 @@ export default function Profile() {
                                     <p className="text-xs text-text-muted font-mono mt-0.5">{method.account_mask}</p>
                                  </div>
                               </div>
-                              <button onClick={() => handleDeleteMethod(method.id)} className="text-text-muted hover:text-red-500 transition-colors sm:opacity-0 sm:group-hover:opacity-100 p-2">
+                              <button onClick={() => handleDeleteMethod(method.method_id)} className="text-text-muted hover:text-red-500 transition-colors sm:opacity-0 sm:group-hover:opacity-100 p-2">
                                  <Trash2 className="w-4 h-4" />
                               </button>
                            </DynamicCard>

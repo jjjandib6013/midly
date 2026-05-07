@@ -10,6 +10,9 @@ import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
 import FeatureSlider from "@/components/sections/FeatureSlider";
 import SpinningCarousel from "@/components/sections/SpinningCarousel";
+import HowItWorks from "@/components/sections/HowItWorks";
+import FAQ from "@/components/sections/FAQ";
+import Starfield from "@/components/ui/Starfield";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -67,123 +70,86 @@ export default function Home() {
   }, { scope: containerRef });
 
   return (
-    <div ref={containerRef} className="flex-1 flex flex-col items-center justify-start overflow-hidden bg-[#030407]">
+    <div ref={containerRef} className="block w-full bg-[#030407] relative min-h-screen">
+      
+      {/* Global Starfield — covers the entire homepage */}
+      <Starfield />
+
+      {/* Background ambient glows */}
+      <div data-speed="-0.15" className="absolute top-0 right-0 w-[50vw] h-[80vh] bg-primary/5 blur-[180px] rounded-full pointer-events-none z-0 translate-x-1/3 -translate-y-1/4" />
+      <div data-speed="-0.25" className="absolute top-[80vh] left-0 w-[40vw] h-[40vw] bg-white/[0.02] blur-[120px] rounded-full pointer-events-none z-0 -translate-x-1/2" />
 
       {/* ===== HERO SECTION — VAULT STYLE ===== */}
-      <section className="relative w-full min-h-screen overflow-hidden">
+      <section className="relative w-full min-h-screen flex flex-col">
+        
+        {/* Hero ambient glows */}
+        <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/3 w-[900px] h-[700px] bg-primary/[0.04] rounded-full blur-[200px]" />
+           <div className="absolute top-[60%] right-[5%] w-[500px] h-[500px] bg-primary/[0.07] rounded-full blur-[160px]" />
+        </div>
 
-        {/* Background ambient glows */}
-        <div data-speed="-0.15" className="absolute top-0 right-0 w-[50vw] h-[80vh] bg-primary/5 blur-[180px] rounded-full pointer-events-none -z-10 translate-x-1/3 -translate-y-1/4" />
-        <div data-speed="-0.25" className="absolute bottom-0 left-0 w-[40vw] h-[40vw] bg-white/[0.02] blur-[120px] rounded-full pointer-events-none -z-10 -translate-x-1/2 translate-y-1/2" />
-
-        {/* Text content wrapper — constrained width, above carousel */}
-        <div className="relative z-20 flex flex-col items-center pt-8 sm:pt-12 px-4 sm:px-6 lg:px-16 max-w-[1600px] mx-auto pointer-events-none">
+        {/* Text content wrapper */}
+        <div className="relative z-10 flex flex-col items-center pt-32 sm:pt-40 px-4 sm:px-6 lg:px-16 max-w-[1600px] mx-auto pointer-events-none flex-1">
           <div className="pointer-events-auto flex flex-col items-center">
           {/* 1. Pill Tags */}
-          <div className="hero-tags flex flex-wrap items-center justify-center gap-3 mb-8 sm:mb-10">
-            <span className="inline-flex items-center gap-2 px-5 py-2 rounded-full border border-primary/20 bg-primary/[0.04] text-primary text-[13px] font-bold tracking-widest uppercase">
-              <ShieldCheck className="w-4 h-4" /> Escrow Platform
+          <div className="hero-tags flex flex-wrap items-center justify-center gap-3 sm:gap-4 mb-10 sm:mb-12">
+            <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs sm:text-sm font-semibold tracking-wide shadow-[0_0_20px_rgba(63,229,108,0.15)]">
+              <ShieldCheck className="w-3.5 h-3.5" /> Escrow Platform
             </span>
-            <span className="inline-flex items-center px-5 py-2 rounded-full border border-white/10 bg-white/[0.02] text-[#8892b0] text-[13px] font-bold tracking-widest uppercase">
+            <span className="inline-flex items-center px-4 py-1.5 rounded-full border border-white/5 bg-white/5 text-[#a1a1aa] text-xs sm:text-sm font-medium tracking-wide backdrop-blur-sm">
               KYC Verified
             </span>
-            <span className="inline-flex items-center px-5 py-2 rounded-full border border-white/10 bg-white/[0.02] text-[#8892b0] text-[13px] font-bold tracking-widest uppercase">
+            <span className="inline-flex items-center px-4 py-1.5 rounded-full border border-white/5 bg-white/5 text-[#a1a1aa] text-xs sm:text-sm font-medium tracking-wide backdrop-blur-sm">
               Dispute Engine
             </span>
-            <span className="inline-flex items-center px-5 py-2 rounded-full border border-white/10 bg-white/[0.02] text-[#8892b0] text-[13px] font-bold tracking-widest uppercase">
+            <span className="inline-flex items-center px-4 py-1.5 rounded-full border border-white/5 bg-white/5 text-[#a1a1aa] text-xs sm:text-sm font-medium tracking-wide backdrop-blur-sm">
               10+ Games
             </span>
           </div>
 
           {/* 2. Headline */}
-          <h1 className="hero-title text-center text-fluid-hero font-black tracking-tighter text-white mb-6 leading-[0.85] uppercase max-w-4xl">
-            <div className="line block" style={{ perspective: 1000 }}>Your Trusted</div>
-            <div className="line block text-transparent bg-clip-text bg-gradient-to-r from-primary via-green-400 to-emerald-900 drop-shadow-[0_0_30px_rgba(63,229,108,0.2)]" style={{ perspective: 1000 }}>
-              Gaming Asset
+          <h1 className="hero-title text-center text-5xl sm:text-6xl md:text-7xl lg:text-[5.5rem] font-extrabold tracking-tight text-white mb-8 leading-[1.05] max-w-5xl">
+            <div className="line block" style={{ perspective: 1000 }}>Your trusted middleman</div>
+            <div className="line block" style={{ perspective: 1000 }}>
+              for <span className="text-primary drop-shadow-[0_0_20px_rgba(63,229,108,0.2)]">gaming trades.</span>
             </div>
-            <div className="line block" style={{ perspective: 1000 }}>Escrow</div>
           </h1>
 
           {/* 3. Subheadline */}
-          <p className="hero-desc text-center text-xl md:text-2xl text-[#8892b0] max-w-3xl mx-auto mb-10 leading-relaxed font-medium">
-            An innovative platform that eliminates digital asset fraud with hardware-enforced identity verification and automated escrow protection.
+          <p className="hero-desc text-center text-lg sm:text-xl text-[#a1a1aa] max-w-3xl mx-auto mb-12 leading-relaxed font-normal">
+            Midly replaces risky human middlemen with AI-enforced escrow. Verify identities, lock funds, and trade with absolute confidence.
           </p>
 
           {/* 4. CTA Buttons */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-5 sm:gap-6 w-full sm:w-auto justify-center">
+          <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 w-full sm:w-auto justify-center">
             <Link href="/register" className="hero-btn w-full sm:w-auto">
-              <NeonButton className="w-full sm:w-auto gap-3 text-base !py-6 !px-12 tracking-widest uppercase shadow-[0_0_40px_-5px_rgba(63,229,108,0.3)]">
-                Get Started <ArrowRight className="w-5 h-5" />
-              </NeonButton>
+              <button className="w-full sm:w-auto flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-[#030407] px-8 py-4 rounded-full text-base font-bold transition-all shadow-[0_0_30px_rgba(63,229,108,0.2)] hover:shadow-[0_0_40px_rgba(63,229,108,0.4)] hover:-translate-y-0.5 duration-300">
+                Get Started <ArrowRight className="w-4 h-4" />
+              </button>
             </Link>
             <Link href="/login" className="hero-btn w-full sm:w-auto">
-              <NeonButton variant="secondary" className="w-full sm:w-auto text-base !py-6 !px-12 tracking-widest uppercase">
+              <button className="w-full sm:w-auto px-8 py-4 rounded-full text-base font-semibold text-white border border-white/10 bg-white/5 hover:bg-white/10 transition-all duration-300 backdrop-blur-sm">
                 Sign In
-              </NeonButton>
+              </button>
             </Link>
           </div>
           </div>
         </div>
 
-        {/* 5. Spinning 3D Carousel — FULL WIDTH, spans edge to edge */}
-        <SpinningCarousel />
-
-        {/* Bottom gradient fade */}
-        <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-[#030407] to-transparent z-30 pointer-events-none" />
+        {/* 5. Spinning 3D Carousel — Added padding so cards don't clip out of the hero section */}
+        <div className="relative z-20 w-full pb-32 pt-16">
+          <SpinningCarousel />
+        </div>
       </section>
 
       {/* ===== FEATURE SLIDER SECTION ===== */}
       <FeatureSlider />
 
-      {/* ===== ARCHITECTURE GRID SECTION ===== */}
-      <section className="w-full px-4 sm:px-6 lg:px-16 py-16 sm:py-24 lg:py-32 max-w-[1600px] mx-auto border-t border-white/[0.02] relative">
-        <div className="section-header flex flex-col md:flex-row md:items-end justify-between mb-12 sm:mb-16 lg:mb-24 gap-6 sm:gap-8">
-          <div>
-            <h2 className="text-sm font-black text-primary tracking-widest uppercase mb-4">Architecture</h2>
-            <h3 className="text-fluid-section font-black text-white tracking-tighter uppercase leading-[0.9]">
-              Zero-Trust <span className="block sm:inline">Guarantee.</span>
-            </h3>
-          </div>
-          <p className="text-lg text-[#8892b0] max-w-md font-medium leading-relaxed border-l-2 border-white/10 pl-6">
-            Our automated Escrow State Engine guarantees that neither party can manipulate the transaction flow. Funds are algorithmically verified before assets move.
-          </p>
-        </div>
+      {/* ===== HOW IT WORKS SECTION (Replaces Architecture Grid) ===== */}
+      <HowItWorks />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          <DynamicCard hoverEffect={true} delay={0.1} className="flex flex-col justify-between min-h-[280px] sm:min-h-[350px] lg:h-[400px]">
-            <div>
-              <div className="w-16 h-16 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center mb-8">
-                <Lock className="w-6 h-6 text-primary" />
-              </div>
-              <h4 className="text-3xl font-black text-white tracking-tight uppercase mb-4">Phase 1: Secure</h4>
-              <p className="text-[#8892b0] font-medium leading-relaxed">Buyer deposits funds directly into the Midly Escrow. Funds are verified and instantly held securely during the transaction.</p>
-            </div>
-            <div className="text-8xl font-black text-white/5 absolute bottom-4 right-8 tracking-tighter">01</div>
-          </DynamicCard>
-
-          <DynamicCard hoverEffect={true} delay={0.3} className="flex flex-col justify-between min-h-[280px] sm:min-h-[350px] lg:h-[400px] lg:translate-y-12">
-            <div>
-              <div className="w-16 h-16 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center mb-8">
-                <PackageSearch className="w-6 h-6 text-primary" />
-              </div>
-              <h4 className="text-3xl font-black text-white tracking-tight uppercase mb-4">Phase 2: Handover</h4>
-              <p className="text-[#8892b0] font-medium leading-relaxed">The Seller safely transfers the digital asset, knowing the exact funds are currently secured by our algorithm.</p>
-            </div>
-            <div className="text-8xl font-black text-white/5 absolute bottom-4 right-8 tracking-tighter">02</div>
-          </DynamicCard>
-
-          <DynamicCard hoverEffect={true} delay={0.5} className="flex flex-col justify-between min-h-[280px] sm:min-h-[350px] lg:h-[400px] lg:translate-y-24">
-            <div>
-              <div className="w-16 h-16 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center mb-8">
-                <MessageSquareWarning className="w-6 h-6 text-primary" />
-              </div>
-              <h4 className="text-3xl font-black text-white tracking-tight uppercase mb-4">Phase 3: Release</h4>
-              <p className="text-[#8892b0] font-medium leading-relaxed">If satisfied, funds release instantly. If a scam is detected, instant dispute freezing protocols are initiated.</p>
-            </div>
-            <div className="text-8xl font-black text-white/5 absolute bottom-4 right-8 tracking-tighter">03</div>
-          </DynamicCard>
-        </div>
-      </section>
+      {/* ===== FAQ SECTION ===== */}
+      <FAQ />
     </div>
   );
 }
