@@ -37,22 +37,22 @@ export default function Navbar() {
     fetch(`${API_URL}/api/notifications`, {
       headers: { "Authorization": `Bearer ${token}` }
     })
-    .then(res => {
+      .then(res => {
         if (res.status === 401 || res.status === 403) {
-            signOut({ callbackUrl: '/login' });
-            return null;
+          signOut({ callbackUrl: '/login' });
+          return null;
         }
         return res.json();
-    })
-    .then(data => {
-      if (data && data.notifications) {
-        setNotifications(data.notifications);
-        setHasNewNotifs(data.notifications.some((n: any) => !n.is_read));
-      }
-    }).catch(console.error);
+      })
+      .then(data => {
+        if (data && data.notifications) {
+          setNotifications(data.notifications);
+          setHasNewNotifs(data.notifications.some((n: any) => !n.is_read));
+        }
+      }).catch(console.error);
   };
 
-let globalSocket: any = null;
+  let globalSocket: any = null;
 
   useEffect(() => {
     setIsAuthenticated(status === "authenticated");
@@ -64,21 +64,21 @@ let globalSocket: any = null;
         const userId = payload.user_id;
 
         if (!globalSocket) {
-           globalSocket = io(API_URL, { transports: ['websocket', 'polling'], withCredentials: true });
-           globalSocket.emit("join_user", userId);
+          globalSocket = io(API_URL, { transports: ['websocket', 'polling'], withCredentials: true });
+          globalSocket.emit("join_user", userId);
         }
-        
+
         globalSocket.on("new_notification", () => {
-           fetchNotifs();
+          fetchNotifs();
         });
       } catch (e) { }
       fetchNotifs();
       fetch(`${API_URL}/api/user/profile`, {
-         headers: { "Authorization": `Bearer ${token}` }
+        headers: { "Authorization": `Bearer ${token}` }
       })
-      .then(res => res.json())
-      .then(data => { if (data.kyc?.status === 'verified') setIsKycVerified(true); })
-      .catch(console.error);
+        .then(res => res.json())
+        .then(data => { if (data.kyc?.status === 'verified') setIsKycVerified(true); })
+        .catch(console.error);
     }
 
     // Initial entrance animation
@@ -88,11 +88,11 @@ let globalSocket: any = null;
         { y: 0, opacity: 1, duration: 1, ease: "power4.out", delay: 0.2 }
       );
     }
-    
+
     return () => {
-       if (globalSocket) {
-         globalSocket.off("new_notification");
-       }
+      if (globalSocket) {
+        globalSocket.off("new_notification");
+      }
     }
   }, [pathname, status, token]);
 
@@ -116,7 +116,7 @@ let globalSocket: any = null;
   const publicNavLinks: any[] = [
     { name: "Features", href: "/#features" },
     { name: "How It Works", href: "/#how-it-works" },
-    { name: "FAQ", href: "/#faq" },
+    { name: "FAQs", href: "/#faq" },
   ];
 
   // GSAP animations for mobile menu
@@ -142,11 +142,11 @@ let globalSocket: any = null;
     if (!showNotifs) return;
 
     if (hasNewNotifs) {
-       fetch(`${API_URL}/api/notifications/mark-read`, {
-          method: 'PUT',
-          headers: { "Authorization": `Bearer ${token}` }
-       });
-       setHasNewNotifs(false);
+      fetch(`${API_URL}/api/notifications/mark-read`, {
+        method: 'PUT',
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      setHasNewNotifs(false);
     }
 
     const handleClickOutside = (e: MouseEvent) => {
@@ -170,8 +170,8 @@ let globalSocket: any = null;
     } else {
       gsap.to(notifMenuRef.current, {
         opacity: 0, y: -10, scale: 0.95, duration: 0.2, ease: "power3.in",
-        onComplete: () => { 
-          if (notifMenuRef.current) notifMenuRef.current.style.display = 'none'; 
+        onComplete: () => {
+          if (notifMenuRef.current) notifMenuRef.current.style.display = 'none';
           setNotifications([]); // Clear history once closed
         }
       });
@@ -183,17 +183,15 @@ let globalSocket: any = null;
       {/* High-End Absolute Glass Header */}
       <div
         ref={navRef}
-        className={`fixed z-50 transition-all duration-300 ${
-          pathname === '/'
-            ? 'top-4 left-4 right-4 mx-auto max-w-[1200px] rounded-full bg-[#030407]/40 backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)]'
-            : 'top-0 left-0 w-full bg-[#030407]/80 backdrop-blur-2xl border-b border-white/[0.04]'
-        }`}
+        className={`fixed z-50 transition-all duration-300 ${pathname === '/'
+          ? 'top-4 left-4 right-4 mx-auto max-w-[1200px] rounded-full bg-[#030407]/40 backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)]'
+          : 'top-0 left-0 w-full bg-[#030407]/80 backdrop-blur-2xl border-b border-white/[0.04]'
+          }`}
       >
-        <div className={`w-full flex items-center justify-between ${
-          pathname === '/' 
-            ? 'px-6 sm:px-8 lg:px-10 h-16 sm:h-20' 
-            : 'px-4 sm:px-6 lg:px-12 h-16 sm:h-20 lg:h-24'
-        }`}>
+        <div className={`w-full flex items-center justify-between ${pathname === '/'
+          ? 'px-6 sm:px-8 lg:px-10 h-16 sm:h-20'
+          : 'px-4 sm:px-6 lg:px-12 h-16 sm:h-20 lg:h-24'
+          }`}>
           <div className="flex items-center gap-8 lg:gap-12">
             <Link href="/" className="flex items-center gap-3 group relative">
               <div className="absolute -inset-4 bg-primary/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
@@ -205,26 +203,24 @@ let globalSocket: any = null;
             <div className="hidden md:flex absolute left-1/2 -translate-x-1/2 items-center gap-6 lg:gap-8 h-8">
               {pathname === '/' && (
                 publicNavLinks.map((link) => (
-                  <Link
+                  <a
                     key={link.name}
-                    href={link.href}
+                    href={link.href.replace('/', '')}
                     onClick={(e) => {
-                      if (pathname === '/' && link.href.startsWith('/#')) {
-                        e.preventDefault();
-                        const id = link.href.split('#')[1];
-                        const lenis = (window as any).lenis;
-                        if (lenis) {
-                           lenis.scrollTo(`#${id}`);
-                        } else {
-                           const el = document.getElementById(id);
-                           if (el) el.scrollIntoView({ behavior: 'smooth' });
-                        }
+                      e.preventDefault();
+                      const id = link.href.split('#')[1];
+                      const lenis = (window as any).lenis;
+                      if (lenis) {
+                        lenis.scrollTo(`#${id}`);
+                      } else {
+                        const el = document.getElementById(id);
+                        if (el) el.scrollIntoView({ behavior: 'smooth' });
                       }
                     }}
                     className="text-xs font-bold tracking-widest uppercase text-[#8892b0] hover:text-white transition-colors"
                   >
                     {link.name}
-                  </Link>
+                  </a>
                 ))
               )}
             </div>
