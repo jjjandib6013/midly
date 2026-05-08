@@ -293,8 +293,8 @@ export default function Navbar() {
               </>
             ) : (
               <div className="hidden md:flex items-center gap-6">
-                <Link href="/login" className="text-xs font-bold uppercase tracking-widest text-[#8892b0] hover:text-white transition-colors">Sign Up</Link>
-                <Link href="/register"><NeonButton className="!py-2.5 !px-8 text-xs tracking-widest uppercase">Log in</NeonButton></Link>
+                <Link href="/register" className="text-xs font-bold uppercase tracking-widest text-[#8892b0] hover:text-white transition-colors">Sign Up</Link>
+                <Link href="/login"><NeonButton className="!py-2.5 !px-8 text-xs tracking-widest uppercase">Log In</NeonButton></Link>
               </div>
             )}
 
