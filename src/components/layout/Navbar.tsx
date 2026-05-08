@@ -36,8 +36,16 @@ export default function Navbar() {
     if (!token) return;
     fetch(`${API_URL}/api/notifications`, {
       headers: { "Authorization": `Bearer ${token}` }
-    }).then(res => res.json()).then(data => {
-      if (data.notifications) {
+    })
+    .then(res => {
+        if (res.status === 401 || res.status === 403) {
+            signOut({ callbackUrl: '/login' });
+            return null;
+        }
+        return res.json();
+    })
+    .then(data => {
+      if (data && data.notifications) {
         setNotifications(data.notifications);
         setHasNewNotifs(data.notifications.some((n: any) => !n.is_read));
       }
@@ -200,6 +208,14 @@ let globalSocket: any = null;
                   <Link
                     key={link.name}
                     href={link.href}
+                    onClick={(e) => {
+                      if (pathname === '/' && link.href.startsWith('/#')) {
+                        e.preventDefault();
+                        const id = link.href.split('#')[1];
+                        const el = document.getElementById(id);
+                        if (el) el.scrollIntoView({ behavior: 'smooth' });
+                      }
+                    }}
                     className="text-xs font-bold tracking-widest uppercase text-[#8892b0] hover:text-white transition-colors"
                   >
                     {link.name}
@@ -253,8 +269,19 @@ let globalSocket: any = null;
                   </div>
                 )}
 
+                {pathname !== '/' && (
+                  <Link
+                    href="/profile"
+                    className="relative p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center text-[#8892b0] hover:text-white transition-colors"
+                    aria-label="Profile"
+                  >
+                    <User className="w-5 h-5" />
+                    {isKycVerified && <CheckCircle2 className="absolute top-1 right-1 w-3 h-3 text-primary bg-[#030407] rounded-full" />}
+                  </Link>
+                )}
+
                 {pathname === '/' && (
-                  <div className="hidden md:block pr-2 border-r border-white/[0.04]">
+                  <div className="hidden md:block">
                     <Link href="/dashboard">
                       <NeonButton className="!py-2.5 !px-6 text-xs tracking-widest uppercase gap-2 flex items-center">
                         Dashboard <ArrowRight className="w-3.5 h-3.5" />
@@ -262,15 +289,6 @@ let globalSocket: any = null;
                     </Link>
                   </div>
                 )}
-
-                <Link
-                  href="/profile"
-                  className="relative p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center text-[#8892b0] hover:text-white transition-colors"
-                  aria-label="Profile"
-                >
-                  <User className="w-5 h-5" />
-                  {isKycVerified && <CheckCircle2 className="absolute top-1 right-1 w-3 h-3 text-primary bg-[#030407] rounded-full" />}
-                </Link>
               </>
             ) : (
               <div className="hidden md:flex items-center gap-6">
