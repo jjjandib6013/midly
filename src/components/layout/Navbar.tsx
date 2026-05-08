@@ -212,8 +212,13 @@ let globalSocket: any = null;
                       if (pathname === '/' && link.href.startsWith('/#')) {
                         e.preventDefault();
                         const id = link.href.split('#')[1];
-                        const el = document.getElementById(id);
-                        if (el) el.scrollIntoView({ behavior: 'smooth' });
+                        const lenis = (window as any).lenis;
+                        if (lenis) {
+                           lenis.scrollTo(`#${id}`);
+                        } else {
+                           const el = document.getElementById(id);
+                           if (el) el.scrollIntoView({ behavior: 'smooth' });
+                        }
                       }
                     }}
                     className="text-xs font-bold tracking-widest uppercase text-[#8892b0] hover:text-white transition-colors"
