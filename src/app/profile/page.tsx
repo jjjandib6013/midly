@@ -11,9 +11,15 @@ import DynamicCard from "@/components/ui/DynamicCard";
 import ReputationBadge from "@/components/ui/ReputationBadge";
 
 export default function Profile() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const token = (session as any)?.accessToken;
   const router = useRouter();
+
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/login');
+    }
+  }, [status, router]);
 
   const [hubData, setHubData] = useState<any>(null);
   const [methods, setMethods] = useState<any[]>([]);
@@ -29,8 +35,14 @@ export default function Profile() {
     fetch(`${API_URL}/api/user/hub`, {
        headers: { "Authorization": `Bearer ${token}` }
     })
-      .then(res => res.json())
-      .then(data => { if (data.identity) setHubData(data); })
+      .then(res => {
+         if (res.status === 401 || res.status === 403) {
+            signOut({ callbackUrl: '/login' });
+            return null;
+         }
+         return res.json();
+      })
+      .then(data => { if (data && data.identity) setHubData(data); })
       .catch(console.error)
       .finally(() => setIsLoading(false));
       
