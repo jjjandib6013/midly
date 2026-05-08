@@ -98,7 +98,10 @@ const handler = NextAuth({
       }
     })
   ],
-  session: { strategy: "jwt" },
+  session: { 
+     strategy: "jwt",
+     maxAge: 7 * 24 * 60 * 60, // 7 days (matches our Express JWT lifecycle)
+  },
   pages: {
     signIn: "/login",
     signOut: "/",
