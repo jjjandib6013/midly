@@ -74,8 +74,9 @@ let globalSocket: any = null;
       .catch(console.error);
     }
 
-    // Initial entrance animation
-    if (navRef.current) {
+    // On homepage, entrance is controlled by the page GSAP timeline via .navbar-entrance class
+    // On other pages, run standalone entrance animation
+    if (navRef.current && pathname !== '/') {
       gsap.fromTo(navRef.current,
         { y: -100, opacity: 0 },
         { y: 0, opacity: 1, duration: 1, ease: "power4.out", delay: 0.2 }
@@ -105,7 +106,7 @@ let globalSocket: any = null;
     await signOut({ callbackUrl: "/" });
   };
 
-  // Unauthenticated nav links (landing page) — matches prototype
+  // Unauthenticated nav links — matches prototype
   const publicNavLinks: any[] = [
     { name: "Home", href: "/" },
     { name: "How It Works", href: "/#how-it-works" },
@@ -186,10 +187,10 @@ let globalSocket: any = null;
 
   return (
     <>
-      {/* Glassmorphism Floating Navbar — matching prototype design */}
+      {/* Glassmorphism Floating Navbar — matching prototype */}
       <div
         ref={navRef}
-        className="fixed top-0 left-0 w-full z-50 flex justify-center px-4 sm:px-6 pt-4"
+        className="fixed top-0 left-0 w-full z-50 flex justify-center px-4 sm:px-6 pt-4 navbar-entrance"
       >
         <div
           className="w-full max-w-[1200px] px-5 sm:px-8 h-14 sm:h-16 flex items-center justify-between rounded-2xl"
@@ -201,14 +202,14 @@ let globalSocket: any = null;
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
           }}
         >
-          {/* Logo */}
-          <Link href="/" className="flex items-center gap-2.5 group relative">
+          {/* Logo — SVG shield icon */}
+          <Link href="/#hero" className="flex items-center gap-2.5 group relative">
             <div className="absolute -inset-4 bg-primary/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
             <Image
-              src="/images/midly-logo.png"
+              src="/images/midly-logo-real.png"
               alt="Midly Logo"
-              width={32}
-              height={32}
+              width={30}
+              height={30}
               className="relative z-10 drop-shadow-[0_0_12px_rgba(63,229,108,0.3)]"
             />
             <span className="relative z-10 text-lg font-black tracking-tight text-white uppercase translate-y-[1px]">MIDLY</span>
@@ -314,7 +315,7 @@ let globalSocket: any = null;
               <div className="hidden md:flex items-center">
                 <Link href="/register">
                   <button
-                    className="px-6 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 flex items-center gap-2"
+                    className="px-6 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 flex items-center gap-2 cursor-pointer"
                     style={{
                       background: 'rgba(63, 229, 108, 0.15)',
                       color: '#b8f5cb',
@@ -359,10 +360,10 @@ let globalSocket: any = null;
         <div className="flex justify-between items-center mb-16 mt-4">
           <Link href="/" className="flex items-center gap-2.5" onClick={() => setIsMobileMenuOpen(false)}>
             <Image
-              src="/images/midly-logo.png"
+              src="/images/midly-logo-real.png"
               alt="Midly Logo"
-              width={32}
-              height={32}
+              width={30}
+              height={30}
             />
             <span className="text-2xl font-black tracking-tighter text-white uppercase pt-1">MIDLY</span>
           </Link>
