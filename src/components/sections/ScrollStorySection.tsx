@@ -56,8 +56,11 @@ export default function ScrollStorySection({ onEnter, onExit }: ScrollStorySecti
       const shouldLock = Math.abs(rect.top) < 100;
       
       if (shouldLock && !isActive && !wheelCooldownRef.current) {
+        const lenis = (window as any).lenis;
+        if (lenis) lenis.stop();
         // Snap to perfect alignment
         window.scrollTo({ top: window.scrollY + rect.top });
+        if (lenis) lenis.scrollTo(window.scrollY + rect.top, { immediate: true });
         onEnter?.();
         setIsActive(true);
       }
@@ -69,14 +72,17 @@ export default function ScrollStorySection({ onEnter, onExit }: ScrollStorySecti
   }, [isActive, onEnter]);
 
   useEffect(() => {
+    const lenis = (window as any).lenis;
     if (!isActive) {
       if (prevOverflowRef.current !== null) {
         document.body.style.overflow = prevOverflowRef.current;
         prevOverflowRef.current = null;
       }
+      if (lenis) lenis.start();
       return;
     }
 
+    if (lenis) lenis.stop();
     prevOverflowRef.current = document.body.style.overflow || "";
     document.body.style.overflow = "hidden";
 
@@ -85,6 +91,7 @@ export default function ScrollStorySection({ onEnter, onExit }: ScrollStorySecti
         document.body.style.overflow = prevOverflowRef.current;
         prevOverflowRef.current = null;
       }
+      if (lenis) lenis.start();
     };
   }, [isActive]);
 
@@ -104,8 +111,15 @@ export default function ScrollStorySection({ onEnter, onExit }: ScrollStorySecti
         isEscapingRef.current = true;
         setIsActive(false);
         onExit?.();
-        // Push scroll exactly out of the lock zone (>100px)
-        window.scrollBy({ top: -150, behavior: "smooth" });
+        
+        const lenis = (window as any).lenis;
+        if (lenis) {
+           lenis.start();
+           lenis.scrollTo(window.scrollY - 150, { immediate: true });
+        } else {
+           window.scrollBy({ top: -150, behavior: "smooth" });
+        }
+        
         setTimeout(() => { isEscapingRef.current = false; }, 1000);
         return;
       }
@@ -114,8 +128,19 @@ export default function ScrollStorySection({ onEnter, onExit }: ScrollStorySecti
         isEscapingRef.current = true;
         setIsActive(false);
         onExit?.();
-        // Push scroll exactly out of the lock zone (>100px)
-        window.scrollBy({ top: 150, behavior: "smooth" });
+        
+        const lenis = (window as any).lenis;
+        if (lenis) {
+           lenis.start();
+           lenis.scrollTo(window.scrollY + 150, { immediate: true });
+           const features = document.getElementById("features");
+           if (features) {
+              lenis.scrollTo(features, { duration: 1.2, offset: -50 });
+           }
+        } else {
+           window.scrollBy({ top: 150, behavior: "smooth" });
+        }
+        
         setTimeout(() => { isEscapingRef.current = false; }, 1000);
         return;
       }

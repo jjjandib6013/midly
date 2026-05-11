@@ -4,6 +4,7 @@ import { useSession } from 'next-auth/react';
 import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import { ShieldCheck, MessageSquare, CheckCircle2, ShieldAlert, Paperclip, ImageIcon, ArrowRight, Copy, Wallet, Smartphone, CreditCard, Lock, Timer, Unlock, XCircle, Key, Eye, EyeOff, Clock, Server, X, UploadCloud, Info, FileText } from "lucide-react";
+import Image from "next/image";
 import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
 import { ChatSkeleton } from "@/components/ui/ChatSkeleton";
