@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 import { Plus, X } from "lucide-react";
@@ -6,27 +6,31 @@ import { Plus, X } from "lucide-react";
 const faqs = [
   {
     question: "How does Midly hold my funds securely?",
-    answer: "Funds are deposited into an escrow vault tied to your trade ID. Neither party can withdraw until the AI confirms the agreed handover, or both sides cancel."
+    answer: "Funds are deposited into a secure Midly Escrow Vault tied to your specific trade. The money is locked and visible to both parties. Neither side can withdraw the funds mid-trade until mutual verification is complete or an administrator steps in."
   },
   {
     question: "What games does Midly support?",
-    answer: "We support a wide variety of games including CS2, Valorant, Dota 2, and many more. Our platform is continuously expanding to include new titles based on community demand."
+    answer: "We support a wide variety of games including CS2, Valorant, Dota 2, Roblox, Mobile Legends, and many more. As long as the game allows item or account transfers, you can trade it securely on Midly."
   },
   {
-    question: "What happens if a trader scams me?",
-    answer: "Our AI dispute engine kicks in automatically. We hold the funds in escrow, so if evidence of a scam is found, your funds are returned safely to your wallet. KYC verification ensures bad actors are permanently banned."
+    question: "What happens if a trader tries to scam me?",
+    answer: "If a dispute arises, Midly administrators will manually step into your trade room to review the chat logs and screenshot evidence. Since the funds are safely locked in escrow, if a scam attempt is proven, your money is refunded to your wallet and the scammer is permanently banned."
   },
   {
     question: "How long does a trade take?",
-    answer: "Trades can be completed in minutes once both parties agree and the buyer funds the escrow. The actual transfer time depends on the game and how quickly the seller delivers."
+    answer: "Trades can be completed in minutes once both parties agree and the buyer funds the escrow. The actual transfer time simply depends on how quickly the seller delivers the asset in-game."
   },
   {
     question: "What fees does Midly charge?",
-    answer: "We charge a minimal transparent fee of 2.5% per successful trade. There are no hidden fees, and deposits/withdrawals use standard network rates."
+    answer: "We charge a flat, transparent fee of 5% per successful trade. There are no hidden fees, and creating a trade room is completely free."
   },
   {
     question: "Can I cancel a trade after it's started?",
-    answer: "Yes, you can cancel a trade as long as the seller hasn't marked the item as sent. If funds are already in escrow, they will be immediately refunded to your Midly wallet."
+    answer: "Yes, you can mutually cancel a trade as long as the seller hasn't marked the item as delivered. If funds are already in escrow, they will be immediately refunded to the buyer's Midly wallet."
+  },
+  {
+    question: "How do I withdraw my money?",
+    answer: "Once a trade is complete and funds are released to your Midly Wallet, you can withdraw them at any time directly to your preferred local payment methods (such as GCash, Maya, or Bank Transfer)."
   }
 ];
 

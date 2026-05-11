@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useRef, useEffect } from "react";
 import { motion } from "framer-motion";
@@ -12,60 +12,50 @@ const STEPS = [
   {
     id: 1,
     number: "01",
-    category: "CONNECT",
-    title: "Find your trade partner instantly.",
+    category: "AGREEMENT",
+    title: "Set terms and conditions.",
     description:
-      "Browse verified listings or create your own. Midly's marketplace matches buyers and sellers across Dota 2, Valorant, CS2, and more ΓÇö with trust scores visible upfront.",
-    icon: ShieldCheck,
-    accent: "#3FE56C",
-  },
-  {
-    id: 2,
-    number: "02",
-    category: "AGREE",
-    title: "Lock in fair terms with AI guardrails.",
-    description:
-      "Buyer and seller define what's traded, the price, and delivery inside a structured contract. The AI flags unfair pricing or coercive language before terms are sealed.",
+      "Buyer and seller meet in a secure trade room to define what's being traded, the price, and the delivery method. Everything is documented upfront.",
     icon: Scale,
     accent: "#A855F7",
   },
   {
-    id: 3,
-    number: "03",
-    category: "ESCROW",
-    title: "Funds locked in a smart vault.",
+    id: 2,
+    number: "02",
+    category: "LOCK",
+    title: "Lock the payment.",
     description:
-      "The buyer deposits into Midly's escrow vault. Funds are visible to both parties ΓÇö no one, not even the Midly team, can withdraw them mid-trade.",
+      "The buyer deposits the agreed amount into the Midly Escrow Vault. The funds are instantly verified and locked—visible to both parties, but untouchable by either.",
     icon: Lock,
     accent: "#3B82F6",
   },
   {
+    id: 3,
+    number: "03",
+    category: "HANDOVER",
+    title: "Deliver the asset.",
+    description:
+      "With the money safely locked, the seller transfers the game account, skin, or item in-game, and uploads screenshot proof directly into the trade room.",
+    icon: RefreshCw,
+    accent: "#EC4899",
+  },
+  {
     id: 4,
     number: "04",
-    category: "VERIFY",
-    title: "Hardware KYC confirms real identities.",
+    category: "VERIFICATION",
+    title: "Verify the transfer.",
     description:
-      "Both parties undergo frictionless, device-bound identity verification. Midly ensures you're trading with a real, accountable human ΓÇö not a burner account.",
-    icon: UserCheck,
+      "The buyer reviews the delivered asset to ensure it matches the agreement exactly. If anything is wrong, Midly admins step in to investigate.",
+    icon: ShieldCheck,
     accent: "#F59E0B",
   },
   {
     id: 5,
     number: "05",
-    category: "TRANSFER",
-    title: "Assets move in a secure window.",
-    description:
-      "With funds locked and identities verified, the seller safely transfers the gaming asset. A time-bound window ensures accountability on both sides.",
-    icon: RefreshCw,
-    accent: "#EC4899",
-  },
-  {
-    id: 6,
-    number: "06",
     category: "RELEASE",
-    title: "Instant payout. Zero disputes.",
+    title: "Escrow complete.",
     description:
-      "Upon mutual confirmation or automated state validation, funds are instantly released to the seller. If anything goes wrong, the AI dispute engine kicks in.",
+      "Upon successful mutual verification, Midly instantly releases the locked funds to the seller's wallet. A flawless, zero-trust transaction.",
     icon: Zap,
     accent: "#3FE56C",
   },
@@ -121,8 +111,8 @@ export default function HowItWorks() {
             </h2>
 
             <p className="text-lg text-[#8892b0] font-medium leading-relaxed max-w-md mb-12">
-              Six steps from handshake to handover. Every action is logged, every
-              dollar accounted for ΓÇö no rogue middlemen, no chargebacks, no
+              Five steps from handshake to handover. Every action is logged, every
+              dollar accounted for — no rogue middlemen, no chargebacks, no
               excuses.
             </p>
 

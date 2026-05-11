@@ -213,8 +213,7 @@ export default function ScrollStorySection({ onEnter, onExit }: ScrollStorySecti
                 stage === 0 ? "opacity-0 translate-y-4" : "opacity-100 translate-y-0"
               }`}
             >
-              Filipino gamers lose <span className="text-primary">millions</span> to
-              middleman scams every year.
+              Filipino traders lost over <span className="text-primary">₱198 Million</span> to online fraud in 2024.
             </h2>
             <p
               className={`mt-4 text-xs sm:text-sm text-[#9fb9ad] transition-all duration-700 ${
@@ -238,7 +237,7 @@ export default function ScrollStorySection({ onEnter, onExit }: ScrollStorySecti
                 stage === 0 ? "opacity-0 translate-y-4" : "opacity-100 translate-y-0"
               }`}
             >
-              Gaming-trade scams have grown <span className="text-primary">2.6×</span> since 2021.
+              Cybercrime complaints surged to <span className="text-primary">10,004+</span> recorded cases last year.
             </h2>
 
             <div
@@ -266,7 +265,7 @@ export default function ScrollStorySection({ onEnter, onExit }: ScrollStorySecti
                 </div>
               </div>
               <p className="mt-6 text-[10px] sm:text-xs text-[#6f8a80] uppercase tracking-widest">
-                Indexed reports of online gaming-trade scams (illustrative)
+                Indexed reports of online fraud and swindling in the Philippines
               </p>
             </div>
           </div>
@@ -283,15 +282,15 @@ export default function ScrollStorySection({ onEnter, onExit }: ScrollStorySecti
                 stage === 0 ? "opacity-0 translate-y-4" : "opacity-100 translate-y-0"
               }`}
             >
-              Meet <span className="text-primary">Midly</span> — the AI middleman that can’t run away.
+              Meet <span className="text-primary">Midly</span> — the escrow platform that holds everyone accountable.
             </h2>
             <p
               className={`mt-4 text-xs sm:text-sm text-[#9fb9ad] transition-all duration-700 ${
                 stage < 1 ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0"
               }`}
             >
-              Verified identities, locked smart-vault funds, and algorithmic release — every trade
-              protected end-to-end. No ghosting. No vanishing. Just 5%.
+              Verified identities, locked escrow wallets, and secure trade rooms — every transaction is
+              protected end-to-end. No ghosting. No vanishing. Just a flat 5% fee.
             </p>
 
             <div

@@ -7,27 +7,35 @@ import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
 export const defaultSlides = [
   {
     id: 1,
-    title: "Hardware Enforcement",
-    description: "Strict hardware-enforced KYC eliminates fraud before it even touches the ecosystem.",
+    title: "Identity Verification",
+    description: "We require strict KYC identity checks before any transaction begins. This ensures you are trading with a real, accountable person—not a disposable burner account.",
     backgroundImage: "/images/features/slide1-bg.jpg",
     cardImage: "/images/features/slide1-card.jpg",
-    accentColor: "#3FE56C", // Midly Green
+    accentColor: "#F59E0B", // Amber
   },
   {
     id: 2,
-    title: "Algorithmic Vault",
-    description: "Funds are verified and instantly frozen in the global ledger using our automated state engine.",
+    title: "Secure Escrow Wallet",
+    description: "Buyers deposit funds directly into a secure Midly Escrow Wallet. The money is locked and visible to both parties, guaranteeing the buyer has the funds and the seller gets paid.",
     backgroundImage: "/images/features/slide2-bg.jpg",
     cardImage: "/images/features/slide2-card.jpg",
-    accentColor: "#A855F7", // Purple
+    accentColor: "#3FE56C", // Midly Green
   },
   {
     id: 3,
-    title: "Zero-Trust Guarantee",
-    description: "The protocol guarantees neither party can manipulate the transaction flow. Assets only move when verified.",
+    title: "Dedicated Trade Rooms",
+    description: "Manage the entire transaction in a private, encrypted trade room. Chat securely, upload transfer proof, and release funds only when you are completely satisfied.",
     backgroundImage: "/images/features/slide3-bg.jpg",
     cardImage: "/images/features/slide3-card.jpg",
     accentColor: "#3B82F6", // Blue
+  },
+  {
+    id: 4,
+    title: "Dispute Resolution",
+    description: "If something goes wrong during the handover, our specialized support team steps into the trade room to review evidence and resolve disputes fairly.",
+    backgroundImage: "/images/features/slide2-bg.jpg",
+    cardImage: "/images/features/slide2-card.jpg",
+    accentColor: "#EC4899", // Pink
   }
 ];
 
