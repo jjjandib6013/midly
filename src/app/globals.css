@@ -4,8 +4,8 @@
   --color-primary: #3FE56C;
   /* Restored Midly Green */
   --color-primary-hover: #32c45b;
-  --color-dark-bg: #0A0A0A;
-  /* Premium Stark Black */
+  --color-dark-bg: #030407;
+  /* Matches hero section — seamless background */
   --color-dark-panel: #111111;
   /* Subtle elevation */
   --color-dark-border: #262626;
@@ -112,7 +112,7 @@ body {
 
 /* Fluid viewport typography */
 .text-fluid-hero {
-  font-size: clamp(1.61rem, 3.88vw + 0.64rem, 4.48rem);
+  font-size: clamp(2rem, 4vw + 0.5rem, 4.5rem);
 }
 .text-fluid-section {
   font-size: clamp(2rem, 4vw + 0.5rem, 4rem);
@@ -123,3 +123,77 @@ body {
 .text-fluid-balance {
   font-size: clamp(2.5rem, 8vw + 1rem, 8rem);
 }
+
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes arrow-rise {
+  0% {
+    transform: translateY(6px);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-4px);
+    opacity: 0.7;
+  }
+}
+
+@keyframes slide-sweep {
+  0% {
+    opacity: 0;
+    transform: translateX(-20%) skewX(-6deg);
+  }
+  20% {
+    opacity: 0.6;
+  }
+  60% {
+    opacity: 0.4;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(20%) skewX(-6deg);
+  }
+}
+
+
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee 24s linear infinite;
+}
+
+.animate-arrow-rise {
+  animation: arrow-rise 1.6s ease-in-out infinite;
+}
+
+@keyframes graph-draw {
+  0% {
+    stroke-dashoffset: 140;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+.graph-stroke {
+  stroke-dasharray: 140;
+  stroke-dashoffset: 140;
+  animation: graph-draw 1.6s ease-in-out forwards;
+  filter: drop-shadow(0 0 10px rgba(63, 229, 108, 0.45));
+}
+
+.animate-slide-sweep {
+  background: linear-gradient(120deg, transparent 0%, rgba(255,255,255,0.08) 30%, rgba(255,255,255,0.14) 50%, rgba(255,255,255,0.08) 70%, transparent 100%);
+  animation: slide-sweep 0.7s ease-out;
+}
+

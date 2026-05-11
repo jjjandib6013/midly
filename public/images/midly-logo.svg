@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="shieldMain" x1="32" y1="8" x2="96" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#6BFABD"/>
+      <stop offset="35%" stop-color="#3FE56C"/>
+      <stop offset="70%" stop-color="#2CC9A0"/>
+      <stop offset="100%" stop-color="#1FA88A"/>
+    </linearGradient>
+    <linearGradient id="shieldInner" x1="40" y1="20" x2="88" y2="110" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#8BFFCE" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#2BB89E" stop-opacity="0.15"/>
+    </linearGradient>
+    <linearGradient id="checkStroke" x1="40" y1="48" x2="88" y2="88" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#D4FFF0"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="3" result="blur"/>
+      <feFlood flood-color="#3FE56C" flood-opacity="0.35" result="color"/>
+      <feComposite in="color" in2="blur" operator="in" result="shadow"/>
+      <feMerge>
+        <feMergeNode in="shadow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <!-- Shield outer shape -->
+  <path d="M64 8L16 32v32c0 28.8 20.48 55.68 48 64 27.52-8.32 48-35.2 48-64V32L64 8z" fill="url(#shieldMain)"/>
+  <!-- Shield inner highlight -->
+  <path d="M64 16L24 36v28c0 25.2 17.92 48.72 40 56 22.08-7.28 40-30.8 40-56V36L64 16z" fill="url(#shieldInner)"/>
+  <!-- Checkmark with glow -->
+  <g filter="url(#glow)">
+    <path d="M44 64l16 16 24-28" stroke="url(#checkStroke)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+</svg>
