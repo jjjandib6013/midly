@@ -37,6 +37,7 @@ export default function ScrollStorySection({ onEnter, onExit }: ScrollStorySecti
   const [flash, setFlash] = useState(false);
   const [isActive, setIsActive] = useState(false);
   const prevOverflowRef = useRef<string | null>(null);
+  const isEscapingRef = useRef(false);
 
   const activeFrame = FRAMES[frameIndex];
   const activeSlide = activeFrame.slide;
@@ -49,10 +50,14 @@ export default function ScrollStorySection({ onEnter, onExit }: ScrollStorySecti
     if (!el) return;
 
     const handleScroll = () => {
+      if (isEscapingRef.current) return;
       const rect = el.getBoundingClientRect();
-      // Lock only when the section fully covers the viewport
-      const shouldLock = rect.top <= 5 && rect.bottom >= window.innerHeight - 5;
-      if (shouldLock && !isActive) {
+      // Lock if the top of the section is within 100px of the top of the viewport
+      const shouldLock = Math.abs(rect.top) < 100;
+      
+      if (shouldLock && !isActive && !wheelCooldownRef.current) {
+        // Snap to perfect alignment
+        window.scrollTo({ top: window.scrollY + rect.top });
         onEnter?.();
         setIsActive(true);
       }
@@ -96,18 +101,22 @@ export default function ScrollStorySection({ onEnter, onExit }: ScrollStorySecti
       e.stopPropagation();
 
       if (direction < 0 && atFirst) {
+        isEscapingRef.current = true;
         setIsActive(false);
         onExit?.();
-        const hero = document.getElementById("hero");
-        hero?.scrollIntoView({ behavior: "smooth" });
+        // Push scroll exactly out of the lock zone (>100px)
+        window.scrollBy({ top: -150, behavior: "smooth" });
+        setTimeout(() => { isEscapingRef.current = false; }, 1000);
         return;
       }
 
       if (direction > 0 && atLast) {
+        isEscapingRef.current = true;
         setIsActive(false);
         onExit?.();
-        const features = document.getElementById("features");
-        features?.scrollIntoView({ behavior: "smooth" });
+        // Push scroll exactly out of the lock zone (>100px)
+        window.scrollBy({ top: 150, behavior: "smooth" });
+        setTimeout(() => { isEscapingRef.current = false; }, 1000);
         return;
       }
 

@@ -692,8 +692,8 @@ export default function TradeHub() {
       return (
          <div className="flex-1 w-full max-w-2xl mx-auto px-4 sm:px-6 py-8 sm:py-12 flex flex-col items-center justify-center">
             <div className="text-center mb-8">
-               <div className="w-20 h-20 rounded-full bg-primary/10 border-2 border-primary/30 flex items-center justify-center mx-auto mb-6">
-                  <ShieldCheck className="w-10 h-10 text-primary" />
+               <div className="w-20 h-20 flex items-center justify-center mx-auto mb-6">
+                  <Image src="/images/midly-logo-real.png" alt="Midly Logo" width={80} height={80} className="drop-shadow-[0_0_15px_rgba(63,229,108,0.3)]" />
                </div>
                <h1 className="text-3xl font-bold text-white mb-2">Private Escrow Invitation</h1>
                <p className="text-text-muted">Trade #{tradeId.padStart(6, '0')}</p>
@@ -792,7 +792,7 @@ export default function TradeHub() {
          <div className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 lg:py-8 flex flex-col gap-6 lg:h-[calc(100vh-64px)] overflow-y-auto custom-scrollbar">
             <header className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-dark-border pb-6 gap-4">
                <div>
-                  <h1 className="text-2xl font-bold text-zinc-100 mb-2 flex items-center gap-3"><ShieldCheck className="w-6 h-6 text-primary" /> Admin Trade Overview</h1>
+                  <h1 className="text-2xl font-bold text-zinc-100 mb-2 flex items-center gap-3"><Image src="/images/midly-logo-real.png" alt="Midly Logo" width={24} height={24} className="drop-shadow-[0_0_15px_rgba(63,229,108,0.3)]" /> Admin Trade Overview</h1>
                   <p className="text-sm text-text-muted max-w-xl leading-relaxed">You are viewing Trade #{tradeId} as a Platform Administrator. The activity timeline below represents the verified system logs for this transaction. You are observing this trade in read-only mode.</p>
                </div>
                <div className="flex items-center gap-4 shrink-0">
@@ -1038,7 +1038,7 @@ export default function TradeHub() {
             {/* ESCROW TRACKER */}
             <DynamicCard hoverEffect={false} className="border border-dark-border bg-dark-panel p-6 shrink-0 mb-4">
                <div className="flex items-center gap-3 mb-6">
-                  <ShieldCheck className="w-6 h-6 text-primary glow-icon" />
+                  <Image src="/images/midly-logo-real.png" alt="Midly Logo" width={24} height={24} className="drop-shadow-[0_0_15px_rgba(63,229,108,0.3)] glow-icon" />
                   <h2 className="text-xl font-bold text-white tracking-tight">Transaction Status</h2>
                </div>
 

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ShieldCheck, User, Menu, Bell, Wallet, LayoutDashboard, X, LogOut, ArrowRight, Store, CheckCircle2 } from "lucide-react";
+import Image from "next/image";
 import NeonButton from "@/components/ui/NeonButton";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
@@ -191,7 +192,13 @@ export default function Navbar() {
           <div className="flex items-center gap-8 lg:gap-12">
             <Link href="/" className="flex items-center gap-3 group relative">
               <div className="absolute -inset-4 bg-primary/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
-              <ShieldCheck className="relative z-10 h-8 w-8 text-primary drop-shadow-[0_0_15px_rgba(63,229,108,0.3)]" />
+              <Image 
+                src="/images/midly-logo-real.png" 
+                alt="Midly Logo" 
+                width={32} 
+                height={32} 
+                className="relative z-10 drop-shadow-[0_0_15px_rgba(63,229,108,0.3)]"
+              />
               <span className="relative z-10 text-2xl font-black tracking-tighter text-white uppercase translate-y-[1px]">MIDLY</span>
             </Link>
 
@@ -315,7 +322,13 @@ export default function Navbar() {
       >
         <div className="flex justify-between items-center mb-16 mt-4">
           <Link href="/" className="flex items-center gap-3" onClick={() => setIsMobileMenuOpen(false)}>
-            <ShieldCheck className="h-8 w-8 text-primary" />
+            <Image 
+              src="/images/midly-logo-real.png" 
+              alt="Midly Logo" 
+              width={32} 
+              height={32} 
+              className="drop-shadow-[0_0_15px_rgba(63,229,108,0.3)]"
+            />
             <span className="text-2xl font-black tracking-tighter text-white uppercase pt-1">MIDLY</span>
           </Link>
           <button
