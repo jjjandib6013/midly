@@ -97,15 +97,10 @@ export default function Navbar() {
   }, [pathname, status, token]);
 
   const handleAcceptInvite = async (tradeId: number) => {
-    try {
-      const res = await fetch(`${API_URL}/api/transactions/${tradeId}/accept-invite`, {
-        method: "PUT",
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (res.ok) {
-        window.location.href = `/trade/${tradeId}`;
-      }
-    } catch (e) { }
+    // Navigate to the Trade Room instead of accepting directly.
+    // The Trade Room enforces the Seller Metadata Gate — sellers must
+    // declare asset details before the accept button is enabled.
+    router.push(`/trade/${tradeId}`);
   };
 
   const handleLogout = async () => {
@@ -259,7 +254,7 @@ export default function Navbar() {
                               <p className="text-xs text-[#8892b0] mt-3 font-semibold uppercase tracking-wider">{new Date(notif.created_at).toLocaleDateString()}</p>
                               {notif.type === 'escrow_invite' && notif.reference_id && (
                                 <button className="mt-4 text-xs bg-primary text-dark-bg hover:brightness-110 px-5 py-2.5 rounded-full font-bold transition-all w-full flex items-center justify-center gap-2" onClick={() => handleAcceptInvite(notif.reference_id)}>
-                                  ACCEPT ESCROW <ArrowRight className="w-3 h-3" />
+                                  VIEW TRADE <ArrowRight className="w-3 h-3" />
                                 </button>
                               )}
                             </div>

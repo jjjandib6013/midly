@@ -435,6 +435,90 @@ router.post('/kyc/:id/resolve', authenticateJWT, async (req: Request, res: Respo
 });
 
 // ==========================================
+// FROZEN TRADES QUEUE
+// ==========================================
+
+router.get('/frozen-trades', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
+   const dbUser = await prisma.user.findUnique({ where: { user_id: req.user.user_id } });
+   if (!dbUser || dbUser.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+   try {
+      const trades = await prisma.transaction.findMany({
+         where: {
+            is_frozen: true,
+            status: { notIn: ['completed', 'cancelled', 'refunded', 'expired'] }
+         },
+         select: {
+            transaction_id: true,
+            risk_score: true,
+            risk_flags: true,
+            total_amount: true,
+            created_at: true,
+            buyer: { select: { first_name: true, last_name: true, email: true } },
+            seller: { select: { first_name: true, last_name: true, email: true } }
+         },
+         orderBy: { risk_score: 'desc' }
+      });
+      res.json({ trades });
+   } catch (e) {
+      res.status(500).json({ error: 'Server error fetching frozen trades' });
+   }
+});
+
+router.post('/frozen-trades/:id/clear', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
+   const dbUser = await prisma.user.findUnique({ where: { user_id: req.user.user_id } });
+   if (!dbUser || dbUser.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+   
+   try {
+      const txId = parseInt(req.params.id as string);
+      
+      await prisma.$transaction(async (tx) => {
+         const trade = await tx.transaction.findUnique({ where: { transaction_id: txId } });
+         if (!trade || !trade.is_frozen) throw new Error('Trade is not actively frozen');
+
+         await tx.transaction.update({
+            where: { transaction_id: txId },
+            data: { is_frozen: false }
+         });
+
+         await tx.message.create({
+            data: {
+               transaction_id: txId,
+               sender_id: null,
+               message_text: '[SYSTEM] Risk review complete. Trade cleared by admin. You may now proceed.',
+               is_system_generated: true,
+               risk_level: 'Safe'
+            }
+         });
+
+         await tx.notification.createMany({
+            data: [
+               { user_id: trade.buyer_id, type: 'system', message: `Admin cleared frozen trade #${txId}`, related_entity_type: 'transaction', related_entity_id: txId },
+               { user_id: trade.seller_id, type: 'system', message: `Admin cleared frozen trade #${txId}`, related_entity_type: 'transaction', related_entity_id: txId }
+            ]
+         });
+
+         await logAudit({
+            tx,
+            transactionId: txId,
+            userId: req.user.user_id,
+            actionType: ACTION_TYPES.ADMIN_UNFREEZE,
+            description: `Admin cleared frozen transaction #${txId}`,
+            ip: req.ip,
+            metadata: { admin_id: req.user.user_id }
+         });
+      });
+
+      if (io) {
+         io.to(`trade_${txId}`).emit('trade_updated', 'cleared');
+      }
+      
+      res.json({ success: true });
+   } catch (e: any) {
+      res.status(500).json({ error: e.message || 'Server error' });
+   }
+});
+
+// ==========================================
 // FRAUD DETECTION: LAYER 4 ENDPOINTS
 // ==========================================
 

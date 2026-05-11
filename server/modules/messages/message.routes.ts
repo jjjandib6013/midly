@@ -3,6 +3,7 @@ import { prisma } from '../../config/db';
 import { authenticateJWT } from '../../shared/middlewares/auth.middleware';
 import { io } from '../../../server';
 import rateLimit from 'express-rate-limit';
+import { presignMessageText } from '../../utils/presignUrl';
 
 const router = Router();
 
@@ -36,7 +37,15 @@ router.get('/:txId', authenticateJWT, async (req: Request, res: Response): Promi
          orderBy: { sent_at: 'asc' },
          include: { sender: true }
       });
-      res.json({ messages });
+
+      // Presign any S3 URLs in message text so the browser can render images directly
+      const presignedMessages = await Promise.all(
+         messages.map(async (m) => ({
+            ...m,
+            message_text: await presignMessageText(m.message_text || '')
+         }))
+      );
+      res.json({ messages: presignedMessages });
    } catch (error: any) {
       res.status(500).json({ error: 'Server error', msg: error.message });
    }
@@ -128,11 +137,14 @@ router.post('/:txId', authenticateJWT, chatRateLimiter, async (req: Request, res
          }
       });
 
-      io.to(`trade_${txId}`).emit('new_message', newMsg);
+      // Presign S3 URLs before emitting to clients via socket
+      const presignedText = await presignMessageText(newMsg.message_text || '');
+      const presignedMsg = { ...newMsg, message_text: presignedText };
+      io.to(`trade_${txId}`).emit('new_message', presignedMsg);
 
       if (computedRiskLevel === 'High') {
          // Emit risk alert directly to client
-         io.to(`trade_${txId}`).emit('risk_alert', newMsg);
+         io.to(`trade_${txId}`).emit('risk_alert', presignedMsg);
          
          // Inject warning message
          const warningMsg = await prisma.message.create({
@@ -152,7 +164,7 @@ router.post('/:txId', authenticateJWT, chatRateLimiter, async (req: Request, res
          });
       }
 
-      res.json({ message: newMsg });
+      res.json({ message: presignedMsg });
    } catch (error: any) {
       res.status(500).json({ error: 'Server error', msg: error.message });
    }
