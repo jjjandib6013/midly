@@ -140,6 +140,7 @@ export default function ScrollStorySection({ onEnter, onExit }: ScrollStorySecti
 
   return (
     <section
+      id="about"
       ref={sectionRef}
       className="relative w-full min-h-screen flex items-center justify-center overflow-hidden px-4 sm:px-6 lg:px-16"
     >

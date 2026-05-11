@@ -109,7 +109,7 @@ export default function Navbar() {
 
   // Unauthenticated nav links (landing page)
   const publicNavLinks: any[] = [
-    { name: "Features", href: "/#features" },
+    { name: "About", href: "/#about" },
     { name: "How It Works", href: "/#how-it-works" },
     { name: "FAQs", href: "/#faq" },
   ];
