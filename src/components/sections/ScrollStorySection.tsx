@@ -50,7 +50,8 @@ export default function ScrollStorySection({ onEnter, onExit }: ScrollStorySecti
 
     const handleScroll = () => {
       const rect = el.getBoundingClientRect();
-      const shouldLock = rect.bottom <= window.innerHeight;
+      // Lock only when the section fully covers the viewport
+      const shouldLock = rect.top <= 5 && rect.bottom >= window.innerHeight - 5;
       if (shouldLock && !isActive) {
         onEnter?.();
         setIsActive(true);
@@ -88,6 +89,7 @@ export default function ScrollStorySection({ onEnter, onExit }: ScrollStorySecti
 
       const direction = e.deltaY > 0 ? 1 : -1;
       const atFirst = frameIndex === 0;
+      const atLast = frameIndex === FRAMES.length - 1;
 
       // Hard lock the page scroll while the story is active
       e.preventDefault();
@@ -98,6 +100,14 @@ export default function ScrollStorySection({ onEnter, onExit }: ScrollStorySecti
         onExit?.();
         const hero = document.getElementById("hero");
         hero?.scrollIntoView({ behavior: "smooth" });
+        return;
+      }
+
+      if (direction > 0 && atLast) {
+        setIsActive(false);
+        onExit?.();
+        const features = document.getElementById("features");
+        features?.scrollIntoView({ behavior: "smooth" });
         return;
       }
 
