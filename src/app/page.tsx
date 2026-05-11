@@ -14,6 +14,7 @@ import ScrollStorySection from "@/components/sections/ScrollStorySection";
 import FeatureSlider from "@/components/sections/FeatureSlider";
 import HowItWorks from "@/components/sections/HowItWorks";
 import FAQ from "@/components/sections/FAQ";
+import Footer from "@/components/layout/Footer";
 import type { SpinningCarouselHandle } from "@/components/sections/SpinningCarousel";
 
 gsap.registerPlugin(ScrollTrigger);
@@ -388,6 +389,9 @@ export default function Home() {
 
       {/* ===== FAQ SECTION ===== */}
       <FAQ />
+
+      {/* ===== FOOTER ===== */}
+      <Footer />
 
     </div>
   );
