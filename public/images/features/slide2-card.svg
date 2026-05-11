@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+  <rect width="800" height="600" fill="#0a0a0e"/>
+  <rect x="200" y="150" width="400" height="300" rx="24" fill="#030407" stroke="#ffffff" stroke-opacity="0.1" stroke-width="1"/>
+  <!-- Lock/Vault Icon -->
+  <rect x="330" y="280" width="140" height="100" rx="16" fill="none" stroke="#ffffff" stroke-opacity="0.4" stroke-width="4"/>
+  <path d="M360,280 V240 C360,200 440,200 440,240 V280" fill="none" stroke="#ffffff" stroke-opacity="0.4" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="400" cy="330" r="12" fill="#ffffff" fill-opacity="0.6"/>
+  <path d="M400,342 L400,355" fill="none" stroke="#ffffff" stroke-opacity="0.6" stroke-width="4" stroke-linecap="round"/>
+</svg>

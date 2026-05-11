@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+  <rect width="800" height="600" fill="#0a0a0e"/>
+  <rect x="200" y="150" width="400" height="300" rx="24" fill="#030407" stroke="#ffffff" stroke-opacity="0.1" stroke-width="1"/>
+  <!-- Admin/Scale/Support Icon -->
+  <path d="M400,220 L400,380" fill="none" stroke="#ffffff" stroke-opacity="0.4" stroke-width="4" stroke-linecap="round"/>
+  <path d="M300,260 L500,260" fill="none" stroke="#ffffff" stroke-opacity="0.6" stroke-width="4" stroke-linecap="round"/>
+  <path d="M320,260 L300,330 L340,330 Z" fill="none" stroke="#ffffff" stroke-opacity="0.4" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M480,260 L460,330 L500,330 Z" fill="none" stroke="#ffffff" stroke-opacity="0.4" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M370,380 L430,380" fill="none" stroke="#ffffff" stroke-opacity="0.4" stroke-width="4" stroke-linecap="round"/>
+</svg>

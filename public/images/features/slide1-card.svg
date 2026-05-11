@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+  <rect width="800" height="600" fill="#0a0a0e"/>
+  <rect x="200" y="150" width="400" height="300" rx="24" fill="#030407" stroke="#ffffff" stroke-opacity="0.1" stroke-width="1"/>
+  <!-- Shield Icon -->
+  <path d="M400,220 L320,250 L320,330 C320,390 350,430 400,460 C450,430 480,390 480,330 L480,250 Z" fill="none" stroke="#ffffff" stroke-opacity="0.4" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M370,350 L390,370 L430,310" fill="none" stroke="#ffffff" stroke-opacity="0.6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
