@@ -353,129 +353,144 @@ export default function Dashboard() {
                </div>
 
                {/* Search & Filter */}
-               <div className="flex gap-3 mb-6 sm:mb-8">
-                  <div className="relative flex-1 group" ref={searchContainerRef}>
-                     <Search className={`w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${isSearchFocused ? 'text-primary' : 'text-[#8892b0]'}`} />
-                     <input 
-                        type="text" 
-                        placeholder="Search by item, category, partner, or status..." 
-                        value={searchQuery}
-                        onChange={(e) => {
-                           setSearchQuery(e.target.value);
-                           setSelectedIndex(-1);
-                           setIsSearchFocused(true);
-                        }}
-                        onFocus={() => setIsSearchFocused(true)}
-                        onKeyDown={handleSearchKeyDown}
-                        className="w-full bg-white/[0.03] text-white placeholder:text-[#8892b0] text-sm font-medium rounded-xl py-3.5 pl-11 pr-10 outline-none border border-white/5 focus:border-primary/50 focus:bg-white/[0.05] transition-all"
-                     />
-                     {searchQuery && (
-                        <button 
-                           onClick={() => {
-                              setSearchQuery("");
+               {showSkeleton ? (
+                  <div className="flex gap-3 mb-6 sm:mb-8">
+                     <Skeleton className="flex-1 h-12 rounded-xl bg-white/5" />
+                     <Skeleton className="w-12 sm:w-24 h-12 rounded-xl bg-white/5" />
+                  </div>
+               ) : (
+                  <div className="flex gap-3 mb-6 sm:mb-8">
+                     <div className="relative flex-1 group" ref={searchContainerRef}>
+                        <Search className={`w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${isSearchFocused ? 'text-primary' : 'text-[#8892b0]'}`} />
+                        <input 
+                           type="text" 
+                           placeholder="Search by item, category, partner, or status..." 
+                           value={searchQuery}
+                           onChange={(e) => {
+                              setSearchQuery(e.target.value);
                               setSelectedIndex(-1);
+                              setIsSearchFocused(true);
                            }}
-                           className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center text-[#8892b0] hover:text-white bg-white/5 hover:bg-white/10 rounded-full transition-colors"
-                        >
-                           <X className="w-3.5 h-3.5" />
-                        </button>
-                     )}
-                     
-                     {/* Autocomplete Dropdown */}
-                     {isSearchFocused && searchQuery && (
-                        <div className="absolute top-full left-0 right-0 mt-2 bg-[#0B0C10] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
-                           {searchResults.length > 0 ? (
-                              <div className="py-2">
-                                 <div className="px-4 py-2 text-xs font-bold text-[#8892b0] uppercase tracking-wider bg-white/[0.02]">
-                                    Search Results
-                                 </div>
-                                 {searchResults.map((t, i) => (
-                                    <Link 
-                                       key={t.transaction_id} 
-                                       href={`/trade/${t.transaction_id}`}
-                                       className={`flex items-center gap-3 px-4 py-3 hover:bg-white/[0.05] transition-colors border-l-2 ${selectedIndex === i ? 'bg-white/[0.05] border-primary' : 'border-transparent'}`}
-                                    >
-                                       <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-[#8892b0] shrink-0">
-                                          <Search className="w-3.5 h-3.5" />
-                                       </div>
-                                       <div>
-                                          <div className="text-sm font-bold text-white">{t.item_name || t.game_type}</div>
-                                          <div className="text-xs text-[#8892b0]">
-                                             with {getCounterparty(t)} &bull; {t.status} &bull; ₱{Number(t.agreed_price).toLocaleString()}
+                           onFocus={() => setIsSearchFocused(true)}
+                           onKeyDown={handleSearchKeyDown}
+                           className="w-full bg-white/[0.03] text-white placeholder:text-[#8892b0] text-sm font-medium rounded-xl py-3.5 pl-11 pr-10 outline-none border border-white/5 focus:border-primary/50 focus:bg-white/[0.05] transition-all"
+                        />
+                        {searchQuery && (
+                           <button 
+                              onClick={() => {
+                                 setSearchQuery("");
+                                 setSelectedIndex(-1);
+                              }}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center text-[#8892b0] hover:text-white bg-white/5 hover:bg-white/10 rounded-full transition-colors"
+                           >
+                              <X className="w-3.5 h-3.5" />
+                           </button>
+                        )}
+                        
+                        {/* Autocomplete Dropdown */}
+                        {isSearchFocused && searchQuery && (
+                           <div className="absolute top-full left-0 right-0 mt-2 bg-[#0B0C10] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
+                              {searchResults.length > 0 ? (
+                                 <div className="py-2">
+                                    <div className="px-4 py-2 text-xs font-bold text-[#8892b0] uppercase tracking-wider bg-white/[0.02]">
+                                       Search Results
+                                    </div>
+                                    {searchResults.map((t, i) => (
+                                       <Link 
+                                          key={t.transaction_id} 
+                                          href={`/trade/${t.transaction_id}`}
+                                          className={`flex items-center gap-3 px-4 py-3 hover:bg-white/[0.05] transition-colors border-l-2 ${selectedIndex === i ? 'bg-white/[0.05] border-primary' : 'border-transparent'}`}
+                                       >
+                                          <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-[#8892b0] shrink-0">
+                                             <Search className="w-3.5 h-3.5" />
                                           </div>
-                                       </div>
-                                    </Link>
-                                 ))}
-                              </div>
-                           ) : (
-                              <div className="px-4 py-8 text-center text-sm text-[#8892b0]">
-                                 No matching trades found for "<span className="text-white">{searchQuery}</span>"
-                              </div>
-                           )}
-                        </div>
-                     )}
-                  </div>
-                  
-                  {/* Filter Dropdown */}
-                  <div className="relative" ref={filterContainerRef}>
-                     <button 
-                        onClick={() => setIsFilterOpen(!isFilterOpen)}
-                        className={`w-12 sm:w-auto h-12 px-0 sm:px-4 rounded-xl bg-white/[0.03] border transition-all flex items-center justify-center gap-2 shrink-0 ${isFilterOpen || dateFilter !== 'all' ? 'border-primary/50 text-primary' : 'border-white/5 hover:border-primary/50 hover:text-primary text-[#8892b0]'}`}
-                     >
-                        <Filter className="w-5 h-5" />
-                        <span className="hidden sm:inline text-sm font-bold">
-                           {dateFilter === 'week' ? 'Past Week' : dateFilter === 'month' ? 'Past Month' : 'All Time'}
-                        </span>
-                     </button>
-                     
-                     {isFilterOpen && (
-                        <div className="absolute top-full right-0 mt-2 w-48 bg-[#0B0C10] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 p-1">
-                           <div className="px-3 py-2 text-xs font-bold text-[#8892b0] uppercase tracking-wider">
-                              Date Filter
+                                          <div>
+                                             <div className="text-sm font-bold text-white">{t.item_name || t.game_type}</div>
+                                             <div className="text-xs text-[#8892b0]">
+                                                with {getCounterparty(t)} &bull; {t.status} &bull; ₱{Number(t.agreed_price).toLocaleString()}
+                                             </div>
+                                          </div>
+                                       </Link>
+                                    ))}
+                                 </div>
+                              ) : (
+                                 <div className="px-4 py-8 text-center text-sm text-[#8892b0]">
+                                    No matching trades found for "<span className="text-white">{searchQuery}</span>"
+                                 </div>
+                              )}
                            </div>
-                           <button onClick={() => handleDateFilter('all')} className={`w-full text-left px-3 py-2 text-sm font-medium rounded-lg transition-colors ${dateFilter === 'all' ? 'bg-primary/10 text-primary' : 'text-white hover:bg-white/5'}`}>
-                              All Time
-                           </button>
-                           <button onClick={() => handleDateFilter('week')} className={`w-full text-left px-3 py-2 text-sm font-medium rounded-lg transition-colors ${dateFilter === 'week' ? 'bg-primary/10 text-primary' : 'text-white hover:bg-white/5'}`}>
-                              Past 7 Days
-                           </button>
-                           <button onClick={() => handleDateFilter('month')} className={`w-full text-left px-3 py-2 text-sm font-medium rounded-lg transition-colors ${dateFilter === 'month' ? 'bg-primary/10 text-primary' : 'text-white hover:bg-white/5'}`}>
-                              Past 30 Days
-                           </button>
-                        </div>
-                     )}
+                        )}
+                     </div>
+                     
+                     {/* Filter Dropdown */}
+                     <div className="relative" ref={filterContainerRef}>
+                        <button 
+                           onClick={() => setIsFilterOpen(!isFilterOpen)}
+                           className={`w-12 sm:w-auto h-12 px-0 sm:px-4 rounded-xl bg-white/[0.03] border transition-all flex items-center justify-center gap-2 shrink-0 ${isFilterOpen || dateFilter !== 'all' ? 'border-primary/50 text-primary' : 'border-white/5 hover:border-primary/50 hover:text-primary text-[#8892b0]'}`}
+                        >
+                           <Filter className="w-5 h-5" />
+                           <span className="hidden sm:inline text-sm font-bold">
+                              {dateFilter === 'week' ? 'Past Week' : dateFilter === 'month' ? 'Past Month' : 'All Time'}
+                           </span>
+                        </button>
+                        
+                        {isFilterOpen && (
+                           <div className="absolute top-full right-0 mt-2 w-48 bg-[#0B0C10] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 p-1">
+                              <div className="px-3 py-2 text-xs font-bold text-[#8892b0] uppercase tracking-wider">
+                                 Date Filter
+                              </div>
+                              <button onClick={() => handleDateFilter('all')} className={`w-full text-left px-3 py-2 text-sm font-medium rounded-lg transition-colors ${dateFilter === 'all' ? 'bg-primary/10 text-primary' : 'text-white hover:bg-white/5'}`}>
+                                 All Time
+                              </button>
+                              <button onClick={() => handleDateFilter('week')} className={`w-full text-left px-3 py-2 text-sm font-medium rounded-lg transition-colors ${dateFilter === 'week' ? 'bg-primary/10 text-primary' : 'text-white hover:bg-white/5'}`}>
+                                 Past 7 Days
+                              </button>
+                              <button onClick={() => handleDateFilter('month')} className={`w-full text-left px-3 py-2 text-sm font-medium rounded-lg transition-colors ${dateFilter === 'month' ? 'bg-primary/10 text-primary' : 'text-white hover:bg-white/5'}`}>
+                                 Past 30 Days
+                              </button>
+                           </div>
+                        )}
+                     </div>
                   </div>
-               </div>
+               )}
 
                {/* Tabs */}
-               <div className="relative flex items-center gap-4 sm:gap-6 border-b border-white/10 mb-6 overflow-x-auto scrollbar-hide pb-1" ref={tabBarRef}>
-                  {(["All", "Pending", "Active", "Verifying", "Completed", "Disputed", "Cancelled"] as TabType[]).map((tab) => {
-                     const isCleared = clearedTabs.has(tab);
-                     const hasItems = counts[tab] > 0;
-                     const showBadge = !isCleared && hasItems;
-                     
-                     return (
-                        <button 
-                           key={tab}
-                           ref={(el) => { tabRefs.current[tab] = el; }}
-                           onClick={() => handleTabClick(tab)}
-                           className={`pb-3 text-sm font-bold tracking-wide whitespace-nowrap transition-colors duration-200 flex items-center gap-2 ${activeTab === tab ? "text-white" : "text-[#8892b0] hover:text-white"}`}
-                        >
-                           {tab}
-                           {showBadge && (
-                              <span className="flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-primary text-[10px] font-black text-[#030407] animate-pulse">
-                                 {counts[tab]}
-                              </span>
-                           )}
-                        </button>
-                     );
-                  })}
-                  {/* Sliding indicator */}
-                  <div
-                     className="absolute bottom-0 h-0.5 bg-primary rounded-t-full shadow-[0_0_8px_rgba(63,229,108,0.6)] transition-all duration-300 ease-out"
-                     style={{ left: indicatorStyle.left, width: indicatorStyle.width }}
-                  />
-               </div>
+               {showSkeleton ? (
+                  <div className="flex items-center gap-4 sm:gap-6 border-b border-white/10 mb-6 pb-3">
+                     {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+                        <Skeleton key={i} className={`h-4 rounded bg-white/5 ${i === 0 ? 'w-8' : i < 3 ? 'w-14' : 'w-18'}`} style={{ width: [32, 56, 48, 60, 72, 60, 64][i] }} />
+                     ))}
+                  </div>
+               ) : (
+                  <div className="relative flex items-center gap-4 sm:gap-6 border-b border-white/10 mb-6 overflow-x-auto scrollbar-hide pb-1" ref={tabBarRef}>
+                     {(["All", "Pending", "Active", "Verifying", "Completed", "Disputed", "Cancelled"] as TabType[]).map((tab) => {
+                        const isCleared = clearedTabs.has(tab);
+                        const hasItems = counts[tab] > 0;
+                        const showBadge = !isCleared && hasItems;
+                        
+                        return (
+                           <button 
+                              key={tab}
+                              ref={(el) => { tabRefs.current[tab] = el; }}
+                              onClick={() => handleTabClick(tab)}
+                              className={`pb-3 text-sm font-bold tracking-wide whitespace-nowrap transition-colors duration-200 flex items-center gap-2 ${activeTab === tab ? "text-white" : "text-[#8892b0] hover:text-white"}`}
+                           >
+                              {tab}
+                              {showBadge && (
+                                 <span className="flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-primary text-[10px] font-black text-[#030407] animate-pulse">
+                                    {counts[tab]}
+                                 </span>
+                              )}
+                           </button>
+                        );
+                     })}
+                     {/* Sliding indicator */}
+                     <div
+                        className="absolute bottom-0 h-0.5 bg-primary rounded-t-full shadow-[0_0_8px_rgba(63,229,108,0.6)] transition-all duration-300 ease-out"
+                        style={{ left: indicatorStyle.left, width: indicatorStyle.width }}
+                     />
+                  </div>
+               )}
 
                {/* Trade List with Scrollbar */}
                <div className={`flex flex-col flex-1 overflow-y-auto pr-2 max-h-[600px] custom-scrollbar transition-opacity duration-200 ${isListTransitioning ? 'opacity-30' : 'opacity-100'}`}>
