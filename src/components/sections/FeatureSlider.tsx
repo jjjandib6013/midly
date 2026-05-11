@@ -9,32 +9,32 @@ export const defaultSlides = [
     id: 1,
     title: "Identity Verification",
     description: "We require strict KYC identity checks before any transaction begins. This ensures you are trading with a real, accountable person—not a disposable burner account.",
-    backgroundImage: "/images/features/slide1-bg.jpg",
-    cardImage: "/images/features/slide1-card.jpg",
+    backgroundImage: "https://picsum.photos/id/0/1200/800",
+    cardImage: "https://picsum.photos/id/3/800/600",
     accentColor: "#F59E0B", // Amber
   },
   {
     id: 2,
     title: "Secure Escrow Wallet",
     description: "Buyers deposit funds directly into a secure Midly Escrow Wallet. The money is locked and visible to both parties, guaranteeing the buyer has the funds and the seller gets paid.",
-    backgroundImage: "/images/features/slide2-bg.jpg",
-    cardImage: "/images/features/slide2-card.jpg",
+    backgroundImage: "https://picsum.photos/id/4/1200/800",
+    cardImage: "https://picsum.photos/id/36/800/600",
     accentColor: "#3FE56C", // Midly Green
   },
   {
     id: 3,
     title: "Dedicated Trade Rooms",
     description: "Manage the entire transaction in a private, encrypted trade room. Chat securely, upload transfer proof, and release funds only when you are completely satisfied.",
-    backgroundImage: "/images/features/slide3-bg.jpg",
-    cardImage: "/images/features/slide3-card.jpg",
+    backgroundImage: "https://picsum.photos/id/373/1200/800",
+    cardImage: "https://picsum.photos/id/119/800/600",
     accentColor: "#3B82F6", // Blue
   },
   {
     id: 4,
     title: "Dispute Resolution",
     description: "If something goes wrong during the handover, our specialized support team steps into the trade room to review evidence and resolve disputes fairly.",
-    backgroundImage: "/images/features/slide4-bg.jpg",
-    cardImage: "/images/features/slide4-card.jpg",
+    backgroundImage: "https://picsum.photos/id/60/1200/800",
+    cardImage: "https://picsum.photos/id/20/800/600",
     accentColor: "#EC4899", // Pink
   }
 ];
