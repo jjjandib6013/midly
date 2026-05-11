@@ -245,72 +245,90 @@ export default function Dashboard() {
          <div className="dash-header flex flex-col md:flex-row items-start md:items-end justify-between mb-8 sm:mb-12 gap-6 border-b border-white/[0.04] pb-6 sm:pb-8">
             <div>
                {showSkeleton ? (
-                  <Skeleton className="h-12 sm:h-14 w-64 sm:w-80 bg-white/5" />
+                  <div className="space-y-3">
+                     <Skeleton className="h-12 sm:h-14 w-64 sm:w-80 bg-white/5" />
+                     <Skeleton className="h-4 w-40 bg-white/5" />
+                  </div>
                ) : (
                   <h1 className="text-4xl sm:text-5xl md:text-6xl font-black text-white tracking-tighter uppercase leading-none">
                      Hi, <span className="text-[#8892b0]">{user?.first_name || 'there'}</span>
                   </h1>
                )}
             </div>
-            <Link href="/create-trade" className="w-full sm:w-auto">
-               <NeonButton className="gap-3 w-full sm:w-auto !py-3.5 tracking-widest uppercase text-xs">
-                  <PlusCircle className="w-4 h-4" /> New Trade
-               </NeonButton>
-            </Link>
+            {showSkeleton ? (
+               <Skeleton className="h-12 w-40 rounded-xl bg-white/5" />
+            ) : (
+               <Link href="/create-trade" className="w-full sm:w-auto">
+                  <NeonButton className="gap-3 w-full sm:w-auto !py-3.5 tracking-widest uppercase text-xs">
+                     <PlusCircle className="w-4 h-4" /> New Trade
+                  </NeonButton>
+               </Link>
+            )}
          </div>
 
          {/* Top Metrics Row */}
          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             
-            {/* Available Balance */}
-            <div className="dash-animate bg-white/[0.02] backdrop-blur-sm rounded-3xl p-8 flex flex-col justify-between border border-white/5 relative overflow-hidden group">
-               <div className="flex justify-between items-start mb-6">
-                  <span className="text-[11px] font-bold text-[#8892b0] uppercase tracking-widest">Available Balance</span>
-                  <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 border border-primary/20">
-                     <Wallet className="w-5 h-5" />
+            {showSkeleton ? (
+               <>
+                  {[0, 1, 2].map((i) => (
+                     <div key={i} className="dash-animate bg-white/[0.02] backdrop-blur-sm rounded-3xl p-8 border border-white/5 relative overflow-hidden">
+                        <div className="flex justify-between items-start mb-6">
+                           <Skeleton className="h-3 w-28 bg-white/5" />
+                           <Skeleton className="w-10 h-10 rounded-xl bg-white/5" />
+                        </div>
+                        <Skeleton className="h-10 w-36 mb-3 bg-white/5" />
+                        <Skeleton className="h-4 w-24 bg-white/5" />
+                     </div>
+                  ))}
+               </>
+            ) : (
+               <>
+                  {/* Available Balance */}
+                  <div className="dash-animate bg-white/[0.02] backdrop-blur-sm rounded-3xl p-8 flex flex-col justify-between border border-white/5 relative overflow-hidden group">
+                     <div className="flex justify-between items-start mb-6">
+                        <span className="text-[11px] font-bold text-[#8892b0] uppercase tracking-widest">Available Balance</span>
+                        <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 border border-primary/20">
+                           <Wallet className="w-5 h-5" />
+                        </div>
+                     </div>
+                     <h2 className="text-4xl md:text-5xl font-black tracking-tight flex items-baseline gap-1 text-white">
+                        <span className="text-2xl text-primary">₱</span>
+                        {Number(user?.wallet_balance || 0).toLocaleString()}
+                     </h2>
+                     <p className="text-sm font-medium text-[#8892b0] mt-2">Ready to trade</p>
                   </div>
-               </div>
-               {showSkeleton ? <Skeleton className="h-10 w-32 mb-2 bg-white/5" /> : (
-                  <h2 className="text-4xl md:text-5xl font-black tracking-tight flex items-baseline gap-1 text-white">
-                     <span className="text-2xl text-primary">₱</span>
-                     {Number(user?.wallet_balance || 0).toLocaleString()}
-                  </h2>
-               )}
-               <p className="text-sm font-medium text-[#8892b0] mt-2">Ready to trade</p>
-            </div>
 
-            {/* In Escrow */}
-            <div className="dash-animate bg-white/[0.02] backdrop-blur-sm rounded-3xl p-8 flex flex-col justify-between border border-white/5 relative overflow-hidden group">
-               <div className="flex justify-between items-start mb-6">
-                  <span className="text-[11px] font-bold text-[#8892b0] uppercase tracking-widest">In Escrow</span>
-                  <div className="w-10 h-10 rounded-xl bg-orange-500/10 text-orange-400 flex items-center justify-center shrink-0 border border-orange-500/20">
-                     <Clock className="w-5 h-5" />
+                  {/* In Escrow */}
+                  <div className="dash-animate bg-white/[0.02] backdrop-blur-sm rounded-3xl p-8 flex flex-col justify-between border border-white/5 relative overflow-hidden group">
+                     <div className="flex justify-between items-start mb-6">
+                        <span className="text-[11px] font-bold text-[#8892b0] uppercase tracking-widest">In Escrow</span>
+                        <div className="w-10 h-10 rounded-xl bg-orange-500/10 text-orange-400 flex items-center justify-center shrink-0 border border-orange-500/20">
+                           <Clock className="w-5 h-5" />
+                        </div>
+                     </div>
+                     <h2 className="text-4xl md:text-5xl font-black tracking-tight flex items-baseline gap-1 text-white">
+                        <span className="text-2xl text-[#8892b0]">₱</span>
+                        {escrowAmount.toLocaleString()}
+                     </h2>
+                     <p className="text-sm font-medium text-[#8892b0] mt-2">Protected transactions</p>
                   </div>
-               </div>
-               {showSkeleton ? <Skeleton className="h-10 w-32 mb-2 bg-white/5" /> : (
-                  <h2 className="text-4xl md:text-5xl font-black tracking-tight flex items-baseline gap-1 text-white">
-                     <span className="text-2xl text-[#8892b0]">₱</span>
-                     {escrowAmount.toLocaleString()}
-                  </h2>
-               )}
-               <p className="text-sm font-medium text-[#8892b0] mt-2">Protected transactions</p>
-            </div>
 
-            {/* Active Trades */}
-            <div className="dash-animate bg-white/[0.02] backdrop-blur-sm rounded-3xl p-8 flex flex-col justify-between border border-white/5 relative overflow-hidden group">
-               <div className="flex justify-between items-start mb-6">
-                  <span className="text-[11px] font-bold text-[#8892b0] uppercase tracking-widest">Active Trades</span>
-                  <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 border border-primary/20">
-                     <Zap className="w-5 h-5" />
+                  {/* Active Trades */}
+                  <div className="dash-animate bg-white/[0.02] backdrop-blur-sm rounded-3xl p-8 flex flex-col justify-between border border-white/5 relative overflow-hidden group">
+                     <div className="flex justify-between items-start mb-6">
+                        <span className="text-[11px] font-bold text-[#8892b0] uppercase tracking-widest">Active Trades</span>
+                        <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 border border-primary/20">
+                           <Zap className="w-5 h-5" />
+                        </div>
+                     </div>
+                     <h2 className="text-4xl md:text-5xl font-black tracking-tight flex items-baseline gap-1 text-white">
+                        {liveTrades.length}
+                     </h2>
+                     <p className="text-sm font-medium text-[#8892b0] mt-2">Ongoing transactions</p>
                   </div>
-               </div>
-               {showSkeleton ? <Skeleton className="h-10 w-16 mb-2 bg-white/5" /> : (
-                  <h2 className="text-4xl md:text-5xl font-black tracking-tight flex items-baseline gap-1 text-white">
-                     {liveTrades.length}
-                  </h2>
-               )}
-               <p className="text-sm font-medium text-[#8892b0] mt-2">Ongoing transactions</p>
-            </div>
+               </>
+            )}
 
          </div>
 
@@ -321,8 +339,17 @@ export default function Dashboard() {
             <div className="xl:col-span-8 dash-animate bg-white/[0.02] backdrop-blur-sm rounded-3xl p-6 sm:p-8 border border-white/5 flex flex-col">
                
                <div className="mb-6 sm:mb-8">
-                  <h3 className="text-2xl font-bold tracking-tight mb-1 text-white">Your Trades</h3>
-                  <p className="text-sm font-medium text-[#8892b0]">Manage all your active and completed trades</p>
+                  {showSkeleton ? (
+                     <div className="space-y-2">
+                        <Skeleton className="h-7 w-36 bg-white/5" />
+                        <Skeleton className="h-4 w-64 bg-white/5" />
+                     </div>
+                  ) : (
+                     <>
+                        <h3 className="text-2xl font-bold tracking-tight mb-1 text-white">Your Trades</h3>
+                        <p className="text-sm font-medium text-[#8892b0]">Manage all your active and completed trades</p>
+                     </>
+                  )}
                </div>
 
                {/* Search & Filter */}
@@ -495,62 +522,103 @@ export default function Dashboard() {
             {/* Right Column */}
             <div className="xl:col-span-4 flex flex-col gap-8">
                
-               {/* Account Status Card */}
-               <div className="dash-animate bg-white/[0.02] backdrop-blur-sm rounded-3xl p-6 sm:p-8 border border-white/5">
-                  <div className="flex items-center gap-3 mb-8 text-white">
-                     <TrendingUp className="w-5 h-5 text-primary" />
-                     <h3 className="text-[17px] font-bold tracking-tight">Account Status</h3>
-                  </div>
-
-                  <div className="flex flex-col gap-6">
-                     <div className="pb-6 border-b border-white/5">
-                        <span className="text-[10px] font-bold text-[#8892b0] uppercase tracking-widest block mb-2">Reputation Tier</span>
-                        {showSkeleton ? <Skeleton className="h-6 w-24 bg-white/5 rounded-full" /> : (
-                           <div className="flex items-center gap-2">
-                              <ReputationBadge score={Number(user?.reputation_score || 0)} showScore className="!bg-orange-500/10 !text-orange-400 !border-orange-500/20" />
+               {showSkeleton ? (
+                  <>
+                     {/* Account Status Skeleton */}
+                     <div className="dash-animate bg-white/[0.02] backdrop-blur-sm rounded-3xl p-6 sm:p-8 border border-white/5">
+                        <div className="flex items-center gap-3 mb-8">
+                           <Skeleton className="w-5 h-5 rounded bg-white/5" />
+                           <Skeleton className="h-5 w-32 bg-white/5" />
+                        </div>
+                        <div className="flex flex-col gap-6">
+                           <div className="pb-6 border-b border-white/5">
+                              <Skeleton className="h-3 w-24 mb-3 bg-white/5" />
+                              <Skeleton className="h-6 w-28 rounded-full bg-white/5" />
                            </div>
-                        )}
+                           <div className="pb-6 border-b border-white/5">
+                              <Skeleton className="h-3 w-28 mb-3 bg-white/5" />
+                              <Skeleton className="h-8 w-16 bg-white/5" />
+                           </div>
+                           <div>
+                              <Skeleton className="h-3 w-20 mb-3 bg-white/5" />
+                              <Skeleton className="h-8 w-12 bg-white/5" />
+                           </div>
+                        </div>
                      </div>
-                     <div className="pb-6 border-b border-white/5">
-                        <span className="text-[10px] font-bold text-[#8892b0] uppercase tracking-widest block mb-2">Completion Rate</span>
-                        {showSkeleton ? <Skeleton className="h-8 w-16 bg-white/5" /> : (
-                           <span className="text-2xl font-black text-white tracking-tight">{completionRate}%</span>
-                        )}
-                     </div>
-                     <div>
-                        <span className="text-[10px] font-bold text-[#8892b0] uppercase tracking-widest block mb-2">Total Trades</span>
-                        {showSkeleton ? <Skeleton className="h-8 w-12 bg-white/5" /> : (
-                           <span className="text-2xl font-black text-white tracking-tight">{trades.length}</span>
-                        )}
-                     </div>
-                  </div>
-               </div>
 
-               {/* Recent Activity Card */}
-               <div className="dash-animate bg-white/[0.02] backdrop-blur-sm rounded-3xl p-6 sm:p-8 border border-white/5">
-                  <h3 className="text-[17px] font-bold text-white tracking-tight mb-6">Recent Activity</h3>
-                  
-                  <div className="flex flex-col gap-5">
-                     {sorted.slice(0, 5).map((t) => {
-                        const s = STATUS_MAP[t.status] || STATUS_MAP.agreement;
-                        return (
-                           <Link href={`/trade/${t.transaction_id}`} key={t.transaction_id} className="flex items-center justify-between group p-2 -mx-2 rounded-xl hover:bg-white/5 transition-colors cursor-pointer">
-                              <div className="min-w-0 pr-4">
-                                 <h4 className="text-[13px] font-bold text-white truncate mb-1 group-hover:text-primary transition-colors">{t.item_name || t.game_type}</h4>
-                                 <span className="text-[12px] font-medium text-[#8892b0]">₱{Number(t.agreed_price).toLocaleString()}</span>
+                     {/* Recent Activity Skeleton */}
+                     <div className="dash-animate bg-white/[0.02] backdrop-blur-sm rounded-3xl p-6 sm:p-8 border border-white/5">
+                        <Skeleton className="h-5 w-32 mb-6 bg-white/5" />
+                        <div className="flex flex-col gap-5">
+                           {[0, 1, 2, 3].map((i) => (
+                              <div key={i} className="flex items-center justify-between p-2">
+                                 <div className="space-y-2 flex-1 mr-4">
+                                    <Skeleton className="h-4 w-32 bg-white/5" />
+                                    <Skeleton className="h-3 w-20 bg-white/5" />
+                                 </div>
+                                 <div className="space-y-2 flex flex-col items-end">
+                                    <Skeleton className="h-3 w-16 bg-white/5" />
+                                    <Skeleton className="h-3 w-10 bg-white/5" />
+                                 </div>
                               </div>
-                              <div className="flex flex-col items-end gap-1 shrink-0">
-                                 <span className={`text-[11px] font-bold ${s.colorClass}`}>{s.label}</span>
-                                 <span className="text-[11px] font-medium text-zinc-600">{timeAgo(t.updated_at || t.created_at)} ago</span>
+                           ))}
+                        </div>
+                     </div>
+                  </>
+               ) : (
+                  <>
+                     {/* Account Status Card */}
+                     <div className="dash-animate bg-white/[0.02] backdrop-blur-sm rounded-3xl p-6 sm:p-8 border border-white/5">
+                        <div className="flex items-center gap-3 mb-8 text-white">
+                           <TrendingUp className="w-5 h-5 text-primary" />
+                           <h3 className="text-[17px] font-bold tracking-tight">Account Status</h3>
+                        </div>
+
+                        <div className="flex flex-col gap-6">
+                           <div className="pb-6 border-b border-white/5">
+                              <span className="text-[10px] font-bold text-[#8892b0] uppercase tracking-widest block mb-2">Reputation Tier</span>
+                              <div className="flex items-center gap-2">
+                                 <ReputationBadge score={Number(user?.reputation_score || 0)} showScore className="!bg-orange-500/10 !text-orange-400 !border-orange-500/20" />
                               </div>
-                           </Link>
-                        );
-                     })}
-                     {sorted.length === 0 && !isLoading && (
-                        <p className="text-[13px] text-[#8892b0] font-medium py-4 text-center border border-dashed border-white/10 rounded-xl">No recent activity.</p>
-                     )}
-                  </div>
-               </div>
+                           </div>
+                           <div className="pb-6 border-b border-white/5">
+                              <span className="text-[10px] font-bold text-[#8892b0] uppercase tracking-widest block mb-2">Completion Rate</span>
+                              <span className="text-2xl font-black text-white tracking-tight">{completionRate}%</span>
+                           </div>
+                           <div>
+                              <span className="text-[10px] font-bold text-[#8892b0] uppercase tracking-widest block mb-2">Total Trades</span>
+                              <span className="text-2xl font-black text-white tracking-tight">{trades.length}</span>
+                           </div>
+                        </div>
+                     </div>
+
+                     {/* Recent Activity Card */}
+                     <div className="dash-animate bg-white/[0.02] backdrop-blur-sm rounded-3xl p-6 sm:p-8 border border-white/5">
+                        <h3 className="text-[17px] font-bold text-white tracking-tight mb-6">Recent Activity</h3>
+                        
+                        <div className="flex flex-col gap-5">
+                           {sorted.slice(0, 5).map((t) => {
+                              const s = STATUS_MAP[t.status] || STATUS_MAP.agreement;
+                              return (
+                                 <Link href={`/trade/${t.transaction_id}`} key={t.transaction_id} className="flex items-center justify-between group p-2 -mx-2 rounded-xl hover:bg-white/5 transition-colors cursor-pointer">
+                                    <div className="min-w-0 pr-4">
+                                       <h4 className="text-[13px] font-bold text-white truncate mb-1 group-hover:text-primary transition-colors">{t.item_name || t.game_type}</h4>
+                                       <span className="text-[12px] font-medium text-[#8892b0]">₱{Number(t.agreed_price).toLocaleString()}</span>
+                                    </div>
+                                    <div className="flex flex-col items-end gap-1 shrink-0">
+                                       <span className={`text-[11px] font-bold ${s.colorClass}`}>{s.label}</span>
+                                       <span className="text-[11px] font-medium text-zinc-600">{timeAgo(t.updated_at || t.created_at)} ago</span>
+                                    </div>
+                                 </Link>
+                              );
+                           })}
+                           {sorted.length === 0 && !isLoading && (
+                              <p className="text-[13px] text-[#8892b0] font-medium py-4 text-center border border-dashed border-white/10 rounded-xl">No recent activity.</p>
+                           )}
+                        </div>
+                     </div>
+                  </>
+               )}
 
             </div>
          </div>
