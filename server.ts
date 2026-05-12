@@ -100,7 +100,7 @@ app.use((req, res, next) => {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Access-Control-Allow-Credentials', 'true');
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-Dev-Mode');
       res.setHeader('Access-Control-Max-Age', '86400');
       res.setHeader('Vary', 'Origin');
    }
@@ -121,7 +121,7 @@ app.use(cors({
    },
    credentials: true,
    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-   allowedHeaders: ['Content-Type', 'Authorization']
+   allowedHeaders: ['Content-Type', 'Authorization', 'X-Dev-Mode']
 }));
 // Tightened 50MB limit: Only allow massive payloads on the specific Phase 3 liveness route
 app.use('/api/kyc/phase3', express.json({ limit: '50mb' }));
