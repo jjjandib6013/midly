@@ -75,6 +75,11 @@ router.post('/', authenticateJWT, upload.single('file'), (req: Request, res: Res
 
    // For S3 uploads, we can't easily validate magic bytes post-upload.
    // The S3 upload config already sets content type automatically.
+   console.log('[Upload] S3 upload complete', {
+      key: s3Key,
+      location: fileUrl,
+      userAgent: req.headers['user-agent'],
+   });
    res.json({ message: 'Upload successful', url: fileUrl, s3Key });
 });
 

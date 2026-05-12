@@ -9,7 +9,7 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import sharp from 'sharp';
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 
 const router = Router();
 
@@ -37,6 +37,29 @@ async function uploadToS3(localPath: string, s3Key: string): Promise<void> {
       ServerSideEncryption: 'AES256',
    }));
    console.log(`[KYC] Uploaded to S3: ${s3Key}`);
+}
+
+/**
+ * Probe a list of candidate S3 keys and return the first one that exists.
+ * Used when the client's key/URL pair is ambiguous (stale cached JS on mobile,
+ * different Tigris path renderings, etc). Tries each via HeadObject (cheap —
+ * metadata only, no body download). Returns null if none match.
+ */
+async function findExistingKey(candidates: string[]): Promise<string | null> {
+   if (!s3Client || !process.env.AWS_BUCKET_NAME) return null;
+   const unique = [...new Set(candidates.filter(Boolean))];
+   for (const key of unique) {
+      try {
+         await s3Client.send(new HeadObjectCommand({
+            Bucket: process.env.AWS_BUCKET_NAME,
+            Key: key,
+         }));
+         return key;
+      } catch {
+         // 404/403 on HeadObject means this key isn't it — try the next.
+      }
+   }
+   return null;
 }
 
 // ==========================================
@@ -236,6 +259,17 @@ router.post('/phase2', authenticateJWT, aiKycLimiter, async (req: Request, res: 
       if (!parsedParams.success) return res.status(400).json({ error: 'Validation failed' });
       const { imageUrl, s3Key: explicitS3Key } = parsedParams.data;
 
+      // Diagnostic — catch client/server key mismatches. On mobile we've seen
+      // cases where imageUrl and s3Key disagree (stale JS cache serving pre-fix
+      // client code, or a non-S3 fallback response shape).
+      console.log('[KYC Phase 2] request received', {
+         user_id: req.user.user_id,
+         imageUrl,
+         explicitS3Key,
+         s3ClientConfigured: !!s3Client,
+         userAgent: req.headers['user-agent'],
+      });
+
       const kyc = await prisma.kycVerification.findUnique({ where: { user_id: req.user.user_id } });
       if (!kyc || kyc.phase < 1) return res.status(400).json({ error: 'Complete Phase 1 first.' });
 
@@ -243,17 +277,19 @@ router.post('/phase2', authenticateJWT, aiKycLimiter, async (req: Request, res: 
 
       // Determine if the file is on S3 or local disk.
       //
-      // Source of truth for the S3 object key, in order:
-      //   1. `explicitS3Key` from the client — this is the real multer-s3 key
-      //      the upload endpoint returned (req.file.key). Trust it unconditionally.
-      //   2. URL parsing — fallback for requests that don't carry the new field
-      //      (older clients, or non-S3 uploads passing a CDN URL).
-      //   3. Default construction from filename — last resort, frequently wrong.
+      // Resolution strategy (fail closed — don't dispatch a worker with a key
+      // that isn't on S3, or it comes back with "The specified key does not
+      // exist" and kills UX):
+      //   1. If the client sent explicitS3Key, HeadObject it. If present, use it.
+      //   2. If that fails, parse the URL to extract a candidate key and HeadObject.
+      //   3. Probe the multer-s3 default layout: `uploads/kyc/<filename>`.
+      //   4. Probe the legacy per-user layout: `kyc/<user_id>/<filename>`.
+      //   5. If none of the above match, reject with a clear 400 telling the
+      //      client to re-upload — better than a 500 from the worker.
       //
-      // The earlier "The specified key does not exist" errors came from
-      // path #2 failing silently on non-matching URL shapes (some Tigris/R2
-      // responses use a different path-style rendering than what we assumed),
-      // falling through to path #3 which invented a key that wasn't on S3.
+      // This handles: stale cached client JS that doesn't send s3Key, URL
+      // parsing edge cases across S3-compat providers, and users re-submitting
+      // Phase 2 with a URL from a previous upload that got cleaned up.
       let workerFilePath: string;
       let fileHash: string;
       let s3Key = explicitS3Key || `kyc/${req.user.user_id}/${filename}`;
@@ -261,23 +297,37 @@ router.post('/phase2', authenticateJWT, aiKycLimiter, async (req: Request, res: 
       const isS3Url = imageUrl.startsWith('http') && imageUrl.includes('storageapi');
 
       if (isS3Url || s3Client) {
-         if (explicitS3Key) {
-            // Trust the client-provided key — multer-s3 gave it to us verbatim.
-            s3Key = explicitS3Key;
-         } else if (isS3Url) {
-            // Path-style URL: https://endpoint/bucket-name/uploads/kyc/<uuid>.ext
-            // Virtual-hosted URL: https://bucket.endpoint/uploads/kyc/<uuid>.ext
-            // Either way, we need to extract just the "uploads/kyc/<uuid>.ext" part
+         // Build a list of candidate keys to probe against S3.
+         const candidates: string[] = [];
+         if (explicitS3Key) candidates.push(explicitS3Key);
+         if (isS3Url) {
             try {
                const urlObj = new URL(imageUrl);
                const rawPath = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
-               // Find where "uploads/" starts in the path (skips bucket name if present)
                const uploadsIdx = rawPath.indexOf('uploads/');
-               s3Key = uploadsIdx >= 0 ? rawPath.substring(uploadsIdx) : rawPath;
-            } catch {
-               s3Key = `uploads/kyc/${filename}`;
-            }
+               if (uploadsIdx >= 0) candidates.push(rawPath.substring(uploadsIdx));
+               else candidates.push(rawPath);
+            } catch { /* fall through */ }
          }
+         // Canonical multer-s3 layouts used by /api/upload?type=kyc.
+         candidates.push(`uploads/kyc/${filename}`);
+         // Legacy per-user layout (Phase 2 default before we started returning
+         // the real multer-s3 key). Still worth probing in case a user comes
+         // back after a deploy with a stale upload response.
+         candidates.push(`kyc/${req.user.user_id}/${filename}`);
+
+         if (s3Client) {
+            const resolved = await findExistingKey(candidates);
+            if (!resolved) {
+               console.warn('[KYC Phase 2] none of the candidate keys exist on S3', { candidates, imageUrl, explicitS3Key });
+               return res.status(400).json({
+                  error: 'Uploaded document could not be located in storage. Please re-upload the image and try again.',
+               });
+            }
+            s3Key = resolved;
+            console.log('[KYC Phase 2] resolved S3 key by probing', { resolved, candidatesTried: candidates.length });
+         }
+
          workerFilePath = s3Key; // Worker will download from S3
          fileHash = 'pending-s3'; // Hash computed by worker after download
       } else {
@@ -330,6 +380,13 @@ router.post('/phase2', authenticateJWT, aiKycLimiter, async (req: Request, res: 
       await prisma.kycVerification.update({
          where: { kyc_id: kyc.kyc_id },
          data: { status: 'verifying_phase2', phase: 2 }
+      });
+
+      console.log('[KYC Phase 2] dispatching worker', {
+         kyc_id: kyc.kyc_id,
+         workerFilePath,
+         resolved_s3Key: s3Key,
+         used_explicit_key: !!explicitS3Key,
       });
 
       await kycQueue.add('verify-kyc-phase2', {
