@@ -162,10 +162,58 @@ export default function KYCVerification() {
   const [challengeText, setChallengeText] = useState("");
   const [currentChallengeIdx, setCurrentChallengeIdx] = useState(-1);
 
+  // ──────────────────────────────────────────────────────────────────────
+  // Dev-mode toggle. When on, every KYC request sends X-Dev-Mode: 1 which
+  // the backend's rateLimiter honors as a skip for any authenticated JWT.
+  // Persisted in localStorage so a refresh doesn't reset it mid-demo.
+  //
+  // NOT for production. Tighten the server-side check to role === 'admin'
+  // before launch. The hidden toggle is a triple-tap on the "Phase 1 of 3"
+  // kicker text.
+  // ──────────────────────────────────────────────────────────────────────
+  const [devMode, setDevMode] = useState(false);
+  const [devTapCount, setDevTapCount] = useState(0);
+
+  useEffect(() => {
+     if (typeof window === 'undefined') return;
+     setDevMode(localStorage.getItem('midly.kyc.devMode') === '1');
+  }, []);
+
+  const toggleDevMode = useCallback(() => {
+     setDevMode((prev) => {
+        const next = !prev;
+        try {
+           if (next) localStorage.setItem('midly.kyc.devMode', '1');
+           else localStorage.removeItem('midly.kyc.devMode');
+        } catch {}
+        return next;
+     });
+  }, []);
+
+  const handleDevTap = () => {
+     setDevTapCount((c) => {
+        if (c + 1 >= 3) {
+           toggleDevMode();
+           return 0;
+        }
+        return c + 1;
+     });
+  };
+
+  // Build auth headers; layer in X-Dev-Mode when the toggle is on.
+  const authHeaders = useCallback((extra?: Record<string, string>): HeadersInit => {
+     const h: Record<string, string> = {
+        Authorization: `Bearer ${token}`,
+        ...(extra || {}),
+     };
+     if (devMode) h['X-Dev-Mode'] = '1';
+     return h;
+  }, [token, devMode]);
+
   const fetchProfile = useCallback(() => {
      setIsLoadingProfile(true);
      fetch(`${API_URL}/api/user/profile`, {
-         headers: { "Authorization": `Bearer ${token}` }
+         headers: authHeaders()
      })
      .then(res => res.json())
      .then(data => {
@@ -175,7 +223,7 @@ export default function KYCVerification() {
          setIsLoadingProfile(false);
      })
      .catch(() => setIsLoadingProfile(false));
-  }, [token]);
+  }, [token, authHeaders]);
 
   useEffect(() => {
       if (!token) return;
@@ -199,7 +247,7 @@ export default function KYCVerification() {
       const formData = new FormData();
       formData.append("file", file);
       try {
-          const res = await fetch(`${API_URL}/api/upload?type=kyc`, { method: "POST", headers: { "Authorization": `Bearer ${token}` }, body: formData });
+          const res = await fetch(`${API_URL}/api/upload?type=kyc`, { method: "POST", headers: authHeaders(), body: formData });
           const data = await res.json();
           if (data.url) {
              setImageUrl(data.url);
@@ -277,7 +325,7 @@ export default function KYCVerification() {
       try {
          const res = await fetch(`${API_URL}/api/kyc/phase1`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+            headers: authHeaders({ "Content-Type": "application/json" }),
             body: JSON.stringify({ idType: selectedID, idNumber: idNumber })
          });
          const data = await res.json();
@@ -293,7 +341,7 @@ export default function KYCVerification() {
     try {
        const res = await fetch(`${API_URL}/api/kyc/phase2`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+          headers: authHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({ imageUrl: imageUrl, s3Key: imageS3Key })
        });
        const data = await res.json();
@@ -312,7 +360,7 @@ export default function KYCVerification() {
           if (i === 11) setProcessingStatus("Finalizing analysis...");
 
           await new Promise(r => setTimeout(r, 4000));
-          const profileRes = await fetch(`${API_URL}/api/user/profile`, { headers: { "Authorization": `Bearer ${token}` } });
+          const profileRes = await fetch(`${API_URL}/api/user/profile`, { headers: authHeaders() });
           const profileData = await profileRes.json();
           const status = profileData.kyc?.status;
 
@@ -338,7 +386,7 @@ export default function KYCVerification() {
     try {
        const res = await fetch(`${API_URL}/api/kyc/phase3`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+          headers: authHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({ livenessFrames: livenessFrames, challenge: 'blink_and_turn' })
        });
        const data = await res.json();
@@ -352,7 +400,7 @@ export default function KYCVerification() {
           if (i === 8) setProcessingStatus("Cross-referencing ID...");
 
           await new Promise(r => setTimeout(r, 4000));
-          const profileRes = await fetch(`${API_URL}/api/user/profile`, { headers: { "Authorization": `Bearer ${token}` } });
+          const profileRes = await fetch(`${API_URL}/api/user/profile`, { headers: authHeaders() });
           const profileData = await profileRes.json();
           const status = profileData.kyc?.status;
 
@@ -380,7 +428,7 @@ export default function KYCVerification() {
          setIsLoadingProfile(true);
          await fetch(`${API_URL}/api/kyc/reset`, {
              method: "POST",
-             headers: { "Authorization": `Bearer ${token}` }
+             headers: authHeaders()
          });
          fetchProfile();
          setStep(1);
@@ -410,6 +458,20 @@ export default function KYCVerification() {
 
   return (
     <div className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-16 overflow-hidden">
+      {/* Dev mode indicator — visible only when the hidden toggle is on.
+          Click to disable without needing to find the triple-tap target again. */}
+      {devMode && (
+         <button
+            type="button"
+            onClick={toggleDevMode}
+            title="Click to disable dev mode"
+            className="fixed top-4 right-4 z-50 px-3 py-1.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-amber-500/30 transition-colors shadow-lg backdrop-blur-sm"
+         >
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-300 animate-pulse" aria-hidden="true" />
+            Dev Mode · Rate Limits Off
+         </button>
+      )}
+
       {/* Header */}
       <header className="text-center mb-8 sm:mb-12">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 mb-4">
@@ -515,7 +577,13 @@ export default function KYCVerification() {
             {step === 1 && (
                <DynamicCard hoverEffect={false} className="border border-white/5 bg-[#0a0d14]/80 p-6 sm:p-10 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)] rounded-3xl">
                   <div className="mb-6">
-                     <p className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-primary mb-2">Phase 1 of 3</p>
+                     <p
+                        onClick={handleDevTap}
+                        className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-primary mb-2 cursor-default select-none"
+                        aria-hidden="true"
+                     >
+                        Phase 1 of 3
+                     </p>
                      <h2 className="text-xl sm:text-2xl font-black text-white mb-2 tracking-tight">Select Your Government ID</h2>
                      <p className="text-[#8892b0] text-xs sm:text-sm">Choose the document you'll use to verify your identity. This is encrypted before it touches our database.</p>
                   </div>
