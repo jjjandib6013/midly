@@ -65,16 +65,50 @@ const PORT = process.env.PORT || 5000;
 
 app.set('io', io);
 
+// ────────────────────────────────────────────────────────────────
+// CORS — manual first-line handler.
+//
+// Express 5 + cors@2 has known quirks behind reverse proxies:
+// OPTIONS preflights occasionally fall through without headers
+// when the `origin` function is async or when a later middleware
+// short-circuits (rate limiter 429, body-parser 413, etc.).
+//
+// This manual handler runs BEFORE any other middleware. It:
+//   1. Echoes CORS headers on every request whose Origin is allowed.
+//   2. Terminates OPTIONS preflights with a clean 204 immediately,
+//      so rate limiters / parsers / auth cannot 4xx/5xx the preflight.
+//
+// The subsequent cors() middleware stays as a defense-in-depth layer
+// for any case this doesn't cover.
+// ────────────────────────────────────────────────────────────────
+const HARDCODED_ORIGINS = ['https://midlyph.com', 'https://www.midlyph.com', 'http://localhost:3000'];
+const isAllowedOrigin = (origin?: string | null): boolean => {
+   if (!origin) return true; // Same-origin / non-browser (curl, server-to-server)
+   const envList = (process.env.ALLOWED_ORIGINS || '').split(',').map(o => o.trim()).filter(Boolean);
+   const allowed = new Set([...HARDCODED_ORIGINS, ...envList]);
+   return allowed.has(origin) || process.env.NODE_ENV === 'development';
+};
+
+app.use((req, res, next) => {
+   const origin = req.headers.origin as string | undefined;
+   if (origin && isAllowedOrigin(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+      res.setHeader('Access-Control-Max-Age', '86400');
+      res.setHeader('Vary', 'Origin');
+   }
+   if (req.method === 'OPTIONS') {
+      res.status(204).end();
+      return;
+   }
+   next();
+});
+
 app.use(cors({
    origin: function (origin, callback) {
-       const HARDCODED = [
-           'https://midlyph.com',
-           'https://www.midlyph.com',
-           'http://localhost:3000',
-       ];
-       const ENV_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').map(o => o.trim()).filter(Boolean);
-       const ALLOWED = [...new Set([...HARDCODED, ...ENV_ORIGINS])];
-       if (!origin || ALLOWED.includes(origin) || process.env.NODE_ENV === 'development') {
+       if (isAllowedOrigin(origin)) {
            callback(null, true);
        } else {
            callback(new Error('CORS: Origin not allowed'));
@@ -204,12 +238,9 @@ app.use('/api', transactionRoutes); // Fallback for /listings and /notifications
 //   3. Returns a clean JSON body.
 // ──────────────────────────────────────────────────────────────────────────
 app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
-   const origin = req.headers.origin;
-   const HARDCODED = ['https://midlyph.com', 'https://www.midlyph.com', 'http://localhost:3000'];
-   const ENV_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').map(o => o.trim()).filter(Boolean);
-   const ALLOWED = new Set([...HARDCODED, ...ENV_ORIGINS]);
+   const origin = req.headers.origin as string | undefined;
 
-   if (origin && (ALLOWED.has(origin) || process.env.NODE_ENV === 'development')) {
+   if (origin && isAllowedOrigin(origin)) {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Access-Control-Allow-Credentials', 'true');
       res.setHeader('Vary', 'Origin');
