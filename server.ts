@@ -34,8 +34,13 @@ import messageRoutes from './server/modules/messages/message.routes';
 import walletRoutes from './server/modules/wallet/wallet.routes';
 import webhookRoutes from './server/modules/webhooks/webhook.routes';
 
-// Import AI worker to initialize BullMQ listener in production (processes KYC queue jobs)
-import './src/ai/worker';
+// Import AI worker to initialize BullMQ listener in production (processes KYC queue jobs).
+// Fix F: WORKER_ONLY_MODE=true on a separate Railway worker service tells the API
+// to skip this import so the worker doesn't double-run. By default this is false
+// and everything runs in-process as before.
+if (process.env.WORKER_ONLY_MODE !== 'true') {
+   require('./src/ai/worker');
+}
 
 dotenv.config();
 
@@ -274,6 +279,14 @@ httpServer.listen(PORT as number, '0.0.0.0', () => {
    console.log(`Hawak mo ang beat - `);
    console.log(`Dubai Chewy Cookie - Ano, tara? `);
    console.log(`Ilocos Empanada - Ano, tara? `);
+
+   // Fix A: Warm up the AI pipeline (face-api models + Tesseract English pack)
+   // in the background so the first user KYC submission doesn't eat the
+   // 30–60s cold-start cost. Fire-and-forget; warmup errors are logged but
+   // don't block anything.
+   import('./src/ai/worker')
+      .then(mod => mod.warmupAiPipeline())
+      .catch(err => console.warn('[BOOT] AI warmup skipped:', err?.message));
 });
 
 // triggered restart

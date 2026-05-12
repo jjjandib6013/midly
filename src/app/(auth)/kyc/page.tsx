@@ -295,13 +295,19 @@ export default function KYCVerification() {
        const data = await res.json();
        if (!res.ok) throw new Error(data.error || "Document upload failed.");
 
-       for (let i = 0; i < 20; i++) {
+       // Fix B: bumped poll budget from 60s (20×3s) to 120s (30×4s).
+       // Cold-start of the AI pipeline can legitimately take 45–70s on a
+       // fresh Railway container (model load + Tesseract language pack
+       // download). Warmup at boot makes the steady-state path ~5–10s, but
+       // the first request after a Railway restart still needs the long
+       // budget. 4s interval cuts poll count by 25%.
+       for (let i = 0; i < 30; i++) {
           if (i === 2) setProcessingStatus("Scanning document...");
           if (i === 5) setProcessingStatus("Extracting text...");
           if (i === 8) setProcessingStatus("Verifying face...");
           if (i === 11) setProcessingStatus("Finalizing analysis...");
 
-          await new Promise(r => setTimeout(r, 3000));
+          await new Promise(r => setTimeout(r, 4000));
           const profileRes = await fetch(`${API_URL}/api/user/profile`, { headers: { "Authorization": `Bearer ${token}` } });
           const profileData = await profileRes.json();
           const status = profileData.kyc?.status;
@@ -333,12 +339,14 @@ export default function KYCVerification() {
        const data = await res.json();
        if (!res.ok) throw new Error(data.error || "Selfie submission failed.");
 
-       for (let i = 0; i < 20; i++) {
+       // Fix B: same 120s budget as Phase 2 — Phase 3 runs five face-api
+       // detections (one per frame) so it's actually heavier than Phase 2.
+       for (let i = 0; i < 30; i++) {
           if (i === 2) setProcessingStatus("Analyzing frames...");
           if (i === 5) setProcessingStatus("Verifying liveness...");
           if (i === 8) setProcessingStatus("Cross-referencing ID...");
 
-          await new Promise(r => setTimeout(r, 3000));
+          await new Promise(r => setTimeout(r, 4000));
           const profileRes = await fetch(`${API_URL}/api/user/profile`, { headers: { "Authorization": `Bearer ${token}` } });
           const profileData = await profileRes.json();
           const status = profileData.kyc?.status;

@@ -85,5 +85,8 @@
     "eslint-config-next": "16.2.1",
     "tailwindcss": "^4",
     "ts-node": "^10.9.2"
+  },
+  "optionalDependencies": {
+    "@tensorflow/tfjs-node": "^4.22.0"
   }
 }
