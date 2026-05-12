@@ -38,9 +38,16 @@ export default function Navbar() {
     fetch(`${API_URL}/api/notifications`, {
       headers: { "Authorization": `Bearer ${token}` }
     })
-      .then(res => {
+      .then(async res => {
         if (res.status === 401 || res.status === 403) {
-          signOut({ callbackUrl: '/login' });
+          // If the backend reports the account is suspended, route to the login
+          // banner state so the user sees *why* they were signed out.
+          let suspended = false;
+          try {
+             const body = await res.clone().json();
+             suspended = body?.code === 'ACCOUNT_SUSPENDED';
+          } catch {}
+          signOut({ callbackUrl: suspended ? '/login?suspended=1' : '/login' });
           return null;
         }
         return res.json();
@@ -72,6 +79,12 @@ export default function Navbar() {
         globalSocket.on("new_notification", () => {
           fetchNotifs();
         });
+
+        // Admin forced suspension — the server emits this when the user's account
+        // is banned. Sign out immediately and land on /login with a banner.
+        globalSocket.on("account_suspended", () => {
+          signOut({ callbackUrl: '/login?suspended=1' });
+        });
       } catch (e) { }
       fetchNotifs();
       fetch(`${API_URL}/api/user/profile`, {
@@ -93,6 +106,7 @@ export default function Navbar() {
     return () => {
       if (globalSocket) {
         globalSocket.off("new_notification");
+        globalSocket.off("account_suspended");
       }
     }
   }, [pathname, status, token]);

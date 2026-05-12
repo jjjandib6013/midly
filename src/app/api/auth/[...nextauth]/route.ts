@@ -32,6 +32,12 @@ const handler = NextAuth({
             throw new Error("Please verify your email address first.");
         }
 
+        if ((user as any).is_banned) {
+            // Block suspended users from authenticating. The error message is surfaced
+            // on /login via NextAuth's error query param.
+            throw new Error("Your account has been suspended. Please contact support for assistance.");
+        }
+
         // Record Login History and Detect New Device (Layer 1 Fraud Detection)
         try {
            const headersList = await import("next/headers").then(m => m.headers());

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../../config/db';
-import { authenticateJWT } from '../../shared/middlewares/auth.middleware';
+import { authenticateJWT, invalidateBanCache } from '../../shared/middlewares/auth.middleware';
 import { generateDownloadUrl } from '../../utils/s3';
 import { io } from '../../../server';
 import { logAudit, ACTION_TYPES } from '../../utils/auditLogger';
@@ -131,7 +131,32 @@ router.post('/users/:id/ban', authenticateJWT, async (req: Request, res: Respons
    try {
       const targetId = parseInt(req.params.id as string);
       const { is_banned } = req.body;
+
+      // Safety rails: reject bans targeting other admins or the caller themselves.
+      const target = await prisma.user.findUnique({ where: { user_id: targetId }, select: { role: true, user_id: true } });
+      if (!target) return res.status(404).json({ error: 'User not found' });
+      if (target.role === 'admin') return res.status(400).json({ error: 'Cannot suspend an admin account' });
+      if (target.user_id === req.user.user_id) return res.status(400).json({ error: 'Cannot suspend your own account' });
+
       await prisma.user.update({ where: { user_id: targetId }, data: { is_banned } });
+
+      // Bust the ban cache immediately so the next request sees the new state
+      // instead of waiting up to 30 s for the TTL to expire.
+      invalidateBanCache(targetId);
+
+      // If we're banning (not unbanning), kick any live sessions. The client
+      // listens for `account_suspended` on its user_{id} socket room and signs
+      // itself out + redirects to /login?suspended=1.
+      if (is_banned) {
+         try {
+            io.to(`user_${targetId}`).emit('account_suspended', {
+               reason: 'Your account has been suspended by an administrator.',
+            });
+         } catch (e) {
+            // Don't let a socket emit failure block the audit log / response.
+            console.error('[ADMIN BAN] Failed to emit account_suspended:', e);
+         }
+      }
 
       // AUDIT: Ban/Unban
       await logAudit({ userId: req.user.user_id, actionType: is_banned ? ACTION_TYPES.USER_BANNED : ACTION_TYPES.USER_UNBANNED, description: `Admin ${is_banned ? 'banned' : 'unbanned'} user #${targetId}`, ip: req.ip, entityType: 'USER', entityId: targetId, metadata: { target_user_id: targetId, admin_id: req.user.user_id } });
