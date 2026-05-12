@@ -189,6 +189,50 @@ app.use('/api', transactionRoutes); // Fallback for /listings and /notifications
 
 // Transactions and Messages have been moved to their respective routes
 
+// ──────────────────────────────────────────────────────────────────────────
+// Global error handler.
+//
+// Without this, an uncaught error in any route (e.g. a Prisma timeout) falls
+// through to Express's default handler, which returns a bare 500 with *no*
+// CORS headers set. Browsers then surface "Failed to fetch / No
+// Access-Control-Allow-Origin" even though the real problem is server-side.
+//
+// This handler:
+//   1. Echoes the origin back as Access-Control-Allow-Origin when the request
+//      came from an allowed origin, so the browser can at least read the body.
+//   2. Logs the real error server-side for diagnosis.
+//   3. Returns a clean JSON body.
+// ──────────────────────────────────────────────────────────────────────────
+app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
+   const origin = req.headers.origin;
+   const HARDCODED = ['https://midlyph.com', 'https://www.midlyph.com', 'http://localhost:3000'];
+   const ENV_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').map(o => o.trim()).filter(Boolean);
+   const ALLOWED = new Set([...HARDCODED, ...ENV_ORIGINS]);
+
+   if (origin && (ALLOWED.has(origin) || process.env.NODE_ENV === 'development')) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Vary', 'Origin');
+   }
+
+   const statusCode = err?.status || err?.statusCode || 500;
+   const isCorsBlock = err?.message === 'CORS: Origin not allowed';
+
+   console.error('[EXPRESS ERROR]', {
+      path: req.path,
+      method: req.method,
+      origin,
+      message: err?.message,
+      stack: err?.stack,
+   });
+
+   if (!res.headersSent) {
+      res.status(isCorsBlock ? 403 : statusCode).json({
+         error: isCorsBlock ? 'Origin not allowed' : (err?.message || 'Internal server error'),
+      });
+   }
+});
+
 httpServer.listen(PORT as number, '0.0.0.0', () => {
    console.log(`Server is running beautifully on http://0.0.0.0:${PORT} with JWT & Socket.io WebSockets enabled.`);
    console.log(`Sumakses ka!`);

@@ -57,10 +57,14 @@ export const authenticateJWT = (req: Request, res: Response, next: NextFunction)
             return res.status(403).json({ error: 'Account suspended', code: 'ACCOUNT_SUSPENDED' });
          }
       } catch (e) {
-         // Fail-closed on DB errors — better to return a 500 than to grant
-         // access to an account whose ban state we couldn't verify.
-         console.error('[AUTH] Ban check failed:', e);
-         return res.status(500).json({ error: 'Authentication error' });
+         // Fail-OPEN with a loud warning. A 500 here would take down every
+         // authenticated endpoint on a brief Postgres hiccup (common with
+         // Railway cold-starts) and surface to the browser as a CORS-less
+         // error. The 30-second cache-miss exposure to a freshly-banned user
+         // is the better trade-off vs a total site outage. Admin-initiated
+         // bans also emit `account_suspended` on the socket + busting the
+         // cache, so the enforcement path doesn't solely rely on this check.
+         console.warn('[AUTH] Ban check errored — failing open for this request:', e);
       }
       req.user = user;
       next();
