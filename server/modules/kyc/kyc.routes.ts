@@ -156,7 +156,8 @@ const kycPhase1Schema = z.object({
 });
 
 const kycPhase2Schema = z.object({
-   imageUrl: z.string().min(1, "Image path is required")
+   imageUrl: z.string().min(1, "Image path is required"),
+   s3Key: z.string().optional().nullable(),
 });
 
 const kycPhase3Schema = z.object({
@@ -233,23 +234,37 @@ router.post('/phase2', authenticateJWT, aiKycLimiter, async (req: Request, res: 
    try {
       const parsedParams = kycPhase2Schema.safeParse(req.body);
       if (!parsedParams.success) return res.status(400).json({ error: 'Validation failed' });
-      const { imageUrl } = parsedParams.data;
+      const { imageUrl, s3Key: explicitS3Key } = parsedParams.data;
 
       const kyc = await prisma.kycVerification.findUnique({ where: { user_id: req.user.user_id } });
       if (!kyc || kyc.phase < 1) return res.status(400).json({ error: 'Complete Phase 1 first.' });
 
       const filename = path.basename(imageUrl);
 
-      // Determine if the file is on S3 or local disk
+      // Determine if the file is on S3 or local disk.
+      //
+      // Source of truth for the S3 object key, in order:
+      //   1. `explicitS3Key` from the client — this is the real multer-s3 key
+      //      the upload endpoint returned (req.file.key). Trust it unconditionally.
+      //   2. URL parsing — fallback for requests that don't carry the new field
+      //      (older clients, or non-S3 uploads passing a CDN URL).
+      //   3. Default construction from filename — last resort, frequently wrong.
+      //
+      // The earlier "The specified key does not exist" errors came from
+      // path #2 failing silently on non-matching URL shapes (some Tigris/R2
+      // responses use a different path-style rendering than what we assumed),
+      // falling through to path #3 which invented a key that wasn't on S3.
       let workerFilePath: string;
       let fileHash: string;
-      let s3Key = `kyc/${req.user.user_id}/${filename}`;
+      let s3Key = explicitS3Key || `kyc/${req.user.user_id}/${filename}`;
 
       const isS3Url = imageUrl.startsWith('http') && imageUrl.includes('storageapi');
 
       if (isS3Url || s3Client) {
-         // S3 path: extract the key from the URL or construct it
-         if (isS3Url) {
+         if (explicitS3Key) {
+            // Trust the client-provided key — multer-s3 gave it to us verbatim.
+            s3Key = explicitS3Key;
+         } else if (isS3Url) {
             // Path-style URL: https://endpoint/bucket-name/uploads/kyc/<uuid>.ext
             // Virtual-hosted URL: https://bucket.endpoint/uploads/kyc/<uuid>.ext
             // Either way, we need to extract just the "uploads/kyc/<uuid>.ext" part

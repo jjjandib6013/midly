@@ -138,12 +138,15 @@ function cleanupTempFile(filePath: string) {
 
 // Resolve a file path: if it's an S3 key, download; otherwise use local
 async function resolveFilePath(filePathOrKey: string): Promise<{ localPath: string; isTemp: boolean }> {
-    // If it starts with 'kyc/' or 'uploads/', it's an S3 key
-    if (s3Client && (filePathOrKey.startsWith('kyc/') || filePathOrKey.startsWith('uploads/'))) {
+    // Treat as an S3 key if we have a client configured AND the input doesn't
+    // look like an absolute local path (Windows: C:\ or starts with /).
+    // Previously we whitelisted only 'kyc/' and 'uploads/' prefixes, which
+    // broke when callers passed keys with bucket-prefixed or custom paths.
+    const looksLocal = /^([A-Za-z]:[\\/]|\/)/.test(filePathOrKey);
+    if (s3Client && !looksLocal) {
         const localPath = await downloadFromS3(filePathOrKey);
         return { localPath, isTemp: true };
     }
-    // Otherwise it's a local filesystem path
     return { localPath: filePathOrKey, isTemp: false };
 }
 

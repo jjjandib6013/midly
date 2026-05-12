@@ -146,6 +146,7 @@ export default function KYCVerification() {
   const [selectedID, setSelectedID] = useState<string | null>(null);
   const [idNumber, setIdNumber] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [imageS3Key, setImageS3Key] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
   const [isProcessing, setIsProcessing] = useState(false);
@@ -200,7 +201,10 @@ export default function KYCVerification() {
       try {
           const res = await fetch(`${API_URL}/api/upload?type=kyc`, { method: "POST", headers: { "Authorization": `Bearer ${token}` }, body: formData });
           const data = await res.json();
-          if (data.url) setImageUrl(data.url);
+          if (data.url) {
+             setImageUrl(data.url);
+             setImageS3Key(data.s3Key || null);
+          }
           else setError("Upload failed from server.");
       } catch (err) { setError("Upload network error."); }
       finally { setIsUploading(false); }
@@ -290,7 +294,7 @@ export default function KYCVerification() {
        const res = await fetch(`${API_URL}/api/kyc/phase2`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-          body: JSON.stringify({ imageUrl: imageUrl })
+          body: JSON.stringify({ imageUrl: imageUrl, s3Key: imageS3Key })
        });
        const data = await res.json();
        if (!res.ok) throw new Error(data.error || "Document upload failed.");
@@ -318,6 +322,7 @@ export default function KYCVerification() {
           }
           if (status === 'rejected') {
              setImageUrl("");
+             setImageS3Key(null);
              const reason = profileData.kyc?.rejection_reason || "AI could not extract required data from ID.";
              throw new Error(`Verification failed. ${reason}`);
           }
@@ -380,6 +385,7 @@ export default function KYCVerification() {
          fetchProfile();
          setStep(1);
          setImageUrl("");
+         setImageS3Key(null);
          setIdNumber("");
          setSelectedID(null);
          setLivenessFrames([]);
@@ -442,7 +448,7 @@ export default function KYCVerification() {
                </div>
                {error.includes("Verification failed.") && (
                    <div className="pt-3 border-t border-red-500/20 flex">
-                      <NeonButton onClick={() => { setError(""); setImageUrl(""); setStep(2); }} variant="danger" className="!py-3 !px-6 text-xs">
+                      <NeonButton onClick={() => { setError(""); setImageUrl(""); setImageS3Key(null); setStep(2); }} variant="danger" className="!py-3 !px-6 text-xs">
                          Try a different photo <ArrowRight className="w-4 h-4 ml-2" />
                       </NeonButton>
                    </div>
