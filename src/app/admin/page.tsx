@@ -1,7 +1,7 @@
 "use client";
 import { useSession } from 'next-auth/react';
-import { useEffect, useState } from "react";
-import { ShieldAlert, Activity, CheckCircle, Search, FileText, Users, Settings, Server, Clock, Lock, Globe, Power, Key, ChevronRight, Ban, Check, ExternalLink, RefreshCw, Download, PieChart, BarChart as BarChartIcon, Filter, ImageIcon, X, AlertTriangle } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ShieldAlert, Activity, CheckCircle, Search, FileText, Users, Settings, Server, Clock, Lock, Globe, Power, Key, ChevronRight, Ban, Check, ExternalLink, RefreshCw, Download, PieChart, BarChart as BarChartIcon, Filter, ImageIcon, X, AlertTriangle, Snowflake, Flame, TrendingUp, UserPlus, ArrowRight } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "@/lib/api";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area, BarChart, Bar } from 'recharts';
@@ -56,7 +56,60 @@ export default function AdminDashboard() {
   const [riskTransactions, setRiskTransactions] = useState<any[]>([]);
   const [timelineModal, setTimelineModal] = useState<{isOpen: boolean, userId: number | null, data: any | null}>({isOpen: false, userId: null, data: null});
   const [tradeTimelineModal, setTradeTimelineModal] = useState<{isOpen: boolean, txId: number | null, logs: any[]}>({isOpen: false, txId: null, logs: []});
-  
+
+  // Ban / Suspend confirmation modal (replaces native confirm())
+  const [banModal, setBanModal] = useState<{isOpen: boolean; userId: number | null; currentBanState: boolean; userLabel: string}>({isOpen: false, userId: null, currentBanState: false, userLabel: ''});
+  const [isBanning, setIsBanning] = useState(false);
+
+  // Freeze / Unfreeze confirmation modal (replaces native confirm() in risk tab)
+  const [freezeModal, setFreezeModal] = useState<{isOpen: boolean; txId: number | null; currentStatus: string}>({isOpen: false, txId: null, currentStatus: ''});
+  const [isFreezing, setIsFreezing] = useState(false);
+
+  // Sidebar tab notification "seen" tracking
+  // A tab shows its badge ONLY if it has new/unread items the admin hasn't visited yet.
+  const [visitedTabs, setVisitedTabs] = useState<Set<TabState>>(new Set(["OVERVIEW"]));
+  // Snapshot counts at the moment the tab was last visited — anything above
+  // the snapshot is considered "new" and re-surfaces the badge.
+  const [seenCounts, setSeenCounts] = useState<{disputes: number; kycs: number; risk: number}>({disputes: 0, kycs: 0, risk: 0});
+
+  // Live counts of items that matter per tab
+  const activeDisputeCount = useMemo(() => disputes.filter(d => !d.resolution).length, [disputes]);
+  const pendingKycCount = useMemo(() => kycs.filter(k => k.status === 'pending_review').length, [kycs]);
+  const highRiskCount = useMemo(() => riskTransactions.filter(t => t.risk_score >= 60).length, [riskTransactions]);
+
+  // When data changes: if counts grew past the snapshot, un-visit those tabs so the badge reappears.
+  useEffect(() => {
+     setVisitedTabs(prev => {
+        const next = new Set(prev);
+        if (activeDisputeCount > seenCounts.disputes) next.delete("DISPUTES");
+        if (pendingKycCount > seenCounts.kycs) next.delete("KYC");
+        if (highRiskCount > seenCounts.risk) next.delete("RISK");
+        return next;
+     });
+  }, [activeDisputeCount, pendingKycCount, highRiskCount, seenCounts]);
+
+  // When the admin clicks into a tab: mark it visited and snapshot its count so the badge hides.
+  const selectTab = (id: TabState) => {
+     setActiveTab(id);
+     setVisitedTabs(prev => {
+        const next = new Set(prev);
+        next.add(id);
+        return next;
+     });
+     if (id === "DISPUTES") setSeenCounts(c => ({...c, disputes: activeDisputeCount}));
+     if (id === "KYC") setSeenCounts(c => ({...c, kycs: pendingKycCount}));
+     if (id === "RISK") setSeenCounts(c => ({...c, risk: highRiskCount}));
+  };
+
+  // Helper to compute the visible badge number for a given tab.
+  const badgeFor = (id: TabState): number | null => {
+     if (visitedTabs.has(id)) return null;
+     if (id === "DISPUTES") return activeDisputeCount > 0 ? activeDisputeCount : null;
+     if (id === "KYC") return pendingKycCount > 0 ? pendingKycCount : null;
+     if (id === "RISK") return highRiskCount > 0 ? highRiskCount : null;
+     return null;
+  };
+
   const loadData = async () => {
     if (!token) return;
     setIsLoading(true);
@@ -166,22 +219,32 @@ export default function AdminDashboard() {
          }
       } catch(e) { toast.error("Server API Error"); }
   };
-  const handleToggleFreeze = async (txId: number, currentStatus: string) => {
-      const isFrozen = currentStatus === 'frozen';
-      if (!confirm(`Are you sure you want to ${isFrozen ? 'release' : 'freeze'} this transaction?`)) return;
+  const handleToggleFreeze = (txId: number, currentStatus: string) => {
+      // Opens a confirmation modal instead of native confirm() so the flow is consistent with dispute resolution.
+      setFreezeModal({ isOpen: true, txId, currentStatus });
+  };
+
+  const confirmFreeze = async () => {
+      if (!freezeModal.txId) return;
+      const isFrozen = freezeModal.currentStatus === 'frozen';
+      setIsFreezing(true);
       try {
-         const res = await fetch(`${API_URL}/api/admin/risk-transactions/${txId}/freeze`, {
+         const res = await fetch(`${API_URL}/api/admin/risk-transactions/${freezeModal.txId}/freeze`, {
             method: "POST",
             headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
             body: JSON.stringify({ action: isFrozen ? 'release' : 'freeze' })
          });
          if (res.ok) {
             toast.success(`Transaction successfully ${isFrozen ? 'released' : 'frozen'}.`);
-            loadData();
+            // Optimistic local update to avoid a full reload race condition
+            setRiskTransactions(prev => prev.map(t => t.transaction_id === freezeModal.txId ? { ...t, status: isFrozen ? 'active' : 'frozen' } : t));
+            setFreezeModal({ isOpen: false, txId: null, currentStatus: '' });
          } else {
             toast.error("Failed to update transaction status.");
          }
-      } catch(e) { toast.error("Server API Error"); }
+      } catch(e) { toast.error("Server API Error"); } finally {
+         setIsFreezing(false);
+      }
   };
 
    const handleViewTimeline = async (userId: number) => {
@@ -212,21 +275,35 @@ export default function AdminDashboard() {
       } catch(e) { toast.error("Server API Error"); }
   };
 
-  const handleToggleBan = async (userId: number, currentBanState: boolean) => {
-      if (!confirm(`Are you sure you want to ${currentBanState ? 'unban' : 'suspend'} this user account?`)) return;
+  const handleToggleBan = (userId: number, currentBanState: boolean) => {
+      // Native browser confirm() is unreliable — some browsers suppress it during bulk admin sessions,
+      // and the prior implementation continued execution when the dialog was blocked. Use a modal instead.
+      const u = users.find(x => x.user_id === userId);
+      const label = u ? `${u.first_name || 'User'} ${u.last_name || ''} (${u.email})`.trim() : `User #${userId}`;
+      setBanModal({ isOpen: true, userId, currentBanState, userLabel: label });
+  };
+
+  const confirmBan = async () => {
+      if (!banModal.userId) return;
+      setIsBanning(true);
       try {
-         const res = await fetch(`${API_URL}/api/admin/users/${userId}/ban`, {
+         const res = await fetch(`${API_URL}/api/admin/users/${banModal.userId}/ban`, {
             method: "POST",
             headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ is_banned: !currentBanState })
+            body: JSON.stringify({ is_banned: !banModal.currentBanState })
          });
          if (res.ok) {
-            toast.success(`User account successfully ${currentBanState ? 'unbanned' : 'suspended'}.`);
-            loadData();
+            toast.success(`User account successfully ${banModal.currentBanState ? 'unbanned' : 'suspended'}.`);
+            // Optimistic local update — avoids a full loadData() reload race that sometimes left the UI stale.
+            setUsers(prev => prev.map(u => u.user_id === banModal.userId ? { ...u, is_banned: !banModal.currentBanState } : u));
+            setBanModal({ isOpen: false, userId: null, currentBanState: false, userLabel: '' });
          } else {
-            toast.error("Failed to modify account state.");
+            const err = await res.json().catch(() => ({}));
+            toast.error(err?.error || "Failed to modify account state.");
          }
-      } catch(e) { toast.error("Server API Error"); }
+      } catch(e) { toast.error("Server API Error"); } finally {
+         setIsBanning(false);
+      }
   };
 
    const handleUpdateSettings = async () => {
@@ -354,56 +431,100 @@ export default function AdminDashboard() {
 
   return (
     <div className="flex min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-zinc-800">
-      {/* Sidebar Navigation — fixed position */}
-      <div className="w-64 bg-zinc-950 border-r border-zinc-800 flex flex-col pt-6 shrink-0 z-20 fixed top-0 left-0 h-screen overflow-y-auto">
+      {/* Sidebar Navigation — collapsible (w-20 → w-64 on hover), mirrors the user-facing sidebar behavior */}
+      <aside className="group hidden md:flex fixed top-0 left-0 h-screen z-20 bg-zinc-950 border-r border-zinc-800 flex-col pt-6 overflow-hidden transition-all duration-300 w-20 hover:w-64" aria-label="Admin navigation">
         <div className="px-6 mb-8 flex items-center gap-3">
-           <div className="w-8 h-8 rounded-md bg-zinc-100 text-zinc-950 flex items-center justify-center font-bold">
+           <div className="w-8 h-8 rounded-md bg-zinc-100 text-zinc-950 flex items-center justify-center font-bold shrink-0">
               M
            </div>
-           <div className="flex flex-col">
+           <div className="flex-col min-w-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 hidden group-hover:flex whitespace-nowrap">
               <span className="text-zinc-100 font-semibold text-sm">Midly</span>
               <span className="text-zinc-500 text-xs">Administration</span>
            </div>
         </div>
 
-        <nav className="flex-1 px-3 space-y-1">
+        <nav className="flex-1 px-3 space-y-1" role="tablist" aria-label="Admin sections">
            {[
               { id: "OVERVIEW", icon: Activity, label: "Overview" },
               { id: "REPORTS", icon: BarChartIcon, label: "Analytics & Reports" },
-              { id: "DISPUTES", icon: ShieldAlert, label: "Disputes", badge: disputes.length > 0 ? disputes.length : null },
-              { id: "KYC", icon: FileText, label: "Identity Verification", badge: kycs.length > 0 ? kycs.length : null },
-              { id: "RISK", icon: AlertTriangle, label: "Risk & Fraud", badge: riskTransactions.filter(t => t.risk_score >= 60).length > 0 ? riskTransactions.filter(t => t.risk_score >= 60).length : null },
+              { id: "DISPUTES", icon: ShieldAlert, label: "Disputes", badge: badgeFor("DISPUTES") },
+              { id: "KYC", icon: FileText, label: "Identity Verification", badge: badgeFor("KYC") },
+              { id: "RISK", icon: AlertTriangle, label: "Risk & Fraud", badge: badgeFor("RISK") },
               { id: "USERS", icon: Users, label: "Users" },
               { id: "SETTINGS", icon: Settings, label: "Settings" },
-           ].map(tab => (
-              <button 
+           ].map(tab => {
+              const isActive = activeTab === tab.id;
+              return (
+              <button
                  key={tab.id}
-                 onClick={() => setActiveTab(tab.id as TabState)}
-                 className={`w-full flex items-center justify-between px-3 py-2 text-sm rounded-md transition-colors ${activeTab === tab.id ? 'bg-zinc-800 text-zinc-100 font-medium' : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200'}`}
+                 onClick={() => selectTab(tab.id as TabState)}
+                 role="tab"
+                 aria-selected={isActive}
+                 aria-label={tab.label}
+                 className={`relative w-full flex items-center justify-between px-3 py-2 text-sm rounded-md transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 ${isActive ? 'bg-zinc-800 text-zinc-100 font-medium' : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200'}`}
+                 title={tab.label}
               >
-                 <div className="flex items-center gap-3">
-                    <tab.icon className={`w-4 h-4 ${activeTab === tab.id ? 'text-zinc-100' : 'text-zinc-400'}`} />
-                    <span>{tab.label}</span>
+                 {/* Active indicator bar — visible in both collapsed and expanded states */}
+                 {isActive && <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-[color:var(--color-primary)]" aria-hidden="true" />}
+                 <div className="flex items-center gap-3 min-w-0">
+                    <tab.icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-zinc-100' : 'text-zinc-400'}`} />
+                    <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 truncate">{tab.label}</span>
                  </div>
-                 {tab.badge && (
-                    <span className="bg-zinc-100 text-zinc-900 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                       {tab.badge}
+                 {(tab as any).badge && (
+                    <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                       {(tab as any).badge}
                     </span>
                  )}
+                 {/* Collapsed-state dot indicator for badges — anchored to the icon on the left */}
+                 {(tab as any).badge && (
+                    <span className="absolute top-2 left-7 w-2 h-2 rounded-full bg-red-500 ring-2 ring-zinc-950 group-hover:hidden" />
+                 )}
               </button>
-           ))}
+              );
+           })}
         </nav>
-        
+
         <div className="p-4 border-t border-zinc-800">
-           <div className="flex items-center gap-2 text-xs text-zinc-500">
-              <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-              Systems Operational
+           <div className="flex items-center gap-2 text-xs text-zinc-500 whitespace-nowrap">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></div>
+              <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">Systems Operational</span>
            </div>
+        </div>
+      </aside>
+
+      {/* Mobile: horizontal tab bar (sidebar hover trick doesn't work on touch) */}
+      <div className="md:hidden fixed top-0 left-0 right-0 z-20 bg-zinc-950 border-b border-zinc-800 overflow-x-auto">
+        <div className="flex gap-1 px-2 py-2" role="tablist" aria-label="Admin sections">
+           {[
+              { id: "OVERVIEW", label: "Overview" },
+              { id: "REPORTS", label: "Reports" },
+              { id: "DISPUTES", label: "Disputes", badge: badgeFor("DISPUTES") },
+              { id: "KYC", label: "KYC", badge: badgeFor("KYC") },
+              { id: "RISK", label: "Risk", badge: badgeFor("RISK") },
+              { id: "USERS", label: "Users" },
+              { id: "SETTINGS", label: "Settings" },
+           ].map(tab => {
+              const isActive = activeTab === tab.id;
+              return (
+              <button
+                 key={tab.id}
+                 onClick={() => selectTab(tab.id as TabState)}
+                 role="tab"
+                 aria-selected={isActive}
+                 className={`relative px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 ${isActive ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'}`}
+              >
+                 {tab.label}
+                 {(tab as any).badge && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold px-1.5 rounded-full">{(tab as any).badge}</span>
+                 )}
+              </button>
+              );
+           })}
         </div>
       </div>
 
-      {/* Main Content Area — offset by sidebar width */}
-      <div className="flex-1 ml-64 px-8 py-8 lg:px-12 relative min-h-screen">
+      {/* Main Content Area — offset by collapsed sidebar width on desktop, by mobile top bar on small screens */}
+      <div className="flex-1 md:ml-20 px-4 md:px-8 py-8 lg:px-12 relative min-h-screen pt-20 md:pt-8">
          {/* Fullscreen Image Hover Modal */}
          {hoveredImage && (
             <div 
@@ -417,7 +538,7 @@ export default function AdminDashboard() {
             </div>
          )}
 
-         <div className="max-w-5xl mx-auto space-y-8">
+         <div className="max-w-6xl mx-auto space-y-8">
 
             {/* TAB: OVERVIEW */}
             {activeTab === "OVERVIEW" && (
@@ -427,33 +548,171 @@ export default function AdminDashboard() {
                      <p className="text-sm text-zinc-400">System metrics, active operations, and overall platform volume.</p>
                   </header>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                  {/* Row 1 — Key Metrics (5 cards) */}
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
                      <div className="p-5 rounded-xl bg-zinc-900/50 border border-zinc-800 flex flex-col">
-                        <div className="flex justify-between items-start mb-4">
-                           <h3 className="text-zinc-400 text-sm font-medium">Escrow Capital</h3>
-                           <Lock className="w-4 h-4 text-zinc-500"/>
+                        <div className="flex justify-between items-start mb-3">
+                           <h3 className="text-zinc-400 text-xs font-medium uppercase tracking-wider">Escrow Capital</h3>
+                           <Lock className="w-4 h-4 text-zinc-500 shrink-0"/>
                         </div>
-                        <p className="text-3xl text-zinc-100 font-semibold tracking-tight">₱{Number(metrics.lockedCapital).toLocaleString()}</p>
+                        <p className="text-2xl text-zinc-100 font-semibold tracking-tight">₱{Number(metrics.lockedCapital).toLocaleString()}</p>
+                        <span className="text-[10px] text-zinc-500 mt-1">Locked in vault</span>
                      </div>
                      <div className="p-5 rounded-xl bg-zinc-900/50 border border-zinc-800 flex flex-col">
-                        <div className="flex justify-between items-start mb-4">
-                           <h3 className="text-zinc-400 text-sm font-medium">Total Trades</h3>
-                           <Activity className="w-4 h-4 text-zinc-500"/>
+                        <div className="flex justify-between items-start mb-3">
+                           <h3 className="text-zinc-400 text-xs font-medium uppercase tracking-wider">Total Trades</h3>
+                           <Activity className="w-4 h-4 text-zinc-500 shrink-0"/>
                         </div>
-                        <p className="text-3xl text-zinc-100 font-semibold tracking-tight">{metrics.tradesCount}</p>
+                        <p className="text-2xl text-zinc-100 font-semibold tracking-tight">{metrics.tradesCount}</p>
+                        <span className="text-[10px] text-zinc-500 mt-1">Completed</span>
                      </div>
                      <div className="p-5 rounded-xl bg-zinc-900/50 border border-zinc-800 flex flex-col">
-                        <div className="flex justify-between items-start mb-4">
-                           <h3 className="text-zinc-400 text-sm font-medium">Active Users</h3>
-                           <Users className="w-4 h-4 text-zinc-500"/>
+                        <div className="flex justify-between items-start mb-3">
+                           <h3 className="text-zinc-400 text-xs font-medium uppercase tracking-wider">Active Users</h3>
+                           <Users className="w-4 h-4 text-zinc-500 shrink-0"/>
                         </div>
-                        <p className="text-3xl text-zinc-100 font-semibold tracking-tight">{metrics.activeUsers}</p>
+                        <p className="text-2xl text-zinc-100 font-semibold tracking-tight">{metrics.activeUsers}</p>
+                        <span className="text-[10px] text-zinc-500 mt-1">Registered accounts</span>
+                     </div>
+                     <div className="p-5 rounded-xl bg-zinc-900/50 border border-zinc-800 flex flex-col">
+                        <div className="flex justify-between items-start mb-3">
+                           <h3 className="text-zinc-400 text-xs font-medium uppercase tracking-wider">Pending Disputes</h3>
+                           <ShieldAlert className={`w-4 h-4 shrink-0 ${activeDisputeCount > 0 ? 'text-amber-400' : 'text-zinc-500'}`}/>
+                        </div>
+                        <p className={`text-2xl font-semibold tracking-tight ${activeDisputeCount > 0 ? 'text-amber-300' : 'text-zinc-100'}`}>{activeDisputeCount}</p>
+                        <span className="text-[10px] text-zinc-500 mt-1">Awaiting resolution</span>
+                     </div>
+                     <div className="p-5 rounded-xl bg-zinc-900/50 border border-zinc-800 flex flex-col">
+                        <div className="flex justify-between items-start mb-3">
+                           <h3 className="text-zinc-400 text-xs font-medium uppercase tracking-wider">KYC Reviews</h3>
+                           <FileText className={`w-4 h-4 shrink-0 ${pendingKycCount > 0 ? 'text-yellow-400' : 'text-zinc-500'}`}/>
+                        </div>
+                        <p className={`text-2xl font-semibold tracking-tight ${pendingKycCount > 0 ? 'text-yellow-300' : 'text-zinc-100'}`}>{pendingKycCount}</p>
+                        <span className="text-[10px] text-zinc-500 mt-1">Manual review queue</span>
                      </div>
                   </div>
-                  
+
+                  {/* Row 2 — Mini Charts (last 7 days) */}
+                  {(() => {
+                     const recent = chartData.slice(-7);
+                     return (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
+                           <div className="p-5 rounded-xl bg-zinc-900/50 border border-zinc-800">
+                              <div className="flex items-center justify-between mb-4">
+                                 <h3 className="text-zinc-100 font-medium text-sm flex items-center gap-2">
+                                    <TrendingUp className="w-4 h-4 text-blue-400"/> Trade Volume
+                                 </h3>
+                                 <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Last 7 Days</span>
+                              </div>
+                              <div className="h-32">
+                                 <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={recent}>
+                                       <defs>
+                                          <linearGradient id="colorOvTxs" x1="0" y1="0" x2="0" y2="1">
+                                             <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4}/>
+                                             <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                                          </linearGradient>
+                                       </defs>
+                                       <XAxis dataKey="date" hide />
+                                       <YAxis hide />
+                                       <RechartsTooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px', fontSize: '11px' }} itemStyle={{ color: '#e4e4e7' }}/>
+                                       <Area type="monotone" dataKey="transactions" stroke="#3b82f6" strokeWidth={2} fill="url(#colorOvTxs)" name="Trades"/>
+                                    </AreaChart>
+                                 </ResponsiveContainer>
+                              </div>
+                           </div>
+                           <div className="p-5 rounded-xl bg-zinc-900/50 border border-zinc-800">
+                              <div className="flex items-center justify-between mb-4">
+                                 <h3 className="text-zinc-100 font-medium text-sm flex items-center gap-2">
+                                    <UserPlus className="w-4 h-4 text-emerald-400"/> User Signups
+                                 </h3>
+                                 <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Last 7 Days</span>
+                              </div>
+                              <div className="h-32">
+                                 <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={recent}>
+                                       <defs>
+                                          <linearGradient id="colorOvUsers" x1="0" y1="0" x2="0" y2="1">
+                                             <stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/>
+                                             <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                                          </linearGradient>
+                                       </defs>
+                                       <XAxis dataKey="date" hide />
+                                       <YAxis hide />
+                                       <RechartsTooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px', fontSize: '11px' }} itemStyle={{ color: '#e4e4e7' }}/>
+                                       <Area type="monotone" dataKey="users" stroke="#10b981" strokeWidth={2} fill="url(#colorOvUsers)" name="Signups"/>
+                                    </AreaChart>
+                                 </ResponsiveContainer>
+                              </div>
+                           </div>
+                        </div>
+                     );
+                  })()}
+
+                  {/* Row 3 — Recent Activity Feed (last 10 audit logs) */}
+                  <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl overflow-hidden mb-8">
+                     <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between">
+                        <h3 className="font-semibold text-zinc-100 text-sm flex items-center gap-2">
+                           <Clock className="w-4 h-4 text-zinc-400"/> Recent Activity
+                        </h3>
+                        <button onClick={() => selectTab("REPORTS")} className="text-xs text-zinc-400 hover:text-zinc-200 flex items-center gap-1 transition-colors">
+                           View full log <ArrowRight className="w-3 h-3"/>
+                        </button>
+                     </div>
+                     <ul className="divide-y divide-zinc-800/50">
+                        {auditLogs.slice(0, 10).map((log: any) => (
+                           <li key={log.log_id} className="px-5 py-3 flex items-start gap-3 hover:bg-zinc-800/20 transition-colors">
+                              <div className="mt-0.5 shrink-0 w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center">
+                                 <Activity className="w-3.5 h-3.5 text-zinc-400"/>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                 <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                                    <span className="text-xs bg-zinc-800 px-2 py-0.5 rounded text-zinc-300 font-mono tracking-tight">{log.action_type}</span>
+                                    <span className="text-xs text-zinc-400 truncate">{log.user?.email || 'System'}</span>
+                                 </div>
+                                 <p className="text-xs text-zinc-500 truncate">{log.action_description}</p>
+                              </div>
+                              <span className="text-[10px] text-zinc-500 font-mono whitespace-nowrap shrink-0">{new Date(log.timestamp).toLocaleString()}</span>
+                           </li>
+                        ))}
+                        {auditLogs.length === 0 && (
+                           <li className="px-5 py-8 text-center text-xs text-zinc-500 italic">No recent activity recorded.</li>
+                        )}
+                     </ul>
+                  </div>
+
+                  {/* Row 4 — Quick Actions */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+                     <button onClick={() => selectTab("DISPUTES")} className="group p-5 rounded-xl bg-zinc-900/50 border border-zinc-800 hover:border-amber-500/40 hover:bg-amber-500/5 transition-all text-left">
+                        <div className="flex items-center justify-between mb-3">
+                           <ShieldAlert className="w-5 h-5 text-amber-400"/>
+                           <ArrowRight className="w-4 h-4 text-zinc-500 group-hover:text-amber-400 group-hover:translate-x-0.5 transition-all"/>
+                        </div>
+                        <h4 className="text-zinc-100 font-medium text-sm mb-0.5">Resolve Disputes</h4>
+                        <p className="text-xs text-zinc-500">{activeDisputeCount} awaiting action</p>
+                     </button>
+                     <button onClick={() => selectTab("KYC")} className="group p-5 rounded-xl bg-zinc-900/50 border border-zinc-800 hover:border-yellow-500/40 hover:bg-yellow-500/5 transition-all text-left">
+                        <div className="flex items-center justify-between mb-3">
+                           <FileText className="w-5 h-5 text-yellow-400"/>
+                           <ArrowRight className="w-4 h-4 text-zinc-500 group-hover:text-yellow-400 group-hover:translate-x-0.5 transition-all"/>
+                        </div>
+                        <h4 className="text-zinc-100 font-medium text-sm mb-0.5">Review KYC</h4>
+                        <p className="text-xs text-zinc-500">{pendingKycCount} pending review</p>
+                     </button>
+                     <button onClick={() => selectTab("RISK")} className="group p-5 rounded-xl bg-zinc-900/50 border border-zinc-800 hover:border-red-500/40 hover:bg-red-500/5 transition-all text-left">
+                        <div className="flex items-center justify-between mb-3">
+                           <AlertTriangle className="w-5 h-5 text-red-400"/>
+                           <ArrowRight className="w-4 h-4 text-zinc-500 group-hover:text-red-400 group-hover:translate-x-0.5 transition-all"/>
+                        </div>
+                        <h4 className="text-zinc-100 font-medium text-sm mb-0.5">Risk &amp; Fraud</h4>
+                        <p className="text-xs text-zinc-500">{highRiskCount} high-risk trades</p>
+                     </button>
+                  </div>
+
+                  {/* System Status (kept from original) */}
                   <div className="p-6 border border-zinc-800 rounded-xl bg-zinc-900/30">
                      <h3 className="text-zinc-100 text-sm font-medium mb-4">System Status</h3>
-                     <div className="flex items-center gap-4 text-sm text-zinc-400">
+                     <div className="flex flex-wrap items-center gap-4 text-sm text-zinc-400">
                         <div className="flex items-center gap-2">
                            <CheckCircle className="w-4 h-4 text-emerald-500" />
                            <span>Database Connected</span>
@@ -630,12 +889,12 @@ export default function AdminDashboard() {
                            ))}
                         </div>
                      </div>
-                     <div className="overflow-x-auto">
+                     <div className="overflow-auto max-h-[28rem] custom-scrollbar">
                         <table className="w-full text-left text-sm text-zinc-400">
 
                            {/* TRANSACTIONS VIEW */}
                            {reportListView === "TRANSACTIONS" && (<>
-                              <thead className="bg-zinc-950/50 text-xs uppercase font-semibold text-zinc-500 border-b border-zinc-800">
+                              <thead className="bg-zinc-950/80 backdrop-blur-md text-xs uppercase font-semibold text-zinc-500 border-b border-zinc-800 sticky top-0 z-10">
                                  <tr>
                                     <th className="px-6 py-4">ID / Date</th>
                                     <th className="px-6 py-4">Entities</th>
@@ -676,7 +935,7 @@ export default function AdminDashboard() {
 
                            {/* USERS VIEW */}
                            {reportListView === "USERS" && (<>
-                              <thead className="bg-zinc-950/50 text-xs uppercase font-semibold text-zinc-500 border-b border-zinc-800">
+                              <thead className="bg-zinc-950/80 backdrop-blur-md text-xs uppercase font-semibold text-zinc-500 border-b border-zinc-800 sticky top-0 z-10">
                                  <tr>
                                     <th className="px-6 py-4">User</th>
                                     <th className="px-6 py-4">Email</th>
@@ -708,7 +967,7 @@ export default function AdminDashboard() {
 
                            {/* DISPUTES VIEW */}
                            {reportListView === "DISPUTES" && (<>
-                              <thead className="bg-zinc-950/50 text-xs uppercase font-semibold text-zinc-500 border-b border-zinc-800">
+                              <thead className="bg-zinc-950/80 backdrop-blur-md text-xs uppercase font-semibold text-zinc-500 border-b border-zinc-800 sticky top-0 z-10">
                                  <tr>
                                     <th className="px-6 py-4">TX ID</th>
                                     <th className="px-6 py-4">Type / Reason</th>
@@ -740,7 +999,7 @@ export default function AdminDashboard() {
 
                            {/* VOLUME VIEW */}
                            {reportListView === "VOLUME" && (<>
-                              <thead className="bg-zinc-950/50 text-xs uppercase font-semibold text-zinc-500 border-b border-zinc-800">
+                              <thead className="bg-zinc-950/80 backdrop-blur-md text-xs uppercase font-semibold text-zinc-500 border-b border-zinc-800 sticky top-0 z-10">
                                  <tr>
                                     <th className="px-6 py-4">Date</th>
                                     <th className="px-6 py-4">New Users</th>
@@ -873,8 +1132,10 @@ export default function AdminDashboard() {
                                  <div>
                                     <div className="flex flex-wrap items-center gap-3 mb-1">
                                        <span className="text-zinc-100 font-medium text-base">Transaction #{d.transaction_id}</span>
-                                       <a href={`/trade/${d.transaction_id}`} target="_blank" rel="noreferrer" className="text-zinc-400 hover:text-zinc-200 flex items-center gap-1 text-xs">View Hub <ExternalLink className="w-3 h-3"/></a>
-                                       <button onClick={() => handleViewTradeTimeline(d.transaction_id)} className="text-blue-400 hover:text-blue-300 flex items-center gap-1 text-xs font-semibold bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
+                                       <a href={`/trade/${d.transaction_id}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-zinc-300 hover:text-zinc-100 bg-zinc-800 hover:bg-zinc-700 px-2.5 py-1 rounded-md border border-zinc-700 transition-colors">
+                                          View Hub <ExternalLink className="w-3 h-3"/>
+                                       </a>
+                                       <button onClick={() => handleViewTradeTimeline(d.transaction_id)} className="text-blue-400 hover:text-blue-300 flex items-center gap-1 text-xs font-semibold bg-blue-500/10 px-2.5 py-1 rounded-md border border-blue-500/20">
                                           <Clock className="w-3 h-3"/> Forensic Timeline
                                        </button>
                                     </div>
@@ -1140,87 +1401,187 @@ export default function AdminDashboard() {
             );})()}
 
             {/* TAB: RISK */}
-            {activeTab === "RISK" && (
+            {activeTab === "RISK" && (() => {
+               const criticalTxs = riskTransactions.filter(t => t.risk_score >= 80);
+               const highTxs = riskTransactions.filter(t => t.risk_score >= 60 && t.risk_score < 80);
+               const moderateTxs = riskTransactions.filter(t => t.risk_score < 60);
+
+               const riskBucket = (score: number) => {
+                  if (score >= 80) return {
+                     label: 'CRITICAL',
+                     barFrom: 'from-red-600',
+                     barTo: 'to-red-400',
+                     border: 'border-red-500/40',
+                     tint: 'bg-red-500/5',
+                     badge: 'bg-red-500/10 text-red-400 border-red-500/30',
+                     glow: 'shadow-[0_0_25px_-10px_rgba(239,68,68,0.5)]',
+                  };
+                  if (score >= 60) return {
+                     label: 'HIGH',
+                     barFrom: 'from-orange-500',
+                     barTo: 'to-orange-300',
+                     border: 'border-orange-500/30',
+                     tint: 'bg-orange-500/5',
+                     badge: 'bg-orange-500/10 text-orange-400 border-orange-500/30',
+                     glow: '',
+                  };
+                  return {
+                     label: 'MODERATE',
+                     barFrom: 'from-yellow-500',
+                     barTo: 'to-yellow-300',
+                     border: 'border-yellow-500/20',
+                     tint: 'bg-yellow-500/[0.02]',
+                     badge: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
+                     glow: '',
+                  };
+               };
+
+               return (
                <div className="animate-in fade-in duration-300">
                   <header className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                      <div>
-                        <h1 className="text-2xl font-semibold text-zinc-100 mb-1">Risk & Fraud</h1>
+                        <h1 className="text-2xl font-semibold text-zinc-100 mb-1">Risk &amp; Fraud</h1>
                         <p className="text-sm text-zinc-500">Monitor flagged transactions and suspicious behaviors across the platform.</p>
                      </div>
                   </header>
 
-                  <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
-                     <table className="w-full text-left border-collapse">
-                        <thead>
-                           <tr className="bg-zinc-950/50 border-b border-zinc-800 text-xs text-zinc-400 uppercase tracking-wider">
-                              <th className="px-6 py-4 font-medium">Tx ID</th>
-                              <th className="px-6 py-4 font-medium">Risk Score</th>
-                              <th className="px-6 py-4 font-medium">Status</th>
-                              <th className="px-6 py-4 font-medium">Buyer</th>
-                              <th className="px-6 py-4 font-medium">Seller</th>
-                              <th className="px-6 py-4 font-medium">Risk Flags</th>
-                              <th className="px-6 py-4 font-medium text-right">Actions</th>
-                           </tr>
-                        </thead>
-                        <tbody className="divide-y divide-zinc-800 text-sm">
-                           {riskTransactions.length === 0 ? (
-                              <tr>
-                                 <td colSpan={7} className="px-6 py-12 text-center text-zinc-500">
-                                    <AlertTriangle className="w-8 h-8 mx-auto mb-3 opacity-20" />
-                                    No high-risk transactions detected.
-                                 </td>
-                              </tr>
-                           ) : riskTransactions.map((tx, idx) => (
-                              <tr key={idx} className="hover:bg-zinc-800/30 transition-colors">
-                                 <td className="px-6 py-4 font-mono text-zinc-300">#{tx.transaction_id}</td>
-                                 <td className="px-6 py-4">
-                                    <span className={`px-2 py-1 rounded text-xs font-bold ${tx.risk_score >= 80 ? 'bg-red-500/10 text-red-500' : tx.risk_score >= 60 ? 'bg-orange-500/10 text-orange-500' : 'bg-yellow-500/10 text-yellow-500'}`}>
-                                       {tx.risk_score} / 100
-                                    </span>
-                                 </td>
-                                 <td className="px-6 py-4">
-                                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                                       tx.status === 'frozen' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
-                                    }`}>
-                                       {tx.status}
-                                    </span>
-                                 </td>
-                                 <td className="px-6 py-4 text-zinc-300">
-                                    <div className="flex flex-col">
-                                       <span>{tx.buyer?.email}</span>
-                                       <button onClick={() => handleViewTimeline(tx.buyer_id)} className="text-xs text-green-500 hover:text-green-400 text-left mt-1">View Timeline</button>
-                                    </div>
-                                 </td>
-                                 <td className="px-6 py-4 text-zinc-300">
-                                    <div className="flex flex-col">
-                                       <span>{tx.seller?.email}</span>
-                                       <button onClick={() => handleViewTimeline(tx.seller_id)} className="text-xs text-green-500 hover:text-green-400 text-left mt-1">View Timeline</button>
-                                    </div>
-                                 </td>
-                                 <td className="px-6 py-4 text-zinc-400 text-xs">
-                                    <ul className="list-disc pl-4 space-y-1">
-                                       {tx.risk_flags?.map((f: string, i: number) => <li key={i}>{f}</li>)}
-                                    </ul>
-                                 </td>
-                                 <td className="px-6 py-4 text-right">
-                                    <button 
-                                       onClick={() => handleToggleFreeze(tx.transaction_id, tx.status)}
-                                       className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors ${
-                                          tx.status === 'frozen' 
-                                             ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700' 
-                                             : 'bg-red-500/10 text-red-500 hover:bg-red-500/20'
-                                       }`}
-                                    >
-                                       {tx.status === 'frozen' ? 'Unfreeze' : 'Freeze'}
-                                    </button>
-                                 </td>
-                              </tr>
-                           ))}
-                        </tbody>
-                     </table>
+                  {/* Risk Summary Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+                     <div className="p-5 rounded-xl bg-red-500/5 border border-red-500/30 flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center justify-center shrink-0">
+                           <Flame className="w-6 h-6 text-red-400"/>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                           <p className="text-[10px] uppercase tracking-widest text-red-400 font-bold mb-1">Critical Risk</p>
+                           <p className="text-3xl text-zinc-100 font-bold leading-none">{criticalTxs.length}</p>
+                           <p className="text-xs text-zinc-500 mt-1">Score ≥ 80</p>
+                        </div>
+                     </div>
+                     <div className="p-5 rounded-xl bg-orange-500/5 border border-orange-500/30 flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-lg bg-orange-500/10 border border-orange-500/30 flex items-center justify-center shrink-0">
+                           <AlertTriangle className="w-6 h-6 text-orange-400"/>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                           <p className="text-[10px] uppercase tracking-widest text-orange-400 font-bold mb-1">High Risk</p>
+                           <p className="text-3xl text-zinc-100 font-bold leading-none">{highTxs.length}</p>
+                           <p className="text-xs text-zinc-500 mt-1">Score 60–79</p>
+                        </div>
+                     </div>
+                     <div className="p-5 rounded-xl bg-yellow-500/5 border border-yellow-500/20 flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-lg bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center shrink-0">
+                           <Activity className="w-6 h-6 text-yellow-400"/>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                           <p className="text-[10px] uppercase tracking-widest text-yellow-400 font-bold mb-1">Moderate Risk</p>
+                           <p className="text-3xl text-zinc-100 font-bold leading-none">{moderateTxs.length}</p>
+                           <p className="text-xs text-zinc-500 mt-1">Score &lt; 60</p>
+                        </div>
+                     </div>
                   </div>
+
+                  {/* Risk Transaction Cards */}
+                  {riskTransactions.length === 0 ? (
+                     <div className="text-center py-20 border border-zinc-800 rounded-xl bg-zinc-900/10">
+                        <AlertTriangle className="w-8 h-8 text-zinc-600 mx-auto mb-3 opacity-40" />
+                        <h3 className="text-zinc-200 font-medium text-sm">No flagged transactions</h3>
+                        <p className="text-xs text-zinc-500 mt-1">All trades are currently scoring below the risk threshold.</p>
+                     </div>
+                  ) : (
+                     <div className="space-y-4">
+                        {riskTransactions.map((tx) => {
+                           const b = riskBucket(tx.risk_score);
+                           const isFrozen = tx.status === 'frozen';
+                           return (
+                              <div key={tx.transaction_id} className={`rounded-xl border ${b.border} ${b.tint} ${b.glow} overflow-hidden`}>
+                                 {/* Header */}
+                                 <div className="p-5 flex flex-col lg:flex-row gap-4 lg:items-center justify-between border-b border-zinc-800/60">
+                                    <div className="flex items-center gap-4 flex-wrap">
+                                       <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold tracking-widest border ${b.badge}`}>
+                                          {b.label}
+                                       </span>
+                                       <span className="font-mono text-zinc-200 font-semibold">#{tx.transaction_id}</span>
+                                       <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                          isFrozen ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
+                                       }`}>
+                                          {isFrozen && <Snowflake className="w-3 h-3 inline mr-1" />}
+                                          {tx.status}
+                                       </span>
+                                       {tx.total_amount !== undefined && (
+                                          <span className="text-sm text-zinc-300">
+                                             <span className="text-zinc-500">Amount:</span> <span className="font-semibold">₱{Number(tx.total_amount || 0).toLocaleString()}</span>
+                                          </span>
+                                       )}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                       <a href={`/trade/${tx.transaction_id}`} target="_blank" rel="noreferrer" className="text-xs text-zinc-400 hover:text-zinc-200 flex items-center gap-1 px-2 py-1 rounded border border-zinc-800 hover:border-zinc-700 transition-colors">
+                                          Trade Hub <ExternalLink className="w-3 h-3"/>
+                                       </a>
+                                       <button
+                                          onClick={() => handleToggleFreeze(tx.transaction_id, tx.status)}
+                                          className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+                                             isFrozen
+                                                ? 'bg-zinc-800 text-zinc-200 hover:bg-zinc-700 border border-zinc-700'
+                                                : 'bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20'
+                                          }`}
+                                       >
+                                          {isFrozen ? <><CheckCircle className="w-3.5 h-3.5"/> Unfreeze</> : <><Snowflake className="w-3.5 h-3.5"/> Freeze</>}
+                                       </button>
+                                    </div>
+                                 </div>
+
+                                 {/* Risk gauge */}
+                                 <div className="p-5 pb-4">
+                                    <div className="flex items-center justify-between mb-2">
+                                       <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Risk Score</span>
+                                       <span className="text-xl font-bold text-zinc-100 font-mono">{tx.risk_score}<span className="text-zinc-500 text-xs">/100</span></span>
+                                    </div>
+                                    <div className="w-full h-2.5 rounded-full bg-zinc-800/60 overflow-hidden">
+                                       <div
+                                          className={`h-full bg-gradient-to-r ${b.barFrom} ${b.barTo} transition-all`}
+                                          style={{ width: `${Math.min(100, Math.max(0, tx.risk_score))}%` }}
+                                       />
+                                    </div>
+                                 </div>
+
+                                 {/* Parties */}
+                                 <div className="px-5 pb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="bg-zinc-950/50 border border-zinc-800 rounded-lg p-3">
+                                       <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-1">Buyer</p>
+                                       <p className="text-sm text-zinc-200 truncate">{tx.buyer?.email || 'Unknown'}</p>
+                                       <button onClick={() => handleViewTimeline(tx.buyer_id)} className="mt-2 text-[11px] text-green-400 hover:text-green-300 flex items-center gap-1">
+                                          <Clock className="w-3 h-3"/> View Timeline
+                                       </button>
+                                    </div>
+                                    <div className="bg-zinc-950/50 border border-zinc-800 rounded-lg p-3">
+                                       <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-1">Seller</p>
+                                       <p className="text-sm text-zinc-200 truncate">{tx.seller?.email || 'Unknown'}</p>
+                                       <button onClick={() => handleViewTimeline(tx.seller_id)} className="mt-2 text-[11px] text-green-400 hover:text-green-300 flex items-center gap-1">
+                                          <Clock className="w-3 h-3"/> View Timeline
+                                       </button>
+                                    </div>
+                                 </div>
+
+                                 {/* Risk flag pills */}
+                                 {tx.risk_flags && tx.risk_flags.length > 0 && (
+                                    <div className="px-5 pb-5">
+                                       <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-2">Risk Flags</p>
+                                       <div className="flex flex-wrap gap-2">
+                                          {tx.risk_flags.map((f: string, i: number) => (
+                                             <span key={i} className="px-2.5 py-1 rounded-full text-[11px] bg-zinc-900 border border-zinc-800 text-zinc-300">
+                                                {f}
+                                             </span>
+                                          ))}
+                                       </div>
+                                    </div>
+                                 )}
+                              </div>
+                           );
+                        })}
+                     </div>
+                  )}
                </div>
-            )}
+               );
+            })()}
 
             {/* TAB: USERS */}
             {activeTab === "USERS" && (
@@ -1243,9 +1604,9 @@ export default function AdminDashboard() {
                   </header>
 
                   <div className="border border-zinc-800 rounded-xl overflow-hidden bg-zinc-900/30">
-                     <div className="overflow-x-auto">
+                     <div className="overflow-auto max-h-[36rem] custom-scrollbar">
                         <table className="w-full text-left text-sm">
-                           <thead className="bg-zinc-900/80 text-xs font-medium text-zinc-400 border-b border-zinc-800">
+                           <thead className="bg-zinc-900/90 backdrop-blur-md text-xs font-medium text-zinc-400 border-b border-zinc-800 sticky top-0 z-10">
                               <tr>
                                  <th className="px-5 py-3 font-medium">User</th>
                                  <th className="px-5 py-3 font-medium">Role</th>
@@ -1545,6 +1906,106 @@ export default function AdminDashboard() {
                         </div>
                      )}
                   </div>
+               </div>
+            </div>
+         </div>
+      )}
+
+      {/* SUSPEND / UNSUSPEND CONFIRMATION MODAL — replaces native confirm() */}
+      {banModal.isOpen && (
+         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+               <div className="p-6 border-b border-zinc-800 bg-zinc-950/50">
+                  <h3 className="text-xl font-semibold text-zinc-100 flex items-center gap-2">
+                     {banModal.currentBanState ? (
+                        <><CheckCircle className="w-5 h-5 text-emerald-500" /> Unsuspend Account</>
+                     ) : (
+                        <><Ban className="w-5 h-5 text-red-500" /> Suspend Account</>
+                     )}
+                  </h3>
+                  <p className="text-zinc-400 text-sm mt-2">
+                     {banModal.currentBanState
+                        ? 'This will restore the user\u2019s access to the platform.'
+                        : 'This will immediately block the user from logging in, creating trades, and accessing escrow.'}
+                  </p>
+               </div>
+               <div className="p-6">
+                  <div className="p-4 bg-zinc-950/50 rounded-lg border border-zinc-800">
+                     <p className="text-xs text-zinc-500 uppercase tracking-widest font-bold mb-1">Target Account</p>
+                     <p className="text-zinc-100 font-medium break-all">{banModal.userLabel}</p>
+                  </div>
+               </div>
+               <div className="p-4 border-t border-zinc-800 bg-zinc-900/50 flex gap-3">
+                  <button
+                     onClick={() => setBanModal({ isOpen: false, userId: null, currentBanState: false, userLabel: '' })}
+                     className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50"
+                     disabled={isBanning}
+                  >
+                     Cancel
+                  </button>
+                  <button
+                     onClick={confirmBan}
+                     disabled={isBanning}
+                     className={`flex-1 py-3 font-bold rounded-lg transition-colors flex justify-center items-center gap-2 uppercase tracking-widest text-xs ${
+                        banModal.currentBanState
+                           ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                           : 'bg-red-600 hover:bg-red-500 text-white'
+                     } disabled:opacity-50`}
+                  >
+                     {isBanning
+                        ? <RefreshCw className="w-4 h-4 animate-spin" />
+                        : (banModal.currentBanState ? 'Unsuspend' : 'Suspend')}
+                  </button>
+               </div>
+            </div>
+         </div>
+      )}
+
+      {/* FREEZE / UNFREEZE CONFIRMATION MODAL — replaces native confirm() */}
+      {freezeModal.isOpen && (
+         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+               <div className="p-6 border-b border-zinc-800 bg-zinc-950/50">
+                  <h3 className="text-xl font-semibold text-zinc-100 flex items-center gap-2">
+                     {freezeModal.currentStatus === 'frozen' ? (
+                        <><CheckCircle className="w-5 h-5 text-emerald-500" /> Release Trade</>
+                     ) : (
+                        <><Snowflake className="w-5 h-5 text-blue-400" /> Freeze Trade</>
+                     )}
+                  </h3>
+                  <p className="text-zinc-400 text-sm mt-2">
+                     {freezeModal.currentStatus === 'frozen'
+                        ? 'This will release the trade and allow the escrow flow to resume.'
+                        : 'This will freeze the trade, block the PAY action, and alert both parties in chat.'}
+                  </p>
+               </div>
+               <div className="p-6">
+                  <div className="p-4 bg-zinc-950/50 rounded-lg border border-zinc-800">
+                     <p className="text-xs text-zinc-500 uppercase tracking-widest font-bold mb-1">Transaction</p>
+                     <p className="text-zinc-100 font-mono">#{freezeModal.txId}</p>
+                  </div>
+               </div>
+               <div className="p-4 border-t border-zinc-800 bg-zinc-900/50 flex gap-3">
+                  <button
+                     onClick={() => setFreezeModal({ isOpen: false, txId: null, currentStatus: '' })}
+                     className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50"
+                     disabled={isFreezing}
+                  >
+                     Cancel
+                  </button>
+                  <button
+                     onClick={confirmFreeze}
+                     disabled={isFreezing}
+                     className={`flex-1 py-3 font-bold rounded-lg transition-colors flex justify-center items-center gap-2 uppercase tracking-widest text-xs ${
+                        freezeModal.currentStatus === 'frozen'
+                           ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                           : 'bg-red-600 hover:bg-red-500 text-white'
+                     } disabled:opacity-50`}
+                  >
+                     {isFreezing
+                        ? <RefreshCw className="w-4 h-4 animate-spin" />
+                        : (freezeModal.currentStatus === 'frozen' ? 'Release' : 'Freeze')}
+                  </button>
                </div>
             </div>
          </div>

@@ -22,6 +22,8 @@ export default function Sidebar() {
    }, [session]);
 
    if (status !== "authenticated" || pathname === "/") return null;
+   // The admin panel has its own sidebar — never render this one on /admin
+   if (pathname.startsWith('/admin')) return null;
 
    const navLinks = [
       { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },

@@ -14,25 +14,51 @@ export async function middleware(request: NextRequest) {
 
 
   // 2. Protect Authenticated Routes
-  const isProtectedRoute = 
-     pathname.startsWith('/dashboard') ||
-     pathname.startsWith('/wallet') ||
-     pathname.startsWith('/create-trade') ||
-     pathname.startsWith('/trade') ||
-     pathname.startsWith('/profile') ||
-     pathname.startsWith('/kyc') ||
-     pathname.startsWith('/admin');
+  // Routes only regular users should use. Admins are redirected away from these to /admin.
+  // Note: /trade/:id is intentionally NOT in this list — admins need forensic access to
+  // individual trade hubs to investigate disputes and flagged transactions.
+  const USER_ONLY_PREFIXES = [
+     '/dashboard',
+     '/wallet',
+     '/create-trade',
+     '/profile',
+     '/kyc',
+     '/marketplace',
+     '/transactions',
+  ];
+  const isUserOnlyRoute = USER_ONLY_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'));
+  const isTradeRoute = pathname === '/trade' || pathname.startsWith('/trade/');
+  const isAdminRoute = pathname === '/admin' || pathname.startsWith('/admin/');
+  const isProtectedRoute = isUserOnlyRoute || isTradeRoute || isAdminRoute;
 
   if (isProtectedRoute && !token) {
     // If user tries to access a protected route without a token, bounce to login
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
+  // 2a. Role-based isolation
+  // - Admins must NOT wander into user-only pages (redirect → /admin)
+  //   but CAN view /trade/:id for forensic review.
+  // - Non-admins must NOT enter the admin panel (redirect → /dashboard)
+  if (token) {
+     const role = (token as any).role;
+     const isAdmin = role === 'admin';
+     if (isAdmin && isUserOnlyRoute) {
+        return NextResponse.redirect(new URL('/admin', request.url));
+     }
+     if (!isAdmin && isAdminRoute) {
+        return NextResponse.redirect(new URL('/dashboard', request.url));
+     }
+  }
+
   // 3. Prevent logged-in users from viewing Login/Register pages
   const isAuthRoute = pathname === '/login' || pathname === '/register';
   
   if (isAuthRoute && token) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+    // Admins land on /admin, everyone else on /dashboard
+    const role = (token as any).role;
+    const dest = role === 'admin' ? '/admin' : '/dashboard';
+    return NextResponse.redirect(new URL(dest, request.url));
   }
 
   return NextResponse.next();
