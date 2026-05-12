@@ -45,8 +45,14 @@ const { Canvas, Image, ImageData } = canvas;
 (faceapi.env as any).monkeyPatch({ Canvas, Image, ImageData, readFile: fs.promises.readFile });
 
 let modelsLoaded = false;
+let modelLoadError: Error | null = null;
+
 async function loadModels() {
     if (modelsLoaded) return;
+    // If loading failed previously, re-throw the cached error so callers
+    // handle it gracefully instead of trying to use the unloaded models
+    // (which would emit "load model before inference" and crash the process).
+    if (modelLoadError) throw modelLoadError;
     try {
         await tf.ready();
         console.log(`[AI Worker] TensorFlow backend: ${tf.getBackend()}`);
@@ -56,8 +62,13 @@ async function loadModels() {
         await faceapi.nets.faceExpressionNet.loadFromDisk(MODEL_DIR);
         modelsLoaded = true;
         console.log('[AI Worker] FaceAPI Models loaded (pure JS backend, with expressions).');
-    } catch (e) {
-        console.error("[AI Worker] Failed to load FaceAPI models:", e);
+    } catch (e: any) {
+        // Cache the error so every subsequent call fails fast without
+        // re-attempting a slow disk load.
+        modelLoadError = e instanceof Error ? e : new Error(String(e));
+        console.error("[AI Worker] Failed to load FaceAPI models:", modelLoadError.message);
+        console.error("[AI Worker] HINT: Run 'tsx download_models.ts' to populate /models, or confirm the deploy's build step downloaded them.");
+        throw modelLoadError;
     }
 }
 
