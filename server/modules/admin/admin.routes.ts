@@ -29,7 +29,9 @@ router.get('/disputes', authenticateJWT, async (req: Request, res: Response): Pr
          const evidenceWithUrls = await Promise.all(d.evidence.map(async (ev) => {
              return {
                  ...ev,
-                 file_url: await generateDownloadUrl(`evidence/${d.dispute_id}/${ev.uploaded_by}/${ev.storage_key}`)
+                 // Pass the stored mime_type as ResponseContentType so the browser
+                 // gets a proper image/png (or pdf) instead of octet-stream.
+                 file_url: await generateDownloadUrl(`evidence/${d.dispute_id}/${ev.uploaded_by}/${ev.storage_key}`, ev.mime_type)
              };
          }));
          return { ...d, evidence: evidenceWithUrls };
