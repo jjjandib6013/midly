@@ -165,6 +165,15 @@ app.get('/api/health', (req, res) => {
    res.json({ status: 'OK', message: 'Midly API is running' });
 });
 
+// Lightweight authenticated heartbeat. Runs through authenticateJWT, which
+// checks is_banned on every request — so this is the endpoint the Navbar
+// polls on an interval to catch suspensions that happen mid-session. A
+// suspended user gets 403 { code: "ACCOUNT_SUSPENDED" } and the client signs
+// them out immediately.
+app.get('/api/auth/session-check', authenticateJWT, (req, res) => {
+   res.json({ ok: true, user_id: (req.user as any)?.user_id });
+});
+
 // GET Wallet Stats, History, Deposit, Withdraw moved to User Routes
 app.use('/api', userRoutes);
 

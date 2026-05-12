@@ -60,10 +60,40 @@ export default function Navbar() {
       }).catch(console.error);
   };
 
+  // Session heartbeat — hits /api/auth/session-check which runs through the JWT
+  // middleware's is_banned check. Catches suspensions that happen after the
+  // user is already logged in, even when they're idle or on pages that don't
+  // otherwise touch the Express API. Also runs on tab focus for near-instant
+  // kick when the user returns from a backgrounded tab.
+  const checkSession = async () => {
+     if (!token) return;
+     try {
+        const res = await fetch(`${API_URL}/api/auth/session-check`, {
+           headers: { "Authorization": `Bearer ${token}` },
+           cache: 'no-store',
+        });
+        if (res.status === 401 || res.status === 403) {
+           let suspended = false;
+           try {
+              const body = await res.clone().json();
+              suspended = body?.code === 'ACCOUNT_SUSPENDED';
+           } catch {}
+           signOut({ callbackUrl: suspended ? '/login?suspended=1' : '/login' });
+        }
+     } catch {
+        // Network errors are silent — we don't want a flaky connection to
+        // sign users out. The server-side check is still authoritative
+        // whenever the next request succeeds.
+     }
+  };
+
   let globalSocket: any = null;
 
   useEffect(() => {
     setIsAuthenticated(status === "authenticated");
+
+    let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+    let onVisibility: (() => void) | null = null;
 
     if (token) {
       try {
@@ -93,6 +123,17 @@ export default function Navbar() {
         .then(res => res.json())
         .then(data => { if (data.kyc?.status === 'verified') setIsKycVerified(true); })
         .catch(console.error);
+
+      // Fire the session check immediately, every 30 s, and on tab focus.
+      // Pairs with the socket event above — socket is the fast path for
+      // active sessions, heartbeat is the fallback for backgrounded tabs
+      // or dropped connections.
+      checkSession();
+      heartbeatInterval = setInterval(checkSession, 30_000);
+      onVisibility = () => {
+        if (document.visibilityState === 'visible') checkSession();
+      };
+      document.addEventListener('visibilitychange', onVisibility);
     }
 
     // Initial entrance animation
@@ -108,6 +149,8 @@ export default function Navbar() {
         globalSocket.off("new_notification");
         globalSocket.off("account_suspended");
       }
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
+      if (onVisibility) document.removeEventListener('visibilitychange', onVisibility);
     }
   }, [pathname, status, token]);
 
