@@ -11,6 +11,11 @@ import NeonButton from "@/components/ui/NeonButton";
 import SpinningCarousel from "@/components/sections/SpinningCarousel";
 import InfiniteLogoMarquee from "@/components/sections/InfiniteLogoMarquee";
 import ScrollStorySection from "@/components/sections/ScrollStorySection";
+import FeatureSlider from "@/components/sections/FeatureSlider";
+import HowItWorks from "@/components/sections/HowItWorks";
+import SupportedGames from "@/components/sections/SupportedGames";
+import ReadyToTrade from "@/components/sections/ReadyToTrade";
+import Footer from "@/components/layout/Footer";
 import type { SpinningCarouselHandle } from "@/components/sections/SpinningCarousel";
 
 gsap.registerPlugin(ScrollTrigger);
@@ -376,6 +381,21 @@ export default function Home() {
 
       {/* ===== SCROLL STORY SECTION ===== */}
       <ScrollStorySection onEnter={() => setHideHero(true)} onExit={() => setHideHero(false)} />
+
+      {/* ===== FEATURE SLIDER SECTION ===== */}
+      <FeatureSlider />
+
+      {/* ===== HOW IT WORKS SECTION ===== */}
+      <HowItWorks />
+
+      {/* ===== SUPPORTED GAMES SECTION ===== */}
+      <SupportedGames />
+
+      {/* ===== READY TO TRADE BAND ===== */}
+      <ReadyToTrade />
+
+      {/* ===== FOOTER ===== */}
+      <Footer />
 
     </div>
   );

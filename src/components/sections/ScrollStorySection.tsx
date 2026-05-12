@@ -37,6 +37,7 @@ export default function ScrollStorySection({ onEnter, onExit }: ScrollStorySecti
   const [flash, setFlash] = useState(false);
   const [isActive, setIsActive] = useState(false);
   const prevOverflowRef = useRef<string | null>(null);
+  const isEscapingRef = useRef(false);
 
   const activeFrame = FRAMES[frameIndex];
   const activeSlide = activeFrame.slide;
@@ -44,14 +45,43 @@ export default function ScrollStorySection({ onEnter, onExit }: ScrollStorySecti
 
   const indicatorIndex = useMemo(() => activeSlide, [activeSlide]);
 
+  // Global bypass: other parts of the app (e.g. footer "Back to top") can
+  // dispatch `midly:scroll-bypass` with an optional `ms` duration to tell
+  // this section to ignore its auto-lock while the page scrolls through it.
+  useEffect(() => {
+    const handleBypass = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { ms?: number } | undefined;
+      const ms = Math.max(500, detail?.ms ?? 1500);
+      isEscapingRef.current = true;
+      setIsActive(false);
+      onExit?.();
+      const lenis = (window as any).lenis;
+      if (lenis && typeof lenis.start === "function") lenis.start();
+      if (document?.body) document.body.style.overflow = "";
+      window.setTimeout(() => {
+        isEscapingRef.current = false;
+      }, ms);
+    };
+    window.addEventListener("midly:scroll-bypass", handleBypass as EventListener);
+    return () => window.removeEventListener("midly:scroll-bypass", handleBypass as EventListener);
+  }, [onExit]);
+
   useEffect(() => {
     const el = sectionRef.current;
     if (!el) return;
 
     const handleScroll = () => {
+      if (isEscapingRef.current) return;
       const rect = el.getBoundingClientRect();
-      const shouldLock = rect.bottom <= window.innerHeight;
-      if (shouldLock && !isActive) {
+      // Lock if the top of the section is within 100px of the top of the viewport
+      const shouldLock = Math.abs(rect.top) < 100;
+      
+      if (shouldLock && !isActive && !wheelCooldownRef.current) {
+        const lenis = (window as any).lenis;
+        if (lenis) lenis.stop();
+        // Snap to perfect alignment
+        window.scrollTo({ top: window.scrollY + rect.top });
+        if (lenis) lenis.scrollTo(window.scrollY + rect.top, { immediate: true });
         onEnter?.();
         setIsActive(true);
       }
@@ -63,14 +93,17 @@ export default function ScrollStorySection({ onEnter, onExit }: ScrollStorySecti
   }, [isActive, onEnter]);
 
   useEffect(() => {
+    const lenis = (window as any).lenis;
     if (!isActive) {
       if (prevOverflowRef.current !== null) {
         document.body.style.overflow = prevOverflowRef.current;
         prevOverflowRef.current = null;
       }
+      if (lenis) lenis.start();
       return;
     }
 
+    if (lenis) lenis.stop();
     prevOverflowRef.current = document.body.style.overflow || "";
     document.body.style.overflow = "hidden";
 
@@ -79,6 +112,7 @@ export default function ScrollStorySection({ onEnter, onExit }: ScrollStorySecti
         document.body.style.overflow = prevOverflowRef.current;
         prevOverflowRef.current = null;
       }
+      if (lenis) lenis.start();
     };
   }, [isActive]);
 
@@ -88,16 +122,47 @@ export default function ScrollStorySection({ onEnter, onExit }: ScrollStorySecti
 
       const direction = e.deltaY > 0 ? 1 : -1;
       const atFirst = frameIndex === 0;
+      const atLast = frameIndex === FRAMES.length - 1;
 
       // Hard lock the page scroll while the story is active
       e.preventDefault();
       e.stopPropagation();
 
       if (direction < 0 && atFirst) {
+        isEscapingRef.current = true;
         setIsActive(false);
         onExit?.();
-        const hero = document.getElementById("hero");
-        hero?.scrollIntoView({ behavior: "smooth" });
+        
+        const lenis = (window as any).lenis;
+        if (lenis) {
+           lenis.start();
+           lenis.scrollTo(window.scrollY - 150, { immediate: true });
+        } else {
+           window.scrollBy({ top: -150, behavior: "smooth" });
+        }
+        
+        setTimeout(() => { isEscapingRef.current = false; }, 1000);
+        return;
+      }
+
+      if (direction > 0 && atLast) {
+        isEscapingRef.current = true;
+        setIsActive(false);
+        onExit?.();
+        
+        const lenis = (window as any).lenis;
+        if (lenis) {
+           lenis.start();
+           lenis.scrollTo(window.scrollY + 150, { immediate: true });
+           const features = document.getElementById("features");
+           if (features) {
+              lenis.scrollTo(features, { duration: 1.2, offset: -50 });
+           }
+        } else {
+           window.scrollBy({ top: 150, behavior: "smooth" });
+        }
+        
+        setTimeout(() => { isEscapingRef.current = false; }, 1000);
         return;
       }
 
@@ -140,6 +205,7 @@ export default function ScrollStorySection({ onEnter, onExit }: ScrollStorySecti
 
   return (
     <section
+      id="about"
       ref={sectionRef}
       className="relative w-full min-h-screen flex items-center justify-center overflow-hidden px-4 sm:px-6 lg:px-16"
     >
@@ -168,8 +234,7 @@ export default function ScrollStorySection({ onEnter, onExit }: ScrollStorySecti
                 stage === 0 ? "opacity-0 translate-y-4" : "opacity-100 translate-y-0"
               }`}
             >
-              Filipino gamers lose <span className="text-primary">millions</span> to
-              middleman scams every year.
+              Filipino traders lost over <span className="text-primary">₱198 Million</span> to online fraud in 2024.
             </h2>
             <p
               className={`mt-4 text-xs sm:text-sm text-[#9fb9ad] transition-all duration-700 ${
@@ -193,7 +258,7 @@ export default function ScrollStorySection({ onEnter, onExit }: ScrollStorySecti
                 stage === 0 ? "opacity-0 translate-y-4" : "opacity-100 translate-y-0"
               }`}
             >
-              Gaming-trade scams have grown <span className="text-primary">2.6×</span> since 2021.
+              Cybercrime complaints surged to <span className="text-primary">10,004+</span> recorded cases last year.
             </h2>
 
             <div
@@ -221,7 +286,7 @@ export default function ScrollStorySection({ onEnter, onExit }: ScrollStorySecti
                 </div>
               </div>
               <p className="mt-6 text-[10px] sm:text-xs text-[#6f8a80] uppercase tracking-widest">
-                Indexed reports of online gaming-trade scams (illustrative)
+                Indexed reports of online fraud and swindling in the Philippines
               </p>
             </div>
           </div>
@@ -238,15 +303,15 @@ export default function ScrollStorySection({ onEnter, onExit }: ScrollStorySecti
                 stage === 0 ? "opacity-0 translate-y-4" : "opacity-100 translate-y-0"
               }`}
             >
-              Meet <span className="text-primary">Midly</span> — the AI middleman that can’t run away.
+              Meet <span className="text-primary">Midly</span> — the escrow platform that holds everyone accountable.
             </h2>
             <p
               className={`mt-4 text-xs sm:text-sm text-[#9fb9ad] transition-all duration-700 ${
                 stage < 1 ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0"
               }`}
             >
-              Verified identities, locked smart-vault funds, and algorithmic release — every trade
-              protected end-to-end. No ghosting. No vanishing. Just 5%.
+              Verified identities, locked escrow wallets, and secure trade rooms — every transaction is
+              protected end-to-end. No ghosting. No vanishing. Just a flat 5% fee.
             </p>
 
             <div
