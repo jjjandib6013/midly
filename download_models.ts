@@ -15,8 +15,12 @@ const MODELS = [
   'face_expression_model-shard1',
 ];
 
-// Use jsDelivr CDN which reliably serves the weights from the original repo
-const BASE_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights/';
+// Pull weights from the @vladmandic/face-api npm package via jsDelivr.
+// The previous justadudewhohacks/face-api.js repo dropped some shard files
+// (CI failed with 404 on face_recognition_model-shard1, May 2026). The
+// vladmandic package is the one we actually use for inference, so its
+// weights are guaranteed to be layout-compatible with the runtime.
+const BASE_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
 const MODEL_DIR = path.join(process.cwd(), 'models');
 
 if (!fs.existsSync(MODEL_DIR)) fs.mkdirSync(MODEL_DIR);
@@ -79,10 +83,27 @@ const downloadFile = (file: string): Promise<boolean> => {
   });
 };
 
+async function downloadWithRetry(file: string, maxAttempts = 3): Promise<void> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await downloadFile(file);
+      return;
+    } catch (err: any) {
+      // 404 means the file genuinely isn't on the CDN — retrying won't help.
+      // Any other error (network, 5xx, timeout) gets a retry with backoff.
+      if (err?.message?.startsWith('HTTP 404')) throw err;
+      if (attempt === maxAttempts) throw err;
+      const backoffMs = 1000 * attempt;
+      console.warn(`  ⚠ ${file} attempt ${attempt}/${maxAttempts} failed (${err.message}) — retrying in ${backoffMs}ms...`);
+      await new Promise(r => setTimeout(r, backoffMs));
+    }
+  }
+}
+
 async function downloadModels() {
   console.log('Downloading Face-API models from jsDelivr CDN...\n');
   for (const model of MODELS) {
-    await downloadFile(model);
+    await downloadWithRetry(model);
   }
   console.log('\n✓ All models downloaded successfully!');
 }
