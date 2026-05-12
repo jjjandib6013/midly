@@ -1,7 +1,7 @@
 "use client";
-import { useSession } from 'next-auth/react';
+import { useSession, signOut } from 'next-auth/react';
 import { useEffect, useMemo, useState } from "react";
-import { ShieldAlert, Activity, CheckCircle, Search, FileText, Users, Settings, Server, Clock, Lock, Globe, Power, Key, ChevronRight, Ban, Check, ExternalLink, RefreshCw, Download, PieChart, BarChart as BarChartIcon, Filter, ImageIcon, X, AlertTriangle, Snowflake, Flame, TrendingUp, UserPlus, ArrowRight } from "lucide-react";
+import { ShieldAlert, Activity, CheckCircle, Search, FileText, Users, Settings, Server, Clock, Lock, Globe, Power, Key, ChevronRight, Ban, Check, ExternalLink, RefreshCw, Download, PieChart, BarChart as BarChartIcon, Filter, ImageIcon, X, AlertTriangle, Snowflake, Flame, TrendingUp, UserPlus, ArrowRight, LogOut } from "lucide-react";
 import toast from "react-hot-toast";
 import { API_URL } from "@/lib/api";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area, BarChart, Bar } from 'recharts';
@@ -179,6 +179,36 @@ export default function AdminDashboard() {
         window.location.href = "/";
      }
   }, [token, session]);
+
+  // Admin session heartbeat. The user Navbar (which owns the heartbeat for
+  // regular users) is not rendered on /admin, so admins would otherwise miss
+  // the session-check loop. This covers token expiry / admin-revoked-to-user
+  // cases by hitting the authenticated /api/auth/session-check endpoint every
+  // 30 s and on visibility change.
+  useEffect(() => {
+     if (!token || !isAdmin) return;
+     const check = async () => {
+        try {
+           const res = await fetch(`${API_URL}/api/auth/session-check`, {
+              headers: { "Authorization": `Bearer ${token}` },
+              cache: 'no-store',
+           });
+           if (res.status === 401 || res.status === 403) {
+              signOut({ callbackUrl: '/login' });
+           }
+        } catch {
+           // Network hiccup — intentionally silent.
+        }
+     };
+     check();
+     const id = setInterval(check, 30_000);
+     const onVis = () => { if (document.visibilityState === 'visible') check(); };
+     document.addEventListener('visibilitychange', onVis);
+     return () => {
+        clearInterval(id);
+        document.removeEventListener('visibilitychange', onVis);
+     };
+  }, [token, isAdmin]);
 
   const confirmResolve = async () => {
       if (resolveConfirmText !== 'CONFIRM') return toast.error("Please type CONFIRM to execute.");
@@ -484,17 +514,61 @@ export default function AdminDashboard() {
            })}
         </nav>
 
-        <div className="p-4 border-t border-zinc-800">
-           <div className="flex items-center gap-2 text-xs text-zinc-500 whitespace-nowrap">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></div>
-              <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">Systems Operational</span>
-           </div>
+        <div className="p-3 border-t border-zinc-800 space-y-2">
+           {/* Admin identity + logout. When the sidebar is collapsed, only the avatar
+               initial + logout icon are visible; on hover the full email and label
+               slide into view. The SETTINGS tab is the jump-to for platform config;
+               we don't ship a separate per-admin profile page today. */}
+           {(() => {
+              const name = (session as any)?.user?.name as string | undefined;
+              const email = (session as any)?.user?.email as string | undefined;
+              const initial = (name || email || 'A').trim().charAt(0).toUpperCase();
+              const displayName = name || 'Administrator';
+              return (
+                 <>
+                    <button
+                       type="button"
+                       onClick={() => selectTab('SETTINGS')}
+                       className="w-full flex items-center gap-3 px-2 py-2 rounded-md hover:bg-zinc-800/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500"
+                       aria-label={`Signed in as ${email || displayName}. Open platform settings.`}
+                       title={email || displayName}
+                    >
+                       <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-emerald-600 text-zinc-950 flex items-center justify-center font-black text-sm shrink-0 ring-2 ring-zinc-800">
+                          {initial}
+                       </div>
+                       <div className="flex-1 min-w-0 text-left opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                          <p className="text-xs font-bold text-zinc-100 truncate">{displayName}</p>
+                          <p className="text-[10px] text-zinc-500 truncate">{email || 'admin@midly'}</p>
+                       </div>
+                       <Settings className="w-3.5 h-3.5 text-zinc-500 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    </button>
+
+                    <button
+                       type="button"
+                       onClick={() => signOut({ callbackUrl: '/login' })}
+                       className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-red-400/90 hover:text-red-300 hover:bg-red-500/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50"
+                       aria-label="Log out"
+                       title="Log out"
+                    >
+                       <LogOut className="w-4 h-4 shrink-0" />
+                       <span className="text-xs font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                          Log out
+                       </span>
+                    </button>
+
+                    <div className="flex items-center gap-2 px-2 pt-1 text-[10px] text-zinc-500 whitespace-nowrap">
+                       <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 animate-pulse" aria-hidden="true" />
+                       <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 uppercase tracking-wider font-semibold">Systems Operational</span>
+                    </div>
+                 </>
+              );
+           })()}
         </div>
       </aside>
 
       {/* Mobile: horizontal tab bar (sidebar hover trick doesn't work on touch) */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-20 bg-zinc-950 border-b border-zinc-800 overflow-x-auto">
-        <div className="flex gap-1 px-2 py-2" role="tablist" aria-label="Admin sections">
+        <div className="flex gap-1 px-2 py-2 items-center" role="tablist" aria-label="Admin sections">
            {[
               { id: "OVERVIEW", label: "Overview" },
               { id: "REPORTS", label: "Reports" },
@@ -520,6 +594,17 @@ export default function AdminDashboard() {
               </button>
               );
            })}
+           {/* Mobile logout — the user Navbar is hidden on /admin, so this is the
+               only quick way out on small screens. Sits at the end of the scroll
+               row so it doesn't displace the nav tabs. */}
+           <button
+              type="button"
+              onClick={() => signOut({ callbackUrl: '/login' })}
+              aria-label="Log out"
+              className="ml-auto shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50"
+           >
+              <LogOut className="w-3.5 h-3.5" /> Out
+           </button>
         </div>
       </div>
 

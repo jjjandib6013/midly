@@ -13,11 +13,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
    return (
       <div className="flex flex-col min-h-screen">
-         <Navbar />
+         {/* Navbar: user-facing app only. Admin has its own in-sidebar user menu. */}
+         {!isAdminRoute && <Navbar />}
          <Sidebar />
-         
-         {/* Main Content Area — no left padding on /admin (admin has its own layout) */}
-         <main className={`flex-1 flex flex-col pb-16 md:pb-0 ${pathname === '/' ? '' : 'pt-16 sm:pt-20 lg:pt-24'} ${isApp ? 'md:pl-20' : ''}`}>
+
+         {/* Main Content Area — no Navbar top padding on /admin since Navbar isn't rendered. */}
+         <main className={`flex-1 flex flex-col pb-16 md:pb-0 ${pathname === '/' || isAdminRoute ? '' : 'pt-16 sm:pt-20 lg:pt-24'} ${isApp ? 'md:pl-20' : ''}`}>
             {children}
          </main>
       </div>
