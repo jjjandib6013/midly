@@ -11,9 +11,15 @@ import DynamicCard from "@/components/ui/DynamicCard";
 import ReputationBadge from "@/components/ui/ReputationBadge";
 
 export default function Profile() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const token = (session as any)?.accessToken;
   const router = useRouter();
+
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/login');
+    }
+  }, [status, router]);
 
   const [hubData, setHubData] = useState<any>(null);
   const [methods, setMethods] = useState<any[]>([]);
@@ -29,8 +35,14 @@ export default function Profile() {
     fetch(`${API_URL}/api/user/hub`, {
        headers: { "Authorization": `Bearer ${token}` }
     })
-      .then(res => res.json())
-      .then(data => { if (data.identity) setHubData(data); })
+      .then(res => {
+         if (res.status === 401 || res.status === 403) {
+            signOut({ callbackUrl: '/login' });
+            return null;
+         }
+         return res.json();
+      })
+      .then(data => { if (data && data.identity) setHubData(data); })
       .catch(console.error)
       .finally(() => setIsLoading(false));
       
@@ -315,7 +327,7 @@ export default function Profile() {
                         </div>
                      ) : (
                         methods.map((method) => (
-                           <DynamicCard key={method.id} hoverEffect className="dash-item flex flex-col sm:flex-row items-start sm:items-center justify-between p-5 gap-4 group shadow-none">
+                           <DynamicCard key={method.method_id} hoverEffect className="dash-item flex flex-col sm:flex-row items-start sm:items-center justify-between p-5 gap-4 group shadow-none">
                               <div className="flex items-center gap-4">
                                  <div className="w-10 h-10 bg-dark-bg border border-dark-border rounded-lg flex items-center justify-center text-text-muted">
                                     <CreditCard className="w-4 h-4" />
@@ -328,7 +340,7 @@ export default function Profile() {
                                     <p className="text-xs text-text-muted font-mono mt-0.5">{method.account_mask}</p>
                                  </div>
                               </div>
-                              <button onClick={() => handleDeleteMethod(method.id)} className="text-text-muted hover:text-red-500 transition-colors sm:opacity-0 sm:group-hover:opacity-100 p-2">
+                              <button onClick={() => handleDeleteMethod(method.method_id)} className="text-text-muted hover:text-red-500 transition-colors sm:opacity-0 sm:group-hover:opacity-100 p-2">
                                  <Trash2 className="w-4 h-4" />
                               </button>
                            </DynamicCard>

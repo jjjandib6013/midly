@@ -1,10 +1,10 @@
 import React from 'react';
 
-export default function ReputationBadge({ score, showScore = false }: { score: number, showScore?: boolean }) {
+export default function ReputationBadge({ score, showScore = false, className }: { score: number, showScore?: boolean, className?: string }) {
    if (score === 0) {
       return (
          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded-full font-medium tracking-wide uppercase">NEW</span>
+            <span className={`text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded-full font-medium tracking-wide uppercase ${className || ''}`}>NEW</span>
             {showScore && <span className="text-xs text-yellow-500 font-bold">★ 0.0</span>}
          </div>
       );
@@ -20,7 +20,7 @@ export default function ReputationBadge({ score, showScore = false }: { score: n
 
    return (
       <div className="flex items-center gap-1.5">
-         <span className={`text-[10px] px-1.5 py-0.5 rounded border font-bold tracking-wide ${tier.classes}`}>
+         <span className={`text-[10px] px-1.5 py-0.5 rounded border font-bold tracking-wide ${tier.classes} ${className || ''}`}>
             {tier.label}
          </span>
          {showScore && (

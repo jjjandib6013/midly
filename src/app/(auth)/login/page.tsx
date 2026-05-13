@@ -16,6 +16,7 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const prefillEmail = searchParams.get("email");
+  const wasSuspended = searchParams.get("suspended") === "1";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -63,6 +64,12 @@ function LoginForm() {
             return;
          }
 
+         // Surface suspended-account errors with the dedicated banner state.
+         if (res.error.toLowerCase().includes("suspended")) {
+            router.push(`/login?suspended=1${email ? `&email=${encodeURIComponent(email)}` : ''}`);
+            return;
+         }
+
          const errorMsg = res.error === "CredentialsSignin" ? "Invalid email or password" : res.error;
          toast.error(errorMsg);
          throw new Error(errorMsg);
@@ -102,6 +109,15 @@ function LoginForm() {
         </div>
 
         <DynamicCard className="border border-white/5 bg-[#0a0d14]/80 p-6 sm:p-8 md:p-12 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)]" hoverEffect={false}>
+          {wasSuspended && (
+            <div className="mb-8 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm flex items-start gap-3 font-semibold">
+              <ShieldAlert className="w-5 h-5 shrink-0 mt-0.5" />
+              <div>
+                <div className="text-red-300 mb-1">Account Suspended</div>
+                <div className="text-red-400/80 font-medium">Your Midly account has been suspended by an administrator. If you believe this is a mistake, please contact support.</div>
+              </div>
+            </div>
+          )}
           {error && (
             <div className="mb-8 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-500 text-sm flex items-center gap-3 font-semibold">
               <ShieldAlert className="w-5 h-5" /> {error}

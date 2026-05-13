@@ -43,20 +43,18 @@ export async function calculateTransactionRisk(transactionId: number): Promise<{
 
         // 3. Trade amount > 2x average (Using a simplified average for now) (+15)
         // Check buyer's past completed trades
-        const pastTrades = await prisma.transaction.findMany({
+        const avg = await prisma.transaction.aggregate({
             where: {
                 buyer_id: tx.buyer_id,
                 status: 'completed'
             },
-            select: { total_amount: true }
+            _avg: { total_amount: true }
         });
+        const avgAmount = Number(avg._avg.total_amount ?? 0);
 
-        if (pastTrades.length > 0) {
-            const avgAmount = pastTrades.reduce((acc, t) => acc + Number(t.total_amount), 0) / pastTrades.length;
-            if (Number(tx.total_amount) > avgAmount * 2 && Number(tx.total_amount) > 1000) { // minimum threshold 1000 to ignore noise
-                score += 15;
-                flags.push("Trade amount > 2x historical average");
-            }
+        if (avgAmount > 0 && Number(tx.total_amount) > avgAmount * 2 && Number(tx.total_amount) > 50000) {
+            score += 15;
+            flags.push("Trade amount > 2x historical average");
         }
 
         // 4. 3+ trades created in 1 hour (+15)
@@ -72,8 +70,7 @@ export async function calculateTransactionRisk(transactionId: number): Promise<{
         }
 
         // 5. Counterparty has low reputation (+10)
-        // Assume default reputation is 0 or 5. Let's say < 3.0 is low.
-        if (Number(tx.buyer.reputation_score || 5) < 3.0 || Number(tx.seller.reputation_score || 5) < 3.0) {
+        if (Number(tx.buyer.reputation_score ?? 0) < 50 || Number(tx.seller.reputation_score ?? 0) < 50) {
             score += 10;
             flags.push("Low counterparty reputation");
         }
@@ -87,25 +84,40 @@ export async function calculateTransactionRisk(transactionId: number): Promise<{
 
         // 7. First-ever transaction (+5)
         const totalTrades = await prisma.transaction.count({
-            where: {
-                OR: [
-                    { buyer_id: tx.buyer_id },
-                    { seller_id: tx.seller_id }
-                ]
-            }
+            where: { buyer_id: tx.buyer_id }
         });
         if (totalTrades <= 1) { // 1 means just this current one
             score += 5;
             flags.push("First transaction for user");
         }
 
+        // --- AIL CONTEXTUAL RISK RULES ---
+        
+        // 8. Critical Context (+100): Regex/Pattern match for stolen/cracked slang
+        const itemText = (tx.item_name || "").toLowerCase() + " " + JSON.stringify(tx.asset_metadata || {}).toLowerCase();
+        const criticalKeywords = ['hacked', 'cracked', 'stolen', 'pulled', 'carded'];
+        if (criticalKeywords.some(kw => itemText.includes(kw))) {
+            score += 100;
+            flags.push("CRITICAL: Contains stolen/cracked keywords");
+        }
+
+        // 9. High Risk Context (+30): Missing original email on Game Account
+        if (tx.trade_category === 'Game Account') {
+            const metadata = tx.asset_metadata as Record<string, any> || {};
+            const emailStatus = metadata?.linkedEmailStatus || metadata?.linked_email_status || 'Unknown';
+            if (emailStatus !== 'Original' && emailStatus !== 'Original (OGE)') {
+                score += 30;
+                flags.push("HIGH RISK: Game Account missing Original Email");
+            }
+        }
+
         // Cap score at 100
         score = Math.min(score, 100);
 
         // Auto-freeze logic if score >= 81
-        let updatedStatus = tx.status;
-        if (score >= 81 && tx.status !== 'frozen' && tx.status !== 'completed' && tx.status !== 'cancelled') {
-            updatedStatus = 'frozen';
+        let isFrozen = tx.is_frozen || false;
+        if (score >= 81 && !tx.is_frozen && tx.status !== 'completed' && tx.status !== 'cancelled') {
+            isFrozen = true;
             flags.push("AUTO-FROZEN (Score >= 81)");
             
             // Generate audit log for auto-freeze
@@ -137,7 +149,7 @@ export async function calculateTransactionRisk(transactionId: number): Promise<{
             data: {
                 risk_score: score,
                 risk_flags: flags,
-                status: updatedStatus
+                is_frozen: isFrozen
             }
         });
 

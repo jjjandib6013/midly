@@ -134,11 +134,16 @@ model Transaction {
   status              String?    @default("pending") @db.VarChar(20)
   risk_score          Int?       @default(0)
   risk_flags          String[]
+  is_frozen           Boolean    @default(false)
   inspection_hours    Int?
   item_delivered_at   DateTime?  @db.Timestamp(6)
   buyer_approved_at   DateTime?  @db.Timestamp(6)
   cancel_requested_by Int?
   expires_at          DateTime?  @db.Timestamp(6)
+  asset_metadata      Json?
+  asset_risk_score    Int?       @default(0)
+  milestone_state     Json?
+  cooldown_ends_at    DateTime?  @db.Timestamp(6)
   created_at          DateTime   @default(now()) @db.Timestamp(6)
   updated_at          DateTime   @default(now()) @updatedAt @db.Timestamp(6)
   audit_logs          AuditLog[]
@@ -246,14 +251,18 @@ model AuditLog {
 }
 
 model Listing {
-  listing_id Int      @id @default(autoincrement())
-  seller_id  Int
-  game_type  String   @db.VarChar(50)
-  item_name  String   @db.VarChar(100)
-  price      Decimal  @db.Decimal(10, 2)
-  status     String   @default("open") @db.VarChar(20)
-  created_at DateTime @default(now()) @db.Timestamp(6)
-  seller     User     @relation("UserListings", fields: [seller_id], references: [user_id], onDelete: Cascade)
+  listing_id         Int      @id @default(autoincrement())
+  seller_id          Int
+  game_type          String   @db.VarChar(50)
+  trade_category     String   @default("Game Account") @db.VarChar(50)
+  item_name          String   @db.VarChar(100)
+  price              Decimal  @db.Decimal(10, 2)
+  status             String   @default("open") @db.VarChar(20)
+  asset_metadata     Json?
+  completeness_score Float    @default(1.0)
+  visibility_status  String   @default("public") @db.VarChar(20)
+  created_at         DateTime @default(now()) @db.Timestamp(6)
+  seller             User     @relation("UserListings", fields: [seller_id], references: [user_id], onDelete: Cascade)
 
   @@index([seller_id])
   @@index([status, game_type])

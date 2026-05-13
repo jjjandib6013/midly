@@ -1,9 +1,9 @@
 import React from 'react';
 import { Skeleton } from './Skeleton';
 
-export function RowSkeleton() {
+export function RowSkeleton({ className }: { className?: string }) {
    return (
-      <div className="dash-item bg-dark-panel border border-white/[0.04] p-5 sm:p-6 rounded-2xl sm:rounded-3xl hover:bg-white/[0.02] transition-colors relative overflow-hidden group">
+      <div className={`dash-item bg-dark-panel border border-white/[0.04] p-5 sm:p-6 rounded-2xl sm:rounded-3xl hover:bg-white/[0.02] transition-colors relative overflow-hidden group ${className || ''}`}>
          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-start sm:items-center gap-4 sm:gap-5">
                <Skeleton className="w-12 h-12 rounded-xl sm:rounded-2xl shrink-0" />

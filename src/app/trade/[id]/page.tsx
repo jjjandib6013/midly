@@ -3,7 +3,8 @@ import { useSession } from 'next-auth/react';
 
 import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
-import { ShieldCheck, MessageSquare, CheckCircle2, ShieldAlert, Paperclip, ImageIcon, ArrowRight, Copy, Wallet, Smartphone, CreditCard, Lock, Timer, Unlock, XCircle, Key, Eye, EyeOff, Clock, Server, X, UploadCloud } from "lucide-react";
+import { ShieldCheck, MessageSquare, CheckCircle2, ShieldAlert, Paperclip, ImageIcon, ArrowRight, Copy, Wallet, Smartphone, CreditCard, Lock, Timer, Unlock, XCircle, Key, Eye, EyeOff, Clock, Server, X, UploadCloud, Info, FileText } from "lucide-react";
+import Image from "next/image";
 import NeonButton from "@/components/ui/NeonButton";
 import DynamicCard from "@/components/ui/DynamicCard";
 import { ChatSkeleton } from "@/components/ui/ChatSkeleton";
@@ -47,6 +48,7 @@ export default function TradeHub() {
    const messagesEndRef = useRef<HTMLDivElement>(null);
 
    // Unified Modal State
+   const [selectedImage, setSelectedImage] = useState<string | null>(null);
    const [isDisputingModalOpen, setIsDisputingModalOpen] = useState(false);
    const [disputeReason, setDisputeReason] = useState("");
    const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
@@ -56,12 +58,25 @@ export default function TradeHub() {
    const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
    const [pendingUpload, setPendingUpload] = useState<File | null>(null);
    const [showCredentials, setShowCredentials] = useState(false);
+   const [isMetadataModalOpen, setIsMetadataModalOpen] = useState(false);
+   const [isViewMetadataModalOpen, setIsViewMetadataModalOpen] = useState(false);
 
    const [adminResolveModal, setAdminResolveModal] = useState<{isOpen: boolean, action: 'REFUND_BUYER' | 'FORWARD_TO_SELLER' | null}>({isOpen: false, action: null});
    const [adminResolveConfirmText, setAdminResolveConfirmText] = useState("");
    const [isAdminResolving, setIsAdminResolving] = useState(false);
 
    const [timeRemaining, setTimeRemaining] = useState({ hours: 24, minutes: 0, seconds: 0, isExpired: false });
+
+   // Seller Metadata State (for Buyer-initiated trades where the Seller must declare asset details upon acceptance)
+   const [sellerMetadata, setSellerMetadata] = useState<Record<string, any>>({});
+
+   // Robust check: Prisma can store undefined/null as {}, Prisma.JsonNull, or null.
+   // A simple `!trade?.asset_metadata` fails for empty objects.
+   const hasAssetMetadata = (t: any): boolean => {
+      if (!t?.asset_metadata) return false;
+      if (typeof t.asset_metadata !== 'object') return false;
+      return Object.keys(t.asset_metadata).length > 0;
+   };
 
    const [revealedCredentials, setRevealedCredentials] = useState<string | null>(null);
    const [isRevealing, setIsRevealing] = useState(false);
@@ -541,6 +556,28 @@ export default function TradeHub() {
       } catch (e) { toast.error("Server error."); } finally { setIsLoading(false); }
    };
 
+   const handleSubmitMetadata = async () => {
+      try {
+         if (Object.keys(sellerMetadata).length === 0) {
+            return toast.error("Please fill out the asset details first.");
+         }
+         setIsLoading(true);
+         const res = await fetch(`${API_URL}/api/transactions/${tradeId}/metadata`, {
+            method: "PUT",
+            headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ assetMetadata: sellerMetadata })
+         });
+         if (res.ok) {
+            toast.success("Asset details locked into contract.");
+            setIsMetadataModalOpen(false);
+            fetchTrade();
+         } else {
+            const data = await res.json();
+            toast.error(data.error || "Failed to save asset details.");
+         }
+      } catch (e) { toast.error("Server error."); } finally { setIsLoading(false); }
+   };
+
    const confirmRequestCancellation = async () => {
       try {
          setIsLoading(true);
@@ -656,8 +693,8 @@ export default function TradeHub() {
       return (
          <div className="flex-1 w-full max-w-2xl mx-auto px-4 sm:px-6 py-8 sm:py-12 flex flex-col items-center justify-center">
             <div className="text-center mb-8">
-               <div className="w-20 h-20 rounded-full bg-primary/10 border-2 border-primary/30 flex items-center justify-center mx-auto mb-6">
-                  <ShieldCheck className="w-10 h-10 text-primary" />
+               <div className="w-20 h-20 flex items-center justify-center mx-auto mb-6">
+                  <Image src="/images/midly-logo-real.png" alt="Midly Logo" width={80} height={80} className="drop-shadow-[0_0_15px_rgba(63,229,108,0.3)]" />
                </div>
                <h1 className="text-3xl font-bold text-white mb-2">Private Escrow Invitation</h1>
                <p className="text-text-muted">Trade #{tradeId.padStart(6, '0')}</p>
@@ -671,8 +708,12 @@ export default function TradeHub() {
                      <span className="text-white text-sm font-medium">{trade.item_name || trade.item_type}</span>
                   </div>
                   <div className="flex justify-between border-b border-dark-border pb-2">
-                     <span className="text-text-muted text-sm">Category</span>
+                     <span className="text-text-muted text-sm">Game</span>
                      <span className="text-white text-sm font-medium">{trade.game_type}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-dark-border pb-2">
+                     <span className="text-text-muted text-sm">Trade Type</span>
+                     <span className="text-white text-sm font-medium">{trade.trade_category || trade.item_type}</span>
                   </div>
                   <div className="flex justify-between border-b border-dark-border pb-2">
                      <span className="text-text-muted text-sm">Your Role</span>
@@ -714,7 +755,7 @@ export default function TradeHub() {
                            <XCircle className="w-4 h-4 mr-2" /> Decline & Cancel
                         </NeonButton>
                      </>
-                  )}
+                   )}
                </div>
             </DynamicCard>
 
@@ -752,7 +793,7 @@ export default function TradeHub() {
          <div className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 lg:py-8 flex flex-col gap-6 lg:h-[calc(100vh-64px)] overflow-y-auto custom-scrollbar">
             <header className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-dark-border pb-6 gap-4">
                <div>
-                  <h1 className="text-2xl font-bold text-zinc-100 mb-2 flex items-center gap-3"><ShieldCheck className="w-6 h-6 text-primary" /> Admin Trade Overview</h1>
+                  <h1 className="text-2xl font-bold text-zinc-100 mb-2 flex items-center gap-3"><Image src="/images/midly-logo-real.png" alt="Midly Logo" width={24} height={24} className="drop-shadow-[0_0_15px_rgba(63,229,108,0.3)]" /> Admin Trade Overview</h1>
                   <p className="text-sm text-text-muted max-w-xl leading-relaxed">You are viewing Trade #{tradeId} as a Platform Administrator. The activity timeline below represents the verified system logs for this transaction. You are observing this trade in read-only mode.</p>
                </div>
                <div className="flex items-center gap-4 shrink-0">
@@ -985,12 +1026,20 @@ export default function TradeHub() {
                      <span className="text-primary font-bold text-lg">₱ {Number(trade.total_amount).toLocaleString()}</span>
                   </div>
                </div>
+               
+               {hasAssetMetadata(trade) && (
+                  <div className="mt-4 pt-4 border-t border-dark-border">
+                     <NeonButton variant="ghost" className="w-full text-xs border border-primary/20 text-primary hover:bg-primary/10" onClick={() => setIsViewMetadataModalOpen(true)}>
+                        <FileText className="w-4 h-4 mr-2" /> View Asset Details
+                     </NeonButton>
+                  </div>
+               )}
             </DynamicCard>
 
             {/* ESCROW TRACKER */}
             <DynamicCard hoverEffect={false} className="border border-dark-border bg-dark-panel p-6 shrink-0 mb-4">
                <div className="flex items-center gap-3 mb-6">
-                  <ShieldCheck className="w-6 h-6 text-primary glow-icon" />
+                  <Image src="/images/midly-logo-real.png" alt="Midly Logo" width={24} height={24} className="drop-shadow-[0_0_15px_rgba(63,229,108,0.3)] glow-icon" />
                   <h2 className="text-xl font-bold text-white tracking-tight">Transaction Status</h2>
                </div>
 
@@ -1049,15 +1098,37 @@ export default function TradeHub() {
                         <h4 className="text-white font-bold text-sm">Agreement Phase</h4>
                         {myRole === 'SELL' ? (
                            <>
-                              <p className="text-sm text-text-muted">Verify terms with the buyer. When ready, lock the terms to request funds into Escrow.</p>
-                              <div className="flex gap-2">
-                                 <NeonButton disabled={isLoading} className="flex-[2] justify-center !py-3 bg-dark-bg" onClick={() => handleTradeProgress('REQUEST_PAYMENT')}>
-                                    Lock Terms & Request Payment <ArrowRight className="w-4 h-4 ml-2" />
-                                 </NeonButton>
-                                 <button className="flex-1 text-red-500 hover:text-red-400 text-xs font-bold uppercase tracking-widest transition-colors" onClick={handleCancelTrade}>
-                                    Cancel Trade
-                                 </button>
-                              </div>
+                              {!hasAssetMetadata(trade) ? (
+                                 <div className="mb-6 space-y-4">
+                                    <div className="p-4 bg-primary/5 border border-primary/20 rounded-xl flex items-start gap-3">
+                                       <Info className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                                       <div>
+                                          <p className="text-sm font-bold text-white">Asset Declaration Required</p>
+                                          <p className="text-xs text-text-muted mt-1">The buyer initiated this trade. As the seller, you must declare the asset details before proceeding.</p>
+                                       </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                       <NeonButton className="flex-[2] justify-center !py-3 bg-dark-bg" onClick={() => setIsMetadataModalOpen(true)}>
+                                          <ShieldCheck className="w-4 h-4 mr-2" /> Declare Asset Metadata
+                                       </NeonButton>
+                                       <button className="flex-1 text-red-500 hover:text-red-400 text-xs font-bold uppercase tracking-widest transition-colors" onClick={handleCancelTrade}>
+                                          Cancel Trade
+                                       </button>
+                                    </div>
+                                 </div>
+                              ) : (
+                                 <>
+                                    <p className="text-sm text-text-muted">Verify terms with the buyer. When ready, lock the terms to request funds into Escrow.</p>
+                                    <div className="flex gap-2 mt-4">
+                                       <NeonButton disabled={isLoading} className="flex-[2] justify-center !py-3 bg-dark-bg" onClick={() => handleTradeProgress('REQUEST_PAYMENT')}>
+                                          Lock Terms & Request Payment <ArrowRight className="w-4 h-4 ml-2" />
+                                       </NeonButton>
+                                       <button className="flex-1 text-red-500 hover:text-red-400 text-xs font-bold uppercase tracking-widest transition-colors" onClick={handleCancelTrade}>
+                                          Cancel Trade
+                                       </button>
+                                    </div>
+                                 </>
+                              )}
                            </>
                         ) : (
                            <>
@@ -1434,11 +1505,29 @@ export default function TradeHub() {
                            ? "bg-primary text-black rounded-tr-sm shadow-[0_0_15px_rgba(63,229,108,0.2)]"
                            : "bg-dark-bg border border-dark-border text-white rounded-tl-sm"
                            }`}>
-                           {m.text.startsWith('http') && m.text.includes('/uploads/') ? (
-                              <img src={m.text} className="max-w-[200px] rounded-lg border border-white/20" alt="Proof" />
-                           ) : (
-                              <p className="text-[15px] leading-relaxed">{m.text}</p>
-                           )}
+                           {(() => {
+                              // Extract the URL part (first word) to check if it's an image
+                              const firstWord = m.text.split(' ')[0];
+                              const isImage = firstWord.startsWith('http') && /\.(png|jpg|jpeg|webp|gif)/i.test(firstWord.split('?')[0]);
+                              const caption = m.text.split(' ').slice(1).join(' ');
+                              
+                              if (isImage) {
+                                 return (
+                                    <div className="flex flex-col gap-2">
+                                       <img 
+                                          src={firstWord} 
+                                          className="max-w-full sm:max-w-[250px] rounded-lg border border-white/20 cursor-pointer hover:opacity-90 transition-opacity" 
+                                          alt="Shared image"
+                                          onClick={() => setSelectedImage(firstWord)}
+                                       />
+                                       {caption && (
+                                          <p className="text-[15px] leading-relaxed mt-1">{caption}</p>
+                                       )}
+                                    </div>
+                                 );
+                              }
+                              return <p className="text-[15px] leading-relaxed">{m.text}</p>;
+                           })()}
                            <span className={`text-[10px] mt-2 block ${m.sender === "user" ? "text-black/60" : "text-text-muted"}`}>
                               {m.timestamp}
                            </span>
@@ -1676,8 +1765,227 @@ export default function TradeHub() {
             </div>
          )}
 
+         {/* SELLER METADATA DECLARATION MODAL */}
+         {isMetadataModalOpen && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+               <DynamicCard className="w-full max-w-2xl bg-[#0a0d14] border border-primary/30 p-6 md:p-8 flex flex-col gap-6 max-h-[90vh] overflow-y-auto custom-scrollbar" hoverEffect={false}>
+                  <div className="flex items-center gap-3 border-b border-primary/20 pb-4 sticky top-0 bg-[#0a0d14] z-10 pt-2 -mt-2">
+                     <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                        <Info className="w-6 h-6 text-primary glow-icon" />
+                     </div>
+                     <div>
+                        <h2 className="text-xl font-bold text-white tracking-tight">Asset Declaration Required</h2>
+                        <p className="text-xs text-primary mt-1">Please fill out the asset details before proceeding.</p>
+                     </div>
+                  </div>
 
+                  <div className="space-y-4">
+                     <h4 className="text-xs uppercase tracking-wider font-bold text-text-muted">Asset Metadata — {trade?.game_type}</h4>
 
+                     {/* Game-specific metadata fields */}
+                     {trade?.game_type === 'Valorant' && (
+                        <div className="space-y-4">
+                           <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-1.5">
+                                 <label className="text-xs uppercase tracking-wider font-semibold text-text-muted block">Riot ID</label>
+                                 <input type="text" placeholder="Name#TAG" onChange={(e) => setSellerMetadata(p => ({...p, riot_id: e.target.value}))} className="w-full bg-dark-bg/50 border border-white/5 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all hover:bg-dark-bg/80" />
+                              </div>
+                              <div className="space-y-1.5">
+                                 <label className="text-xs uppercase tracking-wider font-semibold text-text-muted block">Linked Email Status</label>
+                                 <select onChange={(e) => setSellerMetadata(p => ({...p, email_status: e.target.value}))} className="w-full bg-dark-bg/50 border border-white/5 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all cursor-pointer appearance-none hover:bg-dark-bg/80">
+                                    <option value="">Select...</option>
+                                    <option value="Original Email (Full Access)">Original Email (Full Access)</option>
+                                    <option value="Changed Email">Changed Email</option>
+                                    <option value="No Email Access">No Email Access</option>
+                                 </select>
+                              </div>
+                           </div>
+                           <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-1.5">
+                                 <label className="text-xs uppercase tracking-wider font-semibold text-text-muted block">Region</label>
+                                 <select onChange={(e) => setSellerMetadata(p => ({...p, region: e.target.value}))} className="w-full bg-dark-bg/50 border border-white/5 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all cursor-pointer appearance-none hover:bg-dark-bg/80">
+                                    <option value="">Select...</option>
+                                    <option value="AP (Asia Pacific)">AP (Asia Pacific)</option>
+                                    <option value="NA (North America)">NA (North America)</option>
+                                    <option value="EU (Europe)">EU (Europe)</option>
+                                    <option value="KR (Korea)">KR (Korea)</option>
+                                 </select>
+                              </div>
+                              <div className="space-y-1.5">
+                                 <label className="text-xs uppercase tracking-wider font-semibold text-text-muted block">Current Rank</label>
+                                 <input type="text" placeholder="e.g., Immortal 2" onChange={(e) => setSellerMetadata(p => ({...p, current_rank: e.target.value}))} className="w-full bg-dark-bg/50 border border-white/5 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all hover:bg-dark-bg/80" />
+                              </div>
+                           </div>
+                        </div>
+                     )}
+
+                     {trade?.game_type === 'CS2' && (
+                        <div className="space-y-4">
+                           <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-1.5">
+                                 <label className="text-xs uppercase tracking-wider font-semibold text-text-muted block">Steam ID64</label>
+                                 <input type="text" placeholder="7656119..." onChange={(e) => setSellerMetadata(p => ({...p, steam_id64: e.target.value}))} className="w-full bg-dark-bg/50 border border-white/5 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all hover:bg-dark-bg/80" />
+                              </div>
+                              <div className="space-y-1.5">
+                                 <label className="text-xs uppercase tracking-wider font-semibold text-text-muted block">Prime Status</label>
+                                 <select onChange={(e) => setSellerMetadata(p => ({...p, prime_status: e.target.value}))} className="w-full bg-dark-bg/50 border border-white/5 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all cursor-pointer appearance-none hover:bg-dark-bg/80">
+                                    <option value="">Select...</option>
+                                    <option value="Prime">Prime</option>
+                                    <option value="Non-Prime">Non-Prime</option>
+                                 </select>
+                              </div>
+                           </div>
+                           <div className="space-y-1.5">
+                              <label className="text-xs uppercase tracking-wider font-semibold text-text-muted block">FaceIT Elo (optional)</label>
+                              <input type="number" placeholder="e.g., 2100" onChange={(e) => setSellerMetadata(p => ({...p, faceit_elo: e.target.value}))} className="w-full bg-dark-bg/50 border border-white/5 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all hover:bg-dark-bg/80" />
+                           </div>
+                        </div>
+                     )}
+
+                     {trade?.game_type === 'Roblox' && (
+                        <div className="space-y-4">
+                           <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-1.5">
+                                 <label className="text-xs uppercase tracking-wider font-semibold text-text-muted block">Roblox Username</label>
+                                 <input type="text" onChange={(e) => setSellerMetadata(p => ({...p, roblox_username: e.target.value}))} className="w-full bg-dark-bg/50 border border-white/5 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all hover:bg-dark-bg/80" />
+                              </div>
+                              <div className="space-y-1.5">
+                                 <label className="text-xs uppercase tracking-wider font-semibold text-text-muted block">Robux Balance</label>
+                                 <input type="number" placeholder="0" onChange={(e) => setSellerMetadata(p => ({...p, robux_balance: e.target.value}))} className="w-full bg-dark-bg/50 border border-white/5 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all hover:bg-dark-bg/80" />
+                              </div>
+                           </div>
+                           <div className="space-y-1.5">
+                              <label className="text-xs uppercase tracking-wider font-semibold text-text-muted block">Email Status</label>
+                              <select onChange={(e) => setSellerMetadata(p => ({...p, email_status: e.target.value}))} className="w-full bg-dark-bg/50 border border-white/5 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all cursor-pointer appearance-none hover:bg-dark-bg/80">
+                                 <option value="">Select...</option>
+                                 <option value="Original Email (Full Access)">Original Email (Full Access)</option>
+                                 <option value="Changed Email">Changed Email</option>
+                                 <option value="No Email Access">No Email Access</option>
+                              </select>
+                           </div>
+                        </div>
+                     )}
+
+                     {trade?.game_type === 'Mobile Legends' && (
+                        <div className="space-y-4">
+                           <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-1.5">
+                                 <label className="text-xs uppercase tracking-wider font-semibold text-text-muted block">MLBB User ID</label>
+                                 <input type="text" onChange={(e) => setSellerMetadata(p => ({...p, mlbb_id: e.target.value}))} className="w-full bg-dark-bg/50 border border-white/5 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all hover:bg-dark-bg/80" />
+                              </div>
+                              <div className="space-y-1.5">
+                                 <label className="text-xs uppercase tracking-wider font-semibold text-text-muted block">Moonton Bind</label>
+                                 <select onChange={(e) => setSellerMetadata(p => ({...p, moonton_bind: e.target.value}))} className="w-full bg-dark-bg/50 border border-white/5 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all cursor-pointer appearance-none hover:bg-dark-bg/80">
+                                    <option value="">Select...</option>
+                                    <option value="Bound (with email access)">Bound (with email access)</option>
+                                    <option value="Bound (no email access)">Bound (no email access)</option>
+                                    <option value="Not Bound">Not Bound</option>
+                                 </select>
+                              </div>
+                           </div>
+                           <div className="space-y-1.5">
+                              <label className="text-xs uppercase tracking-wider font-semibold text-text-muted block">Total Heroes</label>
+                              <input type="number" onChange={(e) => setSellerMetadata(p => ({...p, hero_count: e.target.value}))} className="w-full bg-dark-bg/50 border border-white/5 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all hover:bg-dark-bg/80" />
+                           </div>
+                        </div>
+                     )}
+
+                     {/* Generic fallback for other games */}
+                     {!['Valorant', 'CS2', 'Roblox', 'Mobile Legends'].includes(trade?.game_type || '') && (
+                        <div className="grid grid-cols-2 gap-4">
+                           <div className="space-y-1.5">
+                              <label className="text-xs uppercase tracking-wider font-semibold text-text-muted block">Current Rank / Level</label>
+                              <input type="text" onChange={(e) => setSellerMetadata(p => ({...p, current_rank: e.target.value}))} className="w-full bg-dark-bg/50 border border-white/5 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all hover:bg-dark-bg/80" />
+                           </div>
+                           <div className="space-y-1.5">
+                              <label className="text-xs uppercase tracking-wider font-semibold text-text-muted block">Region / Server</label>
+                              <input type="text" onChange={(e) => setSellerMetadata(p => ({...p, region: e.target.value}))} className="w-full bg-dark-bg/50 border border-white/5 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all hover:bg-dark-bg/80" />
+                           </div>
+                        </div>
+                     )}
+                  </div>
+
+                  <div className="flex gap-3 mt-4 pt-4 border-t border-dark-border sticky bottom-0 bg-[#0a0d14] z-10 pb-2 -mb-2">
+                     <NeonButton variant="ghost" className="flex-1 border-white/10 hover:bg-white/5 text-text-muted" onClick={() => setIsMetadataModalOpen(false)}>
+                        Cancel
+                     </NeonButton>
+                     <NeonButton className="flex-[1.5] bg-primary/10 text-primary border-primary hover:bg-primary hover:text-black" onClick={handleSubmitMetadata} isLoading={isLoading}>
+                        Save Asset Details
+                     </NeonButton>
+                  </div>
+               </DynamicCard>
+            </div>
+         )}
+
+         {/* VIEW ASSET METADATA MODAL */}
+         {isViewMetadataModalOpen && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+               <DynamicCard className="w-full max-w-lg bg-[#0a0d14] border border-white/10 p-6 md:p-8 flex flex-col gap-6" hoverEffect={false}>
+                  <div className="flex items-center justify-between border-b border-white/10 pb-4">
+                     <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center shrink-0">
+                           <FileText className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                           <h2 className="text-lg font-bold text-white tracking-tight">Asset Details</h2>
+                           <p className="text-xs text-text-muted mt-1">{trade?.game_type} - Locked in Escrow</p>
+                        </div>
+                     </div>
+                     <button onClick={() => setIsViewMetadataModalOpen(false)} className="text-text-muted hover:text-white transition-colors">
+                        <X className="w-5 h-5" />
+                     </button>
+                  </div>
+
+                  <div className="space-y-4 text-sm max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                     {trade?.asset_metadata && Object.keys(trade.asset_metadata).length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                           {Object.entries(trade.asset_metadata).map(([key, value]) => (
+                              <div key={key} className="p-3 bg-dark-bg/50 border border-white/5 rounded-xl">
+                                 <p className="text-[10px] uppercase tracking-wider font-bold text-text-muted mb-1">
+                                    {key.replace(/_/g, ' ')}
+                                 </p>
+                                 <p className="text-sm font-semibold text-white break-words">
+                                    {String(value) || 'Not provided'}
+                                 </p>
+                              </div>
+                           ))}
+                        </div>
+                     ) : (
+                        <div className="p-6 text-center border border-dashed border-white/10 rounded-xl bg-dark-bg/30">
+                           <Info className="w-6 h-6 text-text-muted mx-auto mb-2" />
+                           <p className="text-text-muted">No specific asset details were declared.</p>
+                        </div>
+                     )}
+                  </div>
+
+                  <div className="mt-4 pt-4 border-t border-white/10">
+                     <NeonButton variant="ghost" className="w-full border-white/10 hover:bg-white/5 text-white" onClick={() => setIsViewMetadataModalOpen(false)}>
+                        Close Details
+                     </NeonButton>
+                  </div>
+               </DynamicCard>
+            </div>
+         )}
+         {/* Fullscreen Image Lightbox Modal */}
+         {selectedImage && (
+            <div 
+               className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm transition-opacity"
+               onClick={() => setSelectedImage(null)}
+            >
+               <button 
+                  className="absolute top-6 right-6 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors"
+                  onClick={(e) => { e.stopPropagation(); setSelectedImage(null); }}
+               >
+                  <X className="w-6 h-6" />
+               </button>
+               <img 
+                  src={selectedImage} 
+                  className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl border border-white/10" 
+                  alt="Expanded view" 
+                  onClick={(e) => e.stopPropagation()} // Prevent click from closing when clicking the image itself
+               />
+            </div>
+         )}
       </div>
    );
 }

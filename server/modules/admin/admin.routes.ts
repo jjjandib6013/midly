@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../../config/db';
-import { authenticateJWT } from '../../shared/middlewares/auth.middleware';
+import { authenticateJWT, invalidateBanCache } from '../../shared/middlewares/auth.middleware';
 import { generateDownloadUrl } from '../../utils/s3';
 import { io } from '../../../server';
 import { logAudit, ACTION_TYPES } from '../../utils/auditLogger';
@@ -29,7 +29,9 @@ router.get('/disputes', authenticateJWT, async (req: Request, res: Response): Pr
          const evidenceWithUrls = await Promise.all(d.evidence.map(async (ev) => {
              return {
                  ...ev,
-                 file_url: await generateDownloadUrl(`evidence/${d.dispute_id}/${ev.uploaded_by}/${ev.storage_key}`)
+                 // Pass the stored mime_type as ResponseContentType so the browser
+                 // gets a proper image/png (or pdf) instead of octet-stream.
+                 file_url: await generateDownloadUrl(`evidence/${d.dispute_id}/${ev.uploaded_by}/${ev.storage_key}`, ev.mime_type)
              };
          }));
          return { ...d, evidence: evidenceWithUrls };
@@ -131,7 +133,32 @@ router.post('/users/:id/ban', authenticateJWT, async (req: Request, res: Respons
    try {
       const targetId = parseInt(req.params.id as string);
       const { is_banned } = req.body;
+
+      // Safety rails: reject bans targeting other admins or the caller themselves.
+      const target = await prisma.user.findUnique({ where: { user_id: targetId }, select: { role: true, user_id: true } });
+      if (!target) return res.status(404).json({ error: 'User not found' });
+      if (target.role === 'admin') return res.status(400).json({ error: 'Cannot suspend an admin account' });
+      if (target.user_id === req.user.user_id) return res.status(400).json({ error: 'Cannot suspend your own account' });
+
       await prisma.user.update({ where: { user_id: targetId }, data: { is_banned } });
+
+      // Bust the ban cache immediately so the next request sees the new state
+      // instead of waiting up to 30 s for the TTL to expire.
+      invalidateBanCache(targetId);
+
+      // If we're banning (not unbanning), kick any live sessions. The client
+      // listens for `account_suspended` on its user_{id} socket room and signs
+      // itself out + redirects to /login?suspended=1.
+      if (is_banned) {
+         try {
+            io.to(`user_${targetId}`).emit('account_suspended', {
+               reason: 'Your account has been suspended by an administrator.',
+            });
+         } catch (e) {
+            // Don't let a socket emit failure block the audit log / response.
+            console.error('[ADMIN BAN] Failed to emit account_suspended:', e);
+         }
+      }
 
       // AUDIT: Ban/Unban
       await logAudit({ userId: req.user.user_id, actionType: is_banned ? ACTION_TYPES.USER_BANNED : ACTION_TYPES.USER_UNBANNED, description: `Admin ${is_banned ? 'banned' : 'unbanned'} user #${targetId}`, ip: req.ip, entityType: 'USER', entityId: targetId, metadata: { target_user_id: targetId, admin_id: req.user.user_id } });
@@ -431,6 +458,90 @@ router.post('/kyc/:id/resolve', authenticateJWT, async (req: Request, res: Respo
       res.json({ success: true, status });
    } catch (e) {
       res.status(500).json({ error: 'Failed to resolve KYC application' });
+   }
+});
+
+// ==========================================
+// FROZEN TRADES QUEUE
+// ==========================================
+
+router.get('/frozen-trades', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
+   const dbUser = await prisma.user.findUnique({ where: { user_id: req.user.user_id } });
+   if (!dbUser || dbUser.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+   try {
+      const trades = await prisma.transaction.findMany({
+         where: {
+            is_frozen: true,
+            status: { notIn: ['completed', 'cancelled', 'refunded', 'expired'] }
+         },
+         select: {
+            transaction_id: true,
+            risk_score: true,
+            risk_flags: true,
+            total_amount: true,
+            created_at: true,
+            buyer: { select: { first_name: true, last_name: true, email: true } },
+            seller: { select: { first_name: true, last_name: true, email: true } }
+         },
+         orderBy: { risk_score: 'desc' }
+      });
+      res.json({ trades });
+   } catch (e) {
+      res.status(500).json({ error: 'Server error fetching frozen trades' });
+   }
+});
+
+router.post('/frozen-trades/:id/clear', authenticateJWT, async (req: Request, res: Response): Promise<any> => {
+   const dbUser = await prisma.user.findUnique({ where: { user_id: req.user.user_id } });
+   if (!dbUser || dbUser.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+   
+   try {
+      const txId = parseInt(req.params.id as string);
+      
+      await prisma.$transaction(async (tx) => {
+         const trade = await tx.transaction.findUnique({ where: { transaction_id: txId } });
+         if (!trade || !trade.is_frozen) throw new Error('Trade is not actively frozen');
+
+         await tx.transaction.update({
+            where: { transaction_id: txId },
+            data: { is_frozen: false }
+         });
+
+         await tx.message.create({
+            data: {
+               transaction_id: txId,
+               sender_id: null,
+               message_text: '[SYSTEM] Risk review complete. Trade cleared by admin. You may now proceed.',
+               is_system_generated: true,
+               risk_level: 'Safe'
+            }
+         });
+
+         await tx.notification.createMany({
+            data: [
+               { user_id: trade.buyer_id, type: 'system', message: `Admin cleared frozen trade #${txId}`, related_entity_type: 'transaction', related_entity_id: txId },
+               { user_id: trade.seller_id, type: 'system', message: `Admin cleared frozen trade #${txId}`, related_entity_type: 'transaction', related_entity_id: txId }
+            ]
+         });
+
+         await logAudit({
+            tx,
+            transactionId: txId,
+            userId: req.user.user_id,
+            actionType: ACTION_TYPES.ADMIN_UNFREEZE,
+            description: `Admin cleared frozen transaction #${txId}`,
+            ip: req.ip,
+            metadata: { admin_id: req.user.user_id }
+         });
+      });
+
+      if (io) {
+         io.to(`trade_${txId}`).emit('trade_updated', 'cleared');
+      }
+      
+      res.json({ success: true });
+   } catch (e: any) {
+      res.status(500).json({ error: e.message || 'Server error' });
    }
 });
 

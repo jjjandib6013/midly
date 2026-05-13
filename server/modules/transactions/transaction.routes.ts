@@ -9,6 +9,7 @@ import { createPaymentLink } from '../../utils/payments/paymongo';
 import { kycQueue } from '../../../src/ai/queue';
 import { generateUploadUrl } from '../../utils/s3';
 import crypto from 'crypto';
+import { getFeeRate } from '../../utils/reputationEngine';
 
 const router = Router();
 
@@ -65,10 +66,20 @@ router.get('/', heavyEndpointLimiter, authenticateJWT, async (req, res): Promise
 // POST Create P2P Listing
 router.post('/listings', authenticateJWT, requireKYC, listingLimiter, async (req, res): Promise<any> => {
    try {
-      const { gameType, itemName, price } = req.body;
+      const { gameType, itemName, price, tradeCategory, assetMetadata } = req.body;
       
-      const ALLOWED_GAMES = ['Valorant', 'CS2', 'Dota 2', 'Steam Account'];
+      const ALLOWED_GAMES = ['Valorant', 'CS2', 'Dota 2', 'Mobile Legends', 'Roblox', 'Clash of Clans', 'Call of Duty Mobile', 'Crossfire', 'Steam Account'];
       if (!ALLOWED_GAMES.includes(gameType)) return res.status(400).json({ error: 'Invalid game category.' });
+      
+      // 1. Block impossible skin trades and Steam API integrations
+      if ((tradeCategory || 'Game Account') === 'In-Game Item') {
+         const blockedGames = ['Valorant', 'Mobile Legends', 'CS2', 'Dota 2', 'Steam Account'];
+         if (blockedGames.includes(gameType)) {
+             return res.status(400).json({ 
+                 error: `${gameType} does not support P2P item trading in Midly. Please change category to 'Game Account' or 'Service/Boosting'.` 
+             });
+         }
+      }
       
       const p = Number(price);
       if (isNaN(p) || p < 50 || p > 1000000) return res.status(400).json({ error: 'Price must be between 50 and 1,000,000 PHP.' });
@@ -81,8 +92,10 @@ router.post('/listings', authenticateJWT, requireKYC, listingLimiter, async (req
          data: {
             seller_id: req.user.user_id,
             game_type: gameType,
+            trade_category: tradeCategory || 'Game Account',
             item_name: cleanName,
-            price: p
+            price: p,
+            asset_metadata: assetMetadata || null
          }
       });
       res.json({ listing });
@@ -131,10 +144,8 @@ router.post('/listings/buy/:id', authenticateJWT, requireKYC, async (req, res): 
          const sellerScore = Number(seller?.reputation_score || 0);
 
          const settings = await tx.platformSettings.findUnique({ where: { id: 1 } });
-         let feeRate = Number(settings?.base_fee ?? 0.05);
-
-         if (sellerScore >= 90) feeRate = Math.max(0, feeRate - 0.02); // Gold Tier
-         else if (sellerScore >= 50) feeRate = Math.max(0, feeRate - 0.01); // Silver Tier
+         const baseFee = Number(settings?.base_fee ?? 0.05);
+         const feeRate = getFeeRate(sellerScore, baseFee);
 
          const basePrice = Number(listing.price);
          const serviceFee = basePrice * feeRate;
@@ -148,18 +159,40 @@ router.post('/listings/buy/:id', authenticateJWT, requireKYC, async (req, res): 
 
          const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes hard expiry
 
+         // Intelligent Context: Initialize Cooldowns and Milestones based on Category
+         let cooldownEndsAt = null;
+         if (listing.trade_category === 'Game Account') {
+            cooldownEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7-day mandatory recovery block
+         }
+
+         let milestoneState = null;
+         if (listing.trade_category === 'Service/Boosting') {
+            milestoneState = {
+               progress: 0,
+               status: 'not_started',
+               payouts: [
+                  { amount_pct: 25, status: 'locked', name: 'Commencement' },
+                  { amount_pct: 75, status: 'locked', name: 'Completion' }
+               ]
+            };
+         }
+
          const trade = await tx.transaction.create({
             data: {
                buyer_id: req.user.user_id,
                seller_id: listing.seller_id,
                item_type: listing.game_type + ' - ' + listing.item_name,
                game_type: listing.game_type,
+               trade_category: listing.trade_category,
                agreed_price: basePrice,
                service_fee: serviceFee,
                total_amount: basePrice + serviceFee,
                status: 'pending_invite',
                inspection_hours: 24,
-               expires_at: expiresAt
+               expires_at: expiresAt,
+               asset_metadata: listing.asset_metadata ? JSON.parse(JSON.stringify(listing.asset_metadata)) : undefined,
+               cooldown_ends_at: cooldownEndsAt,
+               milestone_state: milestoneState || undefined
             }
          });
 
@@ -206,10 +239,21 @@ router.post('', authenticateJWT, requireKYC, async (req, res): Promise<any> => {
          itemDescription, // mapped to item_name now
          tradeCategory, // new field: 'Game Account', 'In-Game Item', etc.
          agreedPrice,
-         sellerEmail
+         sellerEmail,
+         assetMetadata // new dynamic JSON metadata
       } = req.body;
 
       if (!agreedPrice || !sellerEmail) return res.status(400).json({ error: 'Missing logic' });
+
+      // 1. Block impossible skin trades and Steam API integrations
+      if (tradeCategory === 'In-Game Item') {
+         const blockedGames = ['Valorant', 'Mobile Legends', 'CS2', 'Dota 2', 'Steam Account'];
+         if (blockedGames.includes(itemCategory)) {
+             return res.status(400).json({ 
+                 error: `${itemCategory} does not support P2P item trading in Midly. Please change category to 'Game Account' or 'Service/Boosting'.` 
+             });
+         }
+      }
 
       const counterParty = await prisma.user.findUnique({ where: { email: sellerEmail } });
       if (!counterParty) return res.status(404).json({ error: 'Counterparty email not registered.' });
@@ -222,14 +266,33 @@ router.post('', authenticateJWT, requireKYC, async (req, res): Promise<any> => {
       const sellerScore = Number(seller?.reputation_score || 0);
 
       const settings = await prisma.platformSettings.findUnique({ where: { id: 1 } });
-      let feeRate = Number(settings?.base_fee ?? 0.05);
-
-      if (sellerScore >= 90) feeRate = Math.max(0, feeRate - 0.02); // Gold Tier
-      else if (sellerScore >= 50) feeRate = Math.max(0, feeRate - 0.01); // Silver Tier
+      const baseFee = Number(settings?.base_fee ?? 0.05);
+      const feeRate = getFeeRate(sellerScore, baseFee);
 
       const basePrice = Number(agreedPrice);
       const serviceFee = basePrice * feeRate;
       const totalAmount = basePrice + serviceFee;
+
+      // Ensure Buyers cannot declare strict seller metadata
+      const finalAssetMetadata = role === 'BUY' ? undefined : assetMetadata;
+
+      // Intelligent Context: Initialize Cooldowns and Milestones based on Category
+      let cooldownEndsAt = null;
+      if (tradeCategory === 'Game Account') {
+         cooldownEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7-day mandatory recovery block
+      }
+
+      let milestoneState = null;
+      if (tradeCategory === 'Service/Boosting') {
+         milestoneState = {
+            progress: 0,
+            status: 'not_started',
+            payouts: [
+               { amount_pct: 25, status: 'locked', name: 'Commencement' },
+               { amount_pct: 75, status: 'locked', name: 'Completion' }
+            ]
+         };
+      }
 
       const tradeRes = await prisma.$transaction(async (tx) => {
          const trade = await tx.transaction.create({
@@ -245,6 +308,9 @@ router.post('', authenticateJWT, requireKYC, async (req, res): Promise<any> => {
                total_amount: totalAmount,
                status: 'pending_invite',
                inspection_hours: 24,
+               asset_metadata: finalAssetMetadata ?? undefined,
+               cooldown_ends_at: cooldownEndsAt,
+               milestone_state: milestoneState || undefined
             }
          });
 
@@ -338,7 +404,9 @@ router.put('/:id/accept-invite', authenticateJWT, async (req, res): Promise<any>
          // Atomic state update: verify it's still pending
          const updated = await tx.transaction.updateMany({
             where: { transaction_id: tradeId, status: 'pending_invite' },
-            data: { status: 'agreement' }
+            data: { 
+               status: 'agreement'
+            }
          });
          if (updated.count === 0) throw new Error('Transaction is no longer pending.');
 
@@ -375,7 +443,62 @@ router.put('/:id/accept-invite', authenticateJWT, async (req, res): Promise<any>
          await logAudit({ tx, transactionId: tradeId, userId: req.user.user_id, actionType: ACTION_TYPES.INVITE_ACCEPTED, description: `User accepted escrow invite for trade #${tradeId}`, ip: req.ip, metadata: { accepted_by: req.user.user_id } });
       });
 
-      io.to(`trade_${tradeId}`).emit('trade_updated', 'agreement');
+      const io = req.app.get('io');
+      if (io) io.to(`trade_${tradeId}`).emit('trade_updated', 'agreement');
+      return res.json({ success: true });
+   } catch (e: any) {
+      res.status(500).json({ error: 'Server error', details: e.message });
+   }
+});
+
+// PUT Save Asset Metadata (Seller Only, Agreement Phase)
+router.put('/:id/metadata', authenticateJWT, async (req, res): Promise<any> => {
+   try {
+      const tradeId = parseInt(req.params.id as string);
+      const { assetMetadata } = req.body;
+
+      if (!assetMetadata || Object.keys(assetMetadata).length === 0) {
+         return res.status(400).json({ error: 'Asset metadata is required.' });
+      }
+
+      const trade = await prisma.transaction.findUnique({ where: { transaction_id: tradeId } });
+      if (!trade) return res.status(404).json({ error: 'Trade not found' });
+
+      // Must be in agreement phase
+      if (trade.status !== 'agreement') {
+         return res.status(400).json({ error: 'Asset metadata can only be updated during the Agreement phase.' });
+      }
+
+      // Authorization: Must be the Seller
+      if (req.user.user_id !== trade.seller_id) {
+         return res.status(403).json({ error: 'Only the Seller can declare asset metadata.' });
+      }
+
+      await prisma.$transaction(async (tx) => {
+         await tx.transaction.update({
+            where: { transaction_id: tradeId },
+            data: { asset_metadata: assetMetadata }
+         });
+
+         await logAudit({ 
+            tx, 
+            transactionId: tradeId, 
+            userId: req.user.user_id, 
+            actionType: ACTION_TYPES.METADATA_DECLARED, 
+            description: `Seller locked asset metadata into contract`, 
+            ip: req.ip, 
+            metadata: { asset_metadata: assetMetadata } 
+         });
+      });
+
+      // Re-run risk engine asynchronously since metadata has changed
+      import('../../utils/riskEngine').then(({ calculateTransactionRisk }) => {
+         calculateTransactionRisk(tradeId).catch(console.error);
+      });
+
+      const io = req.app.get('io');
+      if (io) io.to(`trade_${tradeId}`).emit('trade_updated', 'agreement');
+
       return res.json({ success: true });
    } catch (e: any) {
       res.status(500).json({ error: 'Server error', details: e.message });

@@ -5,11 +5,38 @@ import { TextEncoder, TextDecoder } from 'util';
 (global as any).TextEncoder = TextEncoder;
 (global as any).TextDecoder = TextDecoder;
 
-// Use pure JS TensorFlow (no native bindings required)
+// ──────────────────────────────────────────────────────────────────────────
+// TensorFlow backend selection (fix D).
+//
+// Native @tensorflow/tfjs-node is 3–10× faster than the wasm backend, but
+// its C++ addon doesn't always compile on Railway's build image. We prefer
+// native when available and fall back to wasm transparently — face-api
+// only cares that a backend is registered, not which one.
+//
+// NOTE: tfjs-node registers itself as a side effect of the require().
+// We deliberately use require() (not a static import) so a build that
+// ships without tfjs-node still runs.
+// ──────────────────────────────────────────────────────────────────────────
 import * as tf from '@tensorflow/tfjs';
+let tfBackendLabel = 'cpu';
+try {
+    require('@tensorflow/tfjs-node');
+    tfBackendLabel = 'tfjs-node (native)';
+} catch (nativeErr) {
+    try {
+        require('@tensorflow/tfjs-backend-wasm');
+        tfBackendLabel = 'tfjs-wasm';
+    } catch {
+        console.warn('[AI Worker] No TensorFlow backend installed besides pure JS — inference will be slow.');
+    }
+}
+
 import * as canvas from 'canvas';
-// Use WASM backend (no native C++ bindings needed)
-const faceapi = require('@vladmandic/face-api/dist/face-api.node-wasm.js');
+// Use the node-native face-api entry when we have tfjs-node; the wasm
+// entry when we don't. Both export identical public APIs.
+const faceapi = tfBackendLabel === 'tfjs-node (native)'
+    ? require('@vladmandic/face-api')
+    : require('@vladmandic/face-api/dist/face-api.node-wasm.js');
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
@@ -45,19 +72,30 @@ const { Canvas, Image, ImageData } = canvas;
 (faceapi.env as any).monkeyPatch({ Canvas, Image, ImageData, readFile: fs.promises.readFile });
 
 let modelsLoaded = false;
+let modelLoadError: Error | null = null;
+
 async function loadModels() {
     if (modelsLoaded) return;
+    // If loading failed previously, re-throw the cached error so callers
+    // handle it gracefully instead of trying to use the unloaded models
+    // (which would emit "load model before inference" and crash the process).
+    if (modelLoadError) throw modelLoadError;
     try {
         await tf.ready();
-        console.log(`[AI Worker] TensorFlow backend: ${tf.getBackend()}`);
+        console.log(`[AI Worker] TensorFlow backend: ${tf.getBackend()} (${tfBackendLabel})`);
         await faceapi.nets.ssdMobilenetv1.loadFromDisk(MODEL_DIR);
         await faceapi.nets.faceLandmark68Net.loadFromDisk(MODEL_DIR);
         await faceapi.nets.faceRecognitionNet.loadFromDisk(MODEL_DIR);
         await faceapi.nets.faceExpressionNet.loadFromDisk(MODEL_DIR);
         modelsLoaded = true;
-        console.log('[AI Worker] FaceAPI Models loaded (pure JS backend, with expressions).');
-    } catch (e) {
-        console.error("[AI Worker] Failed to load FaceAPI models:", e);
+        console.log('[AI Worker] FaceAPI Models loaded.');
+    } catch (e: any) {
+        // Cache the error so every subsequent call fails fast without
+        // re-attempting a slow disk load.
+        modelLoadError = e instanceof Error ? e : new Error(String(e));
+        console.error("[AI Worker] Failed to load FaceAPI models:", modelLoadError.message);
+        console.error("[AI Worker] HINT: Run 'tsx download_models.ts' to populate /models, or confirm the deploy's build step downloaded them.");
+        throw modelLoadError;
     }
 }
 
@@ -100,12 +138,15 @@ function cleanupTempFile(filePath: string) {
 
 // Resolve a file path: if it's an S3 key, download; otherwise use local
 async function resolveFilePath(filePathOrKey: string): Promise<{ localPath: string; isTemp: boolean }> {
-    // If it starts with 'kyc/' or 'uploads/', it's an S3 key
-    if (s3Client && (filePathOrKey.startsWith('kyc/') || filePathOrKey.startsWith('uploads/'))) {
+    // Treat as an S3 key if we have a client configured AND the input doesn't
+    // look like an absolute local path (Windows: C:\ or starts with /).
+    // Previously we whitelisted only 'kyc/' and 'uploads/' prefixes, which
+    // broke when callers passed keys with bucket-prefixed or custom paths.
+    const looksLocal = /^([A-Za-z]:[\\/]|\/)/.test(filePathOrKey);
+    if (s3Client && !looksLocal) {
         const localPath = await downloadFromS3(filePathOrKey);
         return { localPath, isTemp: true };
     }
-    // Otherwise it's a local filesystem path
     return { localPath: filePathOrKey, isTemp: false };
 }
 
@@ -232,8 +273,28 @@ export async function processKycPhase2(jobData: any) {
                 .normalize()
                 .toBuffer();
 
-            // Use eng+fil for Philippine IDs with mixed Filipino/English text (#3)
-            const { data: { text } } = await Tesseract.recognize(optimizedBuffer, 'eng+fil');
+            // Fix E: Run English-only first (~2× faster than eng+fil). Philippine
+            // IDs are mostly English fields with Filipino secondary text, so the
+            // English pass catches the ID number + name in the common case. Only
+            // if the English pass returns suspiciously little text do we retry
+            // with eng+fil — paying the language-pack download + dual-pass cost
+            // only when it might actually help.
+            let text = '';
+            try {
+                const engResult = await Tesseract.recognize(optimizedBuffer, 'eng');
+                text = engResult.data.text;
+                const alphanumericCount = text.replace(/[^a-zA-Z0-9]/g, '').length;
+                if (alphanumericCount < 40) {
+                    console.log('[AI Worker] English OCR yielded little text, retrying with eng+fil...');
+                    const filResult = await Tesseract.recognize(optimizedBuffer, 'eng+fil');
+                    if (filResult.data.text.length > text.length) {
+                        text = filResult.data.text;
+                    }
+                }
+            } catch (ocrErr) {
+                console.error('[AI Worker] OCR failed:', ocrErr);
+                text = '';
+            }
             rawOcrText = text;
 
             // Clean text by replacing non-alphanumeric (except spaces and Ñ) with spaces, and normalizing whitespace
@@ -293,9 +354,13 @@ export async function processKycPhase2(jobData: any) {
         // Use canvas.loadImage to properly await the image decoding so width/height are set
         const idImg = await canvas.loadImage(buffer);
 
-        // Lower confidence heavily to handle glare, print artifacts, and watermarks on physical IDs
-        // Phase 3 biometric matching will catch false positives anyway
-        const detectOptions = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.15 });
+        // Fix C: Raised minConfidence from 0.15 → 0.4. At 0.15 the detector
+        // generates 20× more candidate boxes which all go through landmarks +
+        // descriptors — that's the biggest slice of Phase 2 runtime. 0.4 is
+        // safe for well-lit ID photos; genuinely bad photos fail fast here
+        // (the right outcome — rejection asks for a retry) instead of chewing
+        // 10+ seconds before failing anyway.
+        const detectOptions = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.4 });
         const allDetections = await faceapi.detectAllFaces(idImg as any, detectOptions)
             .withFaceLandmarks()
             .withFaceDescriptors();
@@ -742,6 +807,37 @@ export async function processAutoCancelInvite(data: { tradeId: number }) {
 // ==========================================
 const isDev = process.env.NODE_ENV !== 'production';
 const USE_FALLBACK = isDev ? process.env.KYC_QUEUE_FALLBACK !== 'false' : process.env.KYC_QUEUE_FALLBACK === 'true';
+
+// ──────────────────────────────────────────────────────────────────────────
+// Warmup (fix A).
+//
+// Called from server.ts after httpServer.listen() fires. Pre-loads the
+// FaceAPI models AND primes Tesseract by running a tiny no-op OCR on a
+// 1×1 pixel, so the first real user submission doesn't eat the cold-start
+// cost (model load ~10–20s, Tesseract language pack download ~5–15s).
+//
+// Runs in the background — we don't block the server start on it.
+// ──────────────────────────────────────────────────────────────────────────
+export async function warmupAiPipeline(): Promise<void> {
+    const start = Date.now();
+    console.log('[AI Worker] Warmup starting (models + Tesseract eng pack)...');
+    try {
+        await loadModels();
+    } catch (e) {
+        console.warn('[AI Worker] Warmup: models failed to load. First Phase 2 submission will reject cleanly.', (e as Error).message);
+    }
+    try {
+        // A 1×1 white PNG triggers Tesseract to download + init the English
+        // language pack without any real work.
+        const tinyPng = await sharp({
+            create: { width: 8, height: 8, channels: 3, background: { r: 255, g: 255, b: 255 } }
+        }).png().toBuffer();
+        await Tesseract.recognize(tinyPng, 'eng');
+        console.log(`[AI Worker] Warmup complete in ${((Date.now() - start) / 1000).toFixed(1)}s.`);
+    } catch (e) {
+        console.warn('[AI Worker] Tesseract warmup failed:', (e as Error).message);
+    }
+}
 
 if (!USE_FALLBACK) {
     const IORedis = require('ioredis');
