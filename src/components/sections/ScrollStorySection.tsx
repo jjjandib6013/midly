@@ -45,27 +45,6 @@ export default function ScrollStorySection({ onEnter, onExit }: ScrollStorySecti
 
   const indicatorIndex = useMemo(() => activeSlide, [activeSlide]);
 
-  // Global bypass: other parts of the app (e.g. footer "Back to top") can
-  // dispatch `midly:scroll-bypass` with an optional `ms` duration to tell
-  // this section to ignore its auto-lock while the page scrolls through it.
-  useEffect(() => {
-    const handleBypass = (e: Event) => {
-      const detail = (e as CustomEvent).detail as { ms?: number } | undefined;
-      const ms = Math.max(500, detail?.ms ?? 1500);
-      isEscapingRef.current = true;
-      setIsActive(false);
-      onExit?.();
-      const lenis = (window as any).lenis;
-      if (lenis && typeof lenis.start === "function") lenis.start();
-      if (document?.body) document.body.style.overflow = "";
-      window.setTimeout(() => {
-        isEscapingRef.current = false;
-      }, ms);
-    };
-    window.addEventListener("midly:scroll-bypass", handleBypass as EventListener);
-    return () => window.removeEventListener("midly:scroll-bypass", handleBypass as EventListener);
-  }, [onExit]);
-
   useEffect(() => {
     const el = sectionRef.current;
     if (!el) return;
