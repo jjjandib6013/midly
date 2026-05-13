@@ -6,7 +6,7 @@ import { useGSAP } from "@gsap/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-   Wallet, Clock, Zap, Search, Filter, Box, TrendingUp, ShieldCheck, Activity, Eye, CheckCircle2, AlertTriangle, Send, XCircle, X, PlusCircle, ChevronDown
+   Wallet, Clock, Zap, Search, Filter, Box, TrendingUp, ShieldCheck, Activity, Eye, CheckCircle2, AlertTriangle, Send, XCircle, X, PlusCircle, ChevronDown, ArrowRight
 } from "lucide-react";
 import { RowSkeleton } from "@/components/ui/RowSkeleton";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -503,32 +503,47 @@ export default function Dashboard() {
                         <p className="text-[#8892b0] font-medium">No trades found in this category or date range.</p>
                      </div>
                   ) : (
-                     filteredTrades.map((t) => {
-                        const s = STATUS_MAP[t.status] || STATUS_MAP.agreement;
-                        return (
-                           <Link key={t.transaction_id} href={`/trade/${t.transaction_id}`} className="flex items-center justify-between py-4 sm:py-5 border-b border-white/5 last:border-0 hover:bg-white/[0.02] rounded-2xl px-3 sm:px-4 -mx-3 sm:-mx-4 transition-colors group">
-                              <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-                                 <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-white/5 text-[#8892b0] flex items-center justify-center shrink-0 border border-white/10 group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/30 transition-all">
-                                    <Box className="w-4 h-4 sm:w-5 sm:h-5" />
+                     <>
+                        {filteredTrades.slice(0, 5).map((t) => {
+                           const s = STATUS_MAP[t.status] || STATUS_MAP.agreement;
+                           return (
+                              <Link key={t.transaction_id} href={`/trade/${t.transaction_id}`} className="flex items-center justify-between py-4 sm:py-5 border-b border-white/5 last:border-0 hover:bg-white/[0.02] rounded-2xl px-3 sm:px-4 -mx-3 sm:-mx-4 transition-colors group">
+                                 <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-white/5 text-[#8892b0] flex items-center justify-center shrink-0 border border-white/10 group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/30 transition-all">
+                                       <Box className="w-4 h-4 sm:w-5 sm:h-5" />
+                                    </div>
+                                    <div className="min-w-0">
+                                       <h4 className="text-[14px] sm:text-[15px] font-bold text-white mb-0.5 group-hover:text-primary transition-colors truncate">{t.item_name || t.game_type}</h4>
+                                       <p className="text-[12px] sm:text-[13px] font-medium text-[#8892b0] flex items-center gap-1.5 truncate">
+                                          with <span className="text-zinc-300 font-bold truncate">{getCounterparty(t) || 'Unknown'}</span>
+                                       </p>
+                                    </div>
                                  </div>
-                                 <div className="min-w-0">
-                                    <h4 className="text-[14px] sm:text-[15px] font-bold text-white mb-0.5 group-hover:text-primary transition-colors truncate">{t.item_name || t.game_type}</h4>
-                                    <p className="text-[12px] sm:text-[13px] font-medium text-[#8892b0] flex items-center gap-1.5 truncate">
-                                       with <span className="text-zinc-300 font-bold truncate">{getCounterparty(t) || 'Unknown'}</span>
-                                    </p>
+                                 <div className="flex flex-col items-end gap-1.5 sm:gap-2 shrink-0 ml-4">
+                                    <span className="text-[14px] sm:text-[15px] font-black text-white">
+                                       ₱{Number(t.agreed_price).toLocaleString()}
+                                    </span>
+                                    <div className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md text-[9px] sm:text-[10px] font-bold uppercase tracking-widest border ${s.colorClass} ${s.bgClass} ${s.borderClass}`}>
+                                       {s.label}
+                                    </div>
                                  </div>
-                              </div>
-                              <div className="flex flex-col items-end gap-1.5 sm:gap-2 shrink-0 ml-4">
-                                 <span className="text-[14px] sm:text-[15px] font-black text-white">
-                                    ₱{Number(t.agreed_price).toLocaleString()}
-                                 </span>
-                                 <div className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md text-[9px] sm:text-[10px] font-bold uppercase tracking-widest border ${s.colorClass} ${s.bgClass} ${s.borderClass}`}>
-                                    {s.label}
-                                 </div>
-                              </div>
+                              </Link>
+                           );
+                        })}
+
+                        {/* Show-more: only render when we've actually truncated. Deep-links to
+                            /transactions with the current tab preselected so users land on the
+                            same filter they were browsing. */}
+                        {filteredTrades.length > 5 && (
+                           <Link
+                              href={`/transactions${activeTab && activeTab !== 'All' ? `?tab=${encodeURIComponent(activeTab)}` : ''}`}
+                              className="mt-4 flex items-center justify-center gap-2 py-3 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] hover:border-white/10 transition-colors text-sm font-semibold text-[#8892b0] hover:text-white group"
+                           >
+                              Show all {filteredTrades.length} {activeTab !== 'All' ? activeTab.toLowerCase() : ''} trades
+                              <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" aria-hidden="true" />
                            </Link>
-                        );
-                     })
+                        )}
+                     </>
                   )}
                </div>
 
